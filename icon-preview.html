@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>BioSync Icons Preview</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #58CC02;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        .icons {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .icon-card {
+            text-align: center;
+            background: #2a2a4e;
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .icon-card img {
+            border-radius: 22%;
+        }
+
+        .icon-card p {
+            margin-top: 12px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .icon-card .label {
+            color: #58CC02;
+            font-weight: bold;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>BioSync App Icons</h1>
+    <p class="subtitle">AI + Fitness + Nutrition + Marketplace</p>
+    <div class="icons">
+        <div class="icon-card">
+            <img src="assets/icon.png" width="200" height="200" alt="iOS Icon">
+            <p class="label">iOS Icon</p>
+            <p>icon.png (1024x1024)</p>
+        </div>
+        <div class="icon-card">
+            <div
+                style="background:#050814; border-radius:50%; width:200px; height:200px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                <img src="assets/adaptive-icon.png" width="200" height="200" alt="Android Icon"
+                    style="border-radius:50%;">
+            </div>
+            <p class="label">Android Adaptive</p>
+            <p>adaptive-icon.png (1024x1024)</p>
+        </div>
+        <div class="icon-card">
+            <img src="assets/favicon.png" width="48" height="48" alt="Favicon" style="border-radius:8px;">
+            <p class="label">Web Favicon</p>
+            <p>favicon.png (48x48)</p>
+        </div>
+    </div>
+</body>
+
+</html>

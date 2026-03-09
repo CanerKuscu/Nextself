@@ -1,0 +1,815 @@
+import { SupabaseService } from './supabase';
+import { AgreementService } from './agreementService';
+
+const supabase = SupabaseService.getInstance().getClient();
+
+export interface SubscriptionPlan {
+    id: string;
+    name: string;
+    description: string;
+    price_monthly: number;
+    price_yearly: number;
+    currency: string;
+    features: string[];
+    is_popular: boolean;
+    is_active: boolean;
+    trial_days: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserSubscription {
+    id: string;
+    user_id: string;
+    plan_id: string;
+    status: 'active' | 'canceled' | 'expired' | 'pending';
+    billing_cycle: 'monthly' | 'yearly';
+    current_period_start: string;
+    current_period_end: string;
+    cancel_at_period_end: boolean;
+    canceled_at?: string;
+    trial_start?: string;
+    trial_end?: string;
+    payment_method_id?: string;
+    iyzico_subscription_ref?: string;
+    iyzico_customer_ref?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PaymentMethod {
+    id: string;
+    user_id: string;
+    iyzico_card_token: string;
+    type: 'card' | 'bank_account';
+    brand?: string;
+    last4?: string;
+    exp_month?: number;
+    exp_year?: number;
+    is_default: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Invoice {
+    id: string;
+    user_id: string;
+    subscription_id: string;
+    iyzico_payment_id: string;
+    amount: number;
+    currency: string;
+    status: 'paid' | 'open' | 'void' | 'uncollectible';
+    due_date?: string;
+    paid_at?: string;
+    pdf_url?: string;
+    hosted_invoice_url?: string;
+    created_at: string;
+}
+
+export interface PaymentHistory {
+    id: string;
+    user_id: string;
+    amount: number;
+    currency: string;
+    description: string;
+    status: 'succeeded' | 'pending' | 'failed';
+    payment_method: string;
+    invoice_id?: string;
+    metadata?: any;
+    created_at: string;
+}
+
+export class PaymentService {
+    private static instance: PaymentService;
+    private iyzico: any;
+
+    private constructor() {
+        this.initIyzico();
+    }
+
+    public static getInstance(): PaymentService {
+        if (!PaymentService.instance) {
+            PaymentService.instance = new PaymentService();
+        }
+        return PaymentService.instance;
+    }
+
+    private async initIyzico() {
+        try {
+            // In production, initialize iyzico SDK with API key & secret key
+            // iyzico is the primary payment provider for Turkey market
+            // When expanding to Dubai/international, Stripe can be added as secondary provider
+            console.log('iyzico initialized');
+        } catch (error) {
+            console.error('Error initializing iyzico:', error);
+        }
+    }
+
+    /**
+     * Get all subscription plans
+     */
+    public async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+        try {
+            const { data, error } = await supabase
+                .from('subscription_plans')
+                .select('*')
+                .eq('is_active', true)
+                .order('price_monthly', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting subscription plans:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get subscription plan by ID
+     */
+    public async getSubscriptionPlan(planId: string): Promise<SubscriptionPlan | null> {
+        try {
+            const { data, error } = await supabase
+                .from('subscription_plans')
+                .select('*')
+                .eq('id', planId)
+                .eq('is_active', true)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting subscription plan:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get user's current subscription
+     */
+    public async getUserSubscription(userId: string): Promise<UserSubscription | null> {
+        try {
+            const { data, error } = await supabase
+                .from('user_subscriptions')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+            return data;
+        } catch (error) {
+            console.error('Error getting user subscription');
+            return null;
+        }
+    }
+
+    /**
+     * Create subscription (with MSS — Mesafeli Satış Sözleşmesi compliance per 6502 Kanun)
+     *
+     * Flow: 1) Generate MSS contract → 2) Accept contract → 3) Create subscription → 4) Activate contract
+     */
+    public async createSubscription(
+        userId: string,
+        planId: string,
+        billingCycle: 'monthly' | 'yearly',
+        paymentMethodId?: string,
+        buyerInfo?: { fullName: string; email: string; address: string; phone?: string }
+    ): Promise<UserSubscription | null> {
+        try {
+            // Get plan details
+            const plan = await this.getSubscriptionPlan(planId);
+            if (!plan) {
+                throw new Error('Plan not found');
+            }
+
+            // Check if user already has an active subscription
+            const existingSubscription = await this.getUserSubscription(userId);
+            if (existingSubscription) {
+                throw new Error('User already has an active subscription');
+            }
+
+            const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
+
+            // ── MSS Contract Flow (6502 Kanun Mesafeli Satış Sözleşmesi) ──
+            const agreementService = AgreementService.getInstance();
+            let contractId: string | null = null;
+
+            if (buyerInfo) {
+                // 1) Create MSS contract
+                const contractResult = await agreementService.createDistanceSalesContract(
+                    userId,
+                    buyerInfo.fullName,
+                    buyerInfo.email,
+                    buyerInfo.address,
+                    planId,
+                    plan.name,
+                    billingCycle,
+                    price,
+                    plan.currency
+                );
+
+                if (!contractResult.success || !contractResult.contract) {
+                    throw new Error(contractResult.error || 'MSS contract creation failed');
+                }
+
+                contractId = contractResult.contract.id;
+
+                // 2) Accept the MSS contract (buyer confirmed the pre-information form)
+                await agreementService.acceptDistanceSalesContract(contractId);
+            }
+            // ── End MSS Contract Flow ──
+
+            // In production, create iyzico subscription via iyzico API
+            // For international (Dubai) expansion, Stripe integration will be added
+            const currentDate = new Date();
+            const periodEnd = new Date(currentDate);
+
+            if (billingCycle === 'monthly') {
+                periodEnd.setMonth(periodEnd.getMonth() + 1);
+            } else {
+                periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+            }
+
+            // If plan has trial days, adjust dates
+            let trialStart: string | undefined = undefined;
+            let trialEnd: string | undefined = undefined;
+
+            if (plan.trial_days > 0) {
+                trialStart = currentDate.toISOString();
+                const trialEndDate = new Date(currentDate);
+                trialEndDate.setDate(trialEndDate.getDate() + plan.trial_days);
+                trialEnd = trialEndDate.toISOString();
+            }
+
+            const subscription: Omit<UserSubscription, 'id' | 'created_at' | 'updated_at'> = {
+                user_id: userId,
+                plan_id: planId,
+                status: 'active',
+                billing_cycle: billingCycle,
+                current_period_start: currentDate.toISOString(),
+                current_period_end: periodEnd.toISOString(),
+                cancel_at_period_end: false,
+                trial_start: trialStart,
+                trial_end: trialEnd,
+                payment_method_id: paymentMethodId,
+                iyzico_subscription_ref: `iyz_sub_${Date.now()}`,
+                iyzico_customer_ref: `iyz_cus_${userId}`
+            };
+
+            const { data, error } = await supabase
+                .from('user_subscriptions')
+                .insert(subscription)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Create initial invoice
+            await this.createInvoice(
+                userId,
+                data.id,
+                price,
+                plan.currency,
+                'Initial subscription payment'
+            );
+
+            // 3) Activate MSS contract after successful payment
+            if (contractId) {
+                await agreementService.activateContract(contractId);
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error creating subscription');
+            return null;
+        }
+    }
+
+    /**
+     * Cancel subscription
+     */
+    public async cancelSubscription(
+        userId: string,
+        cancelAtPeriodEnd: boolean = true
+    ): Promise<boolean> {
+        try {
+            const subscription = await this.getUserSubscription(userId);
+            if (!subscription) {
+                throw new Error('No active subscription found');
+            }
+
+            const updates: Partial<UserSubscription> = {
+                cancel_at_period_end: cancelAtPeriodEnd,
+                canceled_at: cancelAtPeriodEnd ? undefined : new Date().toISOString(),
+                status: cancelAtPeriodEnd ? 'active' : 'canceled',
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabase
+                .from('user_subscriptions')
+                .update(updates)
+                .eq('id', subscription.id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error canceling subscription:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Update subscription plan
+     */
+    public async updateSubscriptionPlan(
+        userId: string,
+        newPlanId: string,
+        prorate: boolean = true
+    ): Promise<boolean> {
+        try {
+            const subscription = await this.getUserSubscription(userId);
+            if (!subscription) {
+                throw new Error('No active subscription found');
+            }
+
+            const newPlan = await this.getSubscriptionPlan(newPlanId);
+            if (!newPlan) {
+                throw new Error('New plan not found');
+            }
+
+            // Calculate prorated amount if needed
+            let proratedAmount = 0;
+            if (prorate) {
+                proratedAmount = await this.calculateProratedAmount(
+                    subscription,
+                    newPlan,
+                    subscription.billing_cycle
+                );
+            }
+
+            // Update subscription
+            const { error } = await supabase
+                .from('user_subscriptions')
+                .update({
+                    plan_id: newPlanId,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', subscription.id);
+
+            if (error) throw error;
+
+            // Create invoice for prorated amount if applicable
+            if (proratedAmount > 0) {
+                await this.createInvoice(
+                    userId,
+                    subscription.id,
+                    proratedAmount,
+                    newPlan.currency,
+                    'Prorated plan upgrade'
+                );
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error updating subscription plan:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get user's payment methods
+     */
+    public async getPaymentMethods(userId: string): Promise<PaymentMethod[]> {
+        try {
+            const { data, error } = await supabase
+                .from('payment_methods')
+                .select('*')
+                .eq('user_id', userId)
+                .order('is_default', { ascending: false })
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting payment methods:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Add payment method
+     */
+    public async addPaymentMethod(
+        userId: string,
+        iyzicoCardToken: string,
+        type: 'card' | 'bank_account',
+        details: any
+    ): Promise<PaymentMethod | null> {
+        try {
+            // Check if this is the first payment method
+            const existingMethods = await this.getPaymentMethods(userId);
+            const isDefault = existingMethods.length === 0;
+
+            const paymentMethod: Omit<PaymentMethod, 'id' | 'created_at' | 'updated_at'> = {
+                user_id: userId,
+                iyzico_card_token: iyzicoCardToken,
+                type,
+                brand: details.brand,
+                last4: details.last4,
+                exp_month: details.exp_month,
+                exp_year: details.exp_year,
+                is_default: isDefault
+            };
+
+            const { data, error } = await supabase
+                .from('payment_methods')
+                .insert(paymentMethod)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding payment method');
+            return null;
+        }
+    }
+
+    /**
+     * Set default payment method
+     */
+    public async setDefaultPaymentMethod(
+        userId: string,
+        paymentMethodId: string
+    ): Promise<boolean> {
+        try {
+            // First, set all payment methods to not default
+            const { error: clearError } = await supabase
+                .from('payment_methods')
+                .update({ is_default: false })
+                .eq('user_id', userId);
+
+            if (clearError) throw clearError;
+
+            // Then set the specified one as default
+            const { error } = await supabase
+                .from('payment_methods')
+                .update({ is_default: true })
+                .eq('id', paymentMethodId)
+                .eq('user_id', userId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error setting default payment method');
+            return false;
+        }
+    }
+
+    /**
+     * Remove payment method (scoped to user for ownership check)
+     */
+    public async removePaymentMethod(paymentMethodId: string, userId: string): Promise<boolean> {
+        try {
+            const { error } = await supabase
+                .from('payment_methods')
+                .delete()
+                .eq('id', paymentMethodId)
+                .eq('user_id', userId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error removing payment method');
+            return false;
+        }
+    }
+
+    /**
+     * Get user's invoices
+     */
+    public async getInvoices(
+        userId: string,
+        limit: number = 20,
+        offset: number = 0
+    ): Promise<Invoice[]> {
+        try {
+            const { data, error } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting invoices:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get invoice by ID (user-scoped to prevent IDOR)
+     */
+    public async getInvoice(invoiceId: string): Promise<Invoice | null> {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('id', invoiceId)
+                .eq('user_id', user.id)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting invoice:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get payment history
+     */
+    public async getPaymentHistory(
+        userId: string,
+        limit: number = 20,
+        offset: number = 0
+    ): Promise<PaymentHistory[]> {
+        try {
+            const { data, error } = await supabase
+                .from('payment_history')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting payment history:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Process payment
+     */
+    public async processPayment(
+        userId: string,
+        amount: number,
+        currency: string,
+        description: string,
+        paymentMethodId?: string
+    ): Promise<PaymentHistory | null> {
+        try {
+            // Get default payment method if none specified
+            let paymentMethod = paymentMethodId;
+            if (!paymentMethod) {
+                const methods = await this.getPaymentMethods(userId);
+                const defaultMethod = methods.find(m => m.is_default);
+                if (!defaultMethod) {
+                    throw new Error('No payment method available');
+                }
+                paymentMethod = defaultMethod.iyzico_card_token;
+            }
+
+            // In production, process payment via iyzico API
+            // For international (Dubai) expansion, Stripe can be added as secondary provider
+
+            const payment: Omit<PaymentHistory, 'id' | 'created_at'> = {
+                user_id: userId,
+                amount,
+                currency,
+                description,
+                status: 'succeeded',
+                payment_method: paymentMethod || 'unknown',
+                metadata: {
+                    processed_at: new Date().toISOString(),
+                    mock_payment: true
+                }
+            };
+
+            const { data, error } = await supabase
+                .from('payment_history')
+                .insert(payment)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error processing payment');
+            return null;
+        }
+    }
+
+    /**
+     * Check if user has premium features
+     */
+    public async hasPremiumFeatures(userId: string): Promise<boolean> {
+        try {
+            const subscription = await this.getUserSubscription(userId);
+            if (!subscription) return false;
+
+            // Check if subscription is active and not canceled
+            if (subscription.status !== 'active') return false;
+
+            // Check if subscription has expired
+            const currentDate = new Date();
+            const periodEnd = new Date(subscription.current_period_end);
+
+            if (currentDate > periodEnd) {
+                // Update subscription status to expired
+                await supabase
+                    .from('user_subscriptions')
+                    .update({ status: 'expired' })
+                    .eq('id', subscription.id);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error checking premium features:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get subscription analytics (admin only)
+     */
+    public async getSubscriptionAnalytics(
+        startDate: string,
+        endDate: string,
+        userId: string
+    ): Promise<any> {
+        try {
+            // Verify admin role before returning analytics
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('user_type')
+                .eq('id', userId)
+                .single();
+
+            if (profileError || !profile || profile.user_type !== 'admin') {
+                throw new Error('Unauthorized: admin access required');
+            }
+
+            // Get total revenue
+            const { data: revenueData, error: revenueError } = await supabase
+                .from('payment_history')
+                .select('amount, currency')
+                .eq('status', 'succeeded')
+                .gte('created_at', startDate)
+                .lte('created_at', endDate);
+
+            if (revenueError) throw revenueError;
+
+            // Get active subscriptions count
+            const { data: activeSubs, error: subsError } = await supabase
+                .from('user_subscriptions')
+                .select('id')
+                .eq('status', 'active');
+
+            if (subsError) throw subsError;
+
+            // Get new subscriptions
+            const { data: newSubs, error: newSubsError } = await supabase
+                .from('user_subscriptions')
+                .select('id')
+                .eq('status', 'active')
+                .gte('created_at', startDate)
+                .lte('created_at', endDate);
+
+            if (newSubsError) throw newSubsError;
+
+            // Get churned subscriptions
+            const { data: churnedSubs, error: churnedError } = await supabase
+                .from('user_subscriptions')
+                .select('id')
+                .eq('status', 'canceled')
+                .gte('canceled_at', startDate)
+                .lte('canceled_at', endDate);
+
+            if (churnedError) throw churnedError;
+
+            // Calculate total revenue
+            const totalRevenue = revenueData?.reduce((sum, item) => sum + item.amount, 0) || 0;
+
+            // Calculate MRR (Monthly Recurring Revenue)
+            const activeSubscriptions = await supabase
+                .from('user_subscriptions')
+                .select('plan_id, billing_cycle')
+                .eq('status', 'active');
+
+            let mrr = 0;
+            if (activeSubscriptions.data) {
+                for (const sub of activeSubscriptions.data) {
+                    const plan = await this.getSubscriptionPlan(sub.plan_id);
+                    if (plan) {
+                        const price = sub.billing_cycle === 'monthly' ? plan.price_monthly : plan.price_yearly / 12;
+                        mrr += price;
+                    }
+                }
+            }
+
+            // Calculate churn rate
+            const activeCount = activeSubs?.length || 0;
+            const churnedCount = churnedSubs?.length || 0;
+            const churnRate = activeCount > 0 ? (churnedCount / activeCount) * 100 : 0;
+
+            return {
+                total_revenue: totalRevenue,
+                mrr: Math.round(mrr * 100) / 100,
+                active_subscriptions: activeCount,
+                new_subscriptions: newSubs?.length || 0,
+                churned_subscriptions: churnedCount,
+                churn_rate: Math.round(churnRate * 100) / 100,
+                period: {
+                    start: startDate,
+                    end: endDate
+                }
+            };
+        } catch (error) {
+            console.error('Error getting subscription analytics:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Create invoice
+     */
+    private async createInvoice(
+        userId: string,
+        subscriptionId: string,
+        amount: number,
+        currency: string,
+        description: string
+    ): Promise<Invoice | null> {
+        try {
+            const invoice: Omit<Invoice, 'id' | 'created_at'> = {
+                user_id: userId,
+                subscription_id: subscriptionId,
+                iyzico_payment_id: `iyz_pay_${Date.now()}`,
+                amount,
+                currency,
+                status: 'paid',
+                paid_at: new Date().toISOString(),
+                hosted_invoice_url: `https://example.com/invoices/iyz_pay_${Date.now()}`
+            };
+
+            const { data, error } = await supabase
+                .from('invoices')
+                .insert(invoice)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error creating invoice:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Calculate prorated amount
+     */
+    private async calculateProratedAmount(
+        subscription: UserSubscription,
+        newPlan: SubscriptionPlan,
+        billingCycle: 'monthly' | 'yearly'
+    ): Promise<number> {
+        const currentDate = new Date();
+        const periodStart = new Date(subscription.current_period_start);
+        const periodEnd = new Date(subscription.current_period_end);
+
+        // Calculate days used and total days in period
+        const totalDays = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+        const daysUsed = Math.ceil((currentDate.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Calculate unused portion
+        const unusedDays = totalDays - daysUsed;
+        const unusedPercentage = unusedDays / totalDays;
+
+        // Get old plan price
+        const oldPlan = await this.getSubscriptionPlan(subscription.plan_id);
+        const oldPrice = subscription.billing_cycle === 'monthly'
+            ? oldPlan?.price_monthly || 0
+            : oldPlan?.price_yearly || 0;
+
+        const newPrice = billingCycle === 'monthly' ? newPlan.price_monthly : newPlan.price_yearly;
+
+        // Calculate prorated amount (credit for unused portion of old plan)
+        const credit = oldPrice * unusedPercentage;
+
+        // If upgrading, charge the difference minus credit
+        // If downgrading, credit will be applied to future invoices
+        return Math.max(0, newPrice - credit);
+    }
+}

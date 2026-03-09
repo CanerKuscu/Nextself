@@ -1,0 +1,69 @@
+{
+    "translation": {
+        "login": {
+            "title": "BioSync Profesyonel",
+            "subtitle": "Personal Trainer ve Diyetisyen Paneline Giriş Yapın",
+            "email": "E-posta",
+            "password": "Şifre",
+            "remember": "Beni Hatırla",
+            "forgot": "Şifrenizi mi unuttunuz?",
+            "signIn": "Giriş Yap",
+            "signingIn": "Giriş Yapılıyor...",
+            "noAccount": "Hesabınız yok mu?",
+            "register": "Buradan kayıt olun"
+        },
+        "register": {
+            "title": "BioSync Profesyonel'e Katılın",
+            "subtitle": "Personal Trainer veya Diyetisyen hesabınızı oluşturun",
+            "iam": "Ben bir...",
+            "pt": "Personal Trainer",
+            "dietitian": "Diyetisyen",
+            "fullName": "Ad Soyad",
+            "email": "E-posta",
+            "password": "Şifre",
+            "confirmPassword": "Şifreyi Onayla",
+            "createAccount": "Hesap Oluştur",
+            "registering": "Kaydediliyor...",
+            "hasAccount": "Zaten hesabınız var mı?",
+            "signIn": "Buradan giriş yapın"
+        },
+        "sidebar": {
+            "dashboard": "Ana Sayfa",
+            "users": "Kullanıcılar",
+            "assignments": "Atamalar",
+            "messages": "Mesajlar",
+            "workouts": "Antrenmanlar",
+            "nutrition": "Beslenme",
+            "analytics": "Analitik",
+            "courses": "Kurslar",
+            "calendar": "Takvim",
+            "progress": "İlerleme Raporları",
+            "settings": "Ayarlar",
+            "legal": "Yasal Sözleşmeler",
+            "logout": "Çıkış Yap"
+        },
+        "users": {
+            "title": "Kullanıcılar",
+            "subtitle": "Kayıtlı tüm kullanıcıları yönetin",
+            "addUser": "Kullanıcı Ekle",
+            "search": "Kullanıcı adı veya e-posta ara...",
+            "filters": "Filtreler",
+            "user": "Kullanıcı",
+            "email": "E-posta",
+            "joined": "Katılım",
+            "status": "Durum",
+            "actions": "İşlemler",
+            "qr": "Seans QR Oluştur",
+            "edit": "Düzenle",
+            "delete": "Sil",
+            "totalUsers": "Toplam Kullanıcı",
+            "activeToday": "Bugün Aktif",
+            "newThisWeek": "Bu Hafta Yeni"
+        },
+        "dashboard": {
+            "title": "Ana Sayfa",
+            "welcome": "Tekrar hoş geldiniz",
+            "overview": "Bugünkü işleyişinizin bir özeti."
+        }
+    }
+}

@@ -1,0 +1,3125 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioSync — Yasal Sözleşmeler / Legal Agreements</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #1e1e35;
+            --accent: #00d4aa;
+            --accent-dim: #00a88a;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --text-primary: #e8e8f0;
+            --text-secondary: #9898b0;
+            --text-muted: #686880;
+            --border: #2a2a40;
+            --border-accent: rgba(0, 212, 170, 0.3);
+            --warning: #ff9f43;
+            --danger: #ff6b6b;
+            --info: #54a0ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-dim);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 2rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+
+        .header-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), #00b894);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--bg-primary);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .logo-text h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+        }
+
+        .header-meta {
+            text-align: right;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .header-meta a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* Language Switcher */
+        .lang-switcher {
+            display: flex;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .lang-btn {
+            padding: 0.45rem 1rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+        }
+
+        .lang-btn.active {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .lang-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(0, 212, 170, 0.08);
+        }
+
+        /* Language visibility — default: TR shown, EN hidden */
+        [data-lang="en"] {
+            display: none !important;
+        }
+
+        /* When EN is active: show EN, hide TR */
+        body.lang-en [data-lang="en"] {
+            display: revert !important;
+        }
+
+        body.lang-en [data-lang="tr"] {
+            display: none !important;
+        }
+
+        .toc {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .toc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .toc-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .toc-item:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .toc-number {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-glow);
+            border: 1px solid var(--border-accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .toc-label {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+            scroll-margin-top: 120px;
+        }
+
+        .section-header {
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.08), rgba(0, 184, 148, 0.04));
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: background 0.3s ease;
+        }
+
+        .section-header:hover {
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.12), rgba(0, 184, 148, 0.06));
+        }
+
+        .section-badge {
+            background: var(--accent);
+            color: var(--bg-primary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            flex: 1;
+        }
+
+        .section-toggle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+
+        .section.collapsed .section-body {
+            display: none;
+        }
+
+        .section.collapsed .section-toggle {
+            transform: rotate(-90deg);
+        }
+
+        .section-body {
+            padding: 2rem;
+        }
+
+        .article {
+            margin-bottom: 2rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .article:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .article h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .article h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 1.2rem 0 0.6rem;
+        }
+
+        .article p,
+        .article li {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            line-height: 1.8;
+        }
+
+        .article ul,
+        .article ol {
+            padding-left: 1.5rem;
+            margin: 0.8rem 0;
+        }
+
+        .article li {
+            margin-bottom: 0.4rem;
+        }
+
+        .article li strong {
+            color: var(--text-primary);
+        }
+
+        .alert {
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin: 1rem 0;
+            font-size: 0.88rem;
+            line-height: 1.6;
+            display: flex;
+            gap: 0.8rem;
+        }
+
+        .alert-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .alert-warning {
+            background: rgba(255, 159, 67, 0.08);
+            border: 1px solid rgba(255, 159, 67, 0.25);
+            color: var(--warning);
+        }
+
+        .alert-danger {
+            background: rgba(255, 107, 107, 0.08);
+            border: 1px solid rgba(255, 107, 107, 0.25);
+            color: var(--danger);
+        }
+
+        .alert-info {
+            background: rgba(84, 160, 255, 0.08);
+            border: 1px solid rgba(84, 160, 255, 0.25);
+            color: var(--info);
+        }
+
+        .alert-success {
+            background: var(--accent-glow);
+            border: 1px solid var(--border-accent);
+            color: var(--accent);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+        }
+
+        thead th {
+            background: rgba(0, 212, 170, 0.06);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 0.7rem 1rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(42, 42, 64, 0.5);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: rgba(0, 212, 170, 0.03);
+        }
+
+        .footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 2rem;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 44px;
+            height: 44px;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px var(--accent-glow);
+            transition: transform 0.2s ease;
+            z-index: 50;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-3px);
+        }
+
+        .back-to-top.visible {
+            display: flex;
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-meta {
+                text-align: center;
+            }
+
+            .header-right {
+                flex-direction: column;
+            }
+
+            .toc-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-body {
+                padding: 1.2rem;
+            }
+
+            .section-title {
+                font-size: 1.1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+        }
+
+        .sub-section {
+            background: rgba(26, 26, 46, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin: 1rem 0;
+        }
+
+        .sub-section h4 {
+            margin-top: 0;
+        }
+
+        .badge-required {
+            display: inline-block;
+            background: rgba(255, 107, 107, 0.15);
+            color: var(--danger);
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2rem 0;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">B</div>
+                <div class="logo-text">
+                    <h1>BioSync</h1>
+                    <p data-lang="tr">Yasal Sözleşmeler / Legal Agreements</p>
+                    <p data-lang="en">Legal Agreements</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="lang-switcher">
+                    <button class="lang-btn active" id="btn-tr" onclick="setLang('tr')">TR</button>
+                    <button class="lang-btn" id="btn-en" onclick="setLang('en')">EN</button>
+                </div>
+                <div class="header-meta">
+                    <div data-lang="tr">Son Güncelleme: Mart 2026</div>
+                    <div data-lang="en">Last Updated: March 2026</div>
+                    <div><a href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ TABLE OF CONTENTS — TR ============ -->
+    <nav class="toc" data-lang="tr">
+        <div class="toc-grid">
+            <a href="#kvkk" class="toc-item">
+                <div class="toc-number">1</div>
+                <div class="toc-label">KVKK Aydınlatma Metni</div>
+            </a>
+            <a href="#acik-riza" class="toc-item">
+                <div class="toc-number">2</div>
+                <div class="toc-label">Açık Rıza Metni</div>
+            </a>
+            <a href="#gizlilik" class="toc-item">
+                <div class="toc-number">3</div>
+                <div class="toc-label">Gizlilik Politikası</div>
+            </a>
+            <a href="#abonelik" class="toc-item">
+                <div class="toc-number">4</div>
+                <div class="toc-label">Abonelik ve İade Politikası</div>
+            </a>
+            <a href="#mss" class="toc-item">
+                <div class="toc-number">5</div>
+                <div class="toc-label">Mesafeli Satış Sözleşmesi</div>
+            </a>
+            <a href="#kullanim" class="toc-item">
+                <div class="toc-number">6</div>
+                <div class="toc-label">Kullanım Koşulları</div>
+            </a>
+        </div>
+    </nav>
+
+    <!-- ============ TABLE OF CONTENTS — EN ============ -->
+    <nav class="toc" data-lang="en">
+        <div class="toc-grid">
+            <a href="#kvkk" class="toc-item">
+                <div class="toc-number">1</div>
+                <div class="toc-label">KVKK Disclosure Notice</div>
+            </a>
+            <a href="#acik-riza" class="toc-item">
+                <div class="toc-number">2</div>
+                <div class="toc-label">Explicit Consent Form</div>
+            </a>
+            <a href="#gizlilik" class="toc-item">
+                <div class="toc-number">3</div>
+                <div class="toc-label">Privacy Policy</div>
+            </a>
+            <a href="#abonelik" class="toc-item">
+                <div class="toc-number">4</div>
+                <div class="toc-label">Subscription &amp; Refund Policy</div>
+            </a>
+            <a href="#mss" class="toc-item">
+                <div class="toc-number">5</div>
+                <div class="toc-label">Distance Sales Agreement</div>
+            </a>
+            <a href="#kullanim" class="toc-item">
+                <div class="toc-number">6</div>
+                <div class="toc-label">Terms of Use</div>
+            </a>
+        </div>
+    </nav>
+
+    <!-- ===================== MAIN CONTENT ===================== -->
+    <main class="container">
+
+        <!-- ==================== 1. KVKK ==================== -->
+        <section class="section" id="kvkk">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 1</span>
+                <span class="section-badge" data-lang="en">Section 1</span>
+                <h2 class="section-title" data-lang="tr">KVKK Aydınlatma Metni</h2>
+                <h2 class="section-title" data-lang="en">KVKK Disclosure Notice</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Kişisel Verilerin
+                    Korunması Kanunu (6698) Aydınlatma Metni — 7 Madde</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Veri Sorumlusunun Kimliği</h3>
+                    <p>BioSync ("Uygulama"), 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında veri
+                        sorumlusu sıfatıyla hareket etmektedir. İşbu aydınlatma metni, KVKK'nın 10. maddesi uyarınca
+                        hazırlanmıştır.</p>
+                    <p style="margin-top: 0.5rem;">İletişim: <a href="mailto:app.biosync@gmail.com"
+                            style="color: var(--accent);">app.biosync@gmail.com</a></p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — İşlenen Kişisel Veriler</h3>
+                    <p>Uygulama kapsamında aşağıdaki kişisel verileriniz işlenmektedir:</p>
+                    <ul>
+                        <li><strong>Kimlik Verileri:</strong> Ad, soyad, kullanıcı adı, doğum tarihi, cinsiyet</li>
+                        <li><strong>İletişim Verileri:</strong> E-posta adresi</li>
+                        <li><strong>Fiziksel Veriler:</strong> Boy, kilo, vücut ölçüleri, vücut yağ oranı</li>
+                        <li><strong>Sağlık Verileri (Özel Nitelikli):</strong> Antrenman geçmişi, beslenme
+                            alışkanlıkları, kalori takibi, su tüketimi, adım sayısı, uyku düzeni, sağlık hedefleri</li>
+                        <li><strong>Kullanım Verileri:</strong> Uygulama içi etkileşimler, tercihler, cihaz bilgileri
+                        </li>
+                        <li><strong>Biyometrik Veriler:</strong> Postür analizi kapsamında kamera ile elde edilen eklem
+                            açıları ve vücut duruş koordinatları (cihaz üzerinde işlenir, yalnızca anonim koordinatlar
+                            AI'a gönderilir)</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div><strong>ÖNEMLİ:</strong> Boy, kilo, beslenme alışkanlıkları, antrenman geçmişi, sağlık
+                            hedefleri ve biyometrik veriler gibi veriler KVKK kapsamında "Özel Nitelikli Kişisel Veri
+                            (Sağlık Verisi)" kategorisindedir. Bu verilerin işlenmesi için ayrıca Açık Rıza Metni'ni
+                            onaylamanız gerekmektedir.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — İşleme Amaçları</h3>
+                    <p>Kişisel verileriniz aşağıdaki amaçlarla KVKK'nın 5. ve 6. maddelerine uygun olarak işlenmektedir:
+                    </p>
+                    <ul>
+                        <li>AI tabanlı kişiselleştirilmiş antrenman ve beslenme programlarının oluşturulması</li>
+                        <li>Yapay zeka algoritmalarıyla otomatik program ve görev üretilmesi (AI Coach, AI Dietitian, AI
+                            Chef, AI Program Creator)</li>
+                        <li>Postür analizi ve vücut formu değerlendirmesi</li>
+                        <li>Yemek fotoğraflarından besin değeri analizi (Food Scanner)</li>
+                        <li>Seçtiğiniz profesyonellerle (Personal Trainer / Diyetisyen) veri paylaşımının sağlanması
+                        </li>
+                        <li>Gamification sistemi (lig, XP, görevler, coin) kapsamında kullanıcı deneyiminin
+                            kişiselleştirilmesi</li>
+                        <li>Topluluk özellikleri (forum, sıralama, başarılar)</li>
+                        <li>Uygulama performansının iyileştirilmesi ve hata tespiti</li>
+                        <li>Yasal yükümlülüklerin yerine getirilmesi</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — İşlenen Kişisel Verilerin Aktarımı</h3>
+                    <p>Kişisel verileriniz aşağıdaki alıcı gruplarına aktarılmaktadır:</p>
+                    <h4>Yurt Dışı Aktarımları:</h4>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Hizmet Sağlayıcı</th>
+                                    <th>Lokasyon</th>
+                                    <th>Amaç</th>
+                                    <th>Güvenlik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>AWS/Google Cloud (ABD/AB)</td>
+                                    <td>Veri saklama ve yönetim</td>
+                                    <td>Row Level Security (RLS)</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek AI</td>
+                                    <td>Çin (Hangzhou)</td>
+                                    <td>AI model sağlayıcısı</td>
+                                    <td>Anonimleştirme — Kimlik, fotoğraf, IP gönderilmez</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>ABD</td>
+                                    <td>Hata izleme ve performans</td>
+                                    <td>Kullanıcı kimliği gönderilmez</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Türkiye</td>
+                                    <td>Ödeme işleme</td>
+                                    <td>PCI DSS / 3D Secure — Kart bilgileri BioSync'te saklanmaz (BDDK lisanslı)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Uluslararası Genişleme Planı:</h4>
+                    <ul>
+                        <li>BioSync'in ileride Birleşik Arap Emirlikleri (Dubai) ve diğer uluslararası bölgelere
+                            genişlemesi planlanmaktadır</li>
+                        <li>Verileriniz BAE'deki sunuculara aktarılabilir (DIFC Data Protection Law No. 5/2020 uyumlu)
+                        </li>
+                        <li>BAE Federal Veri Koruma Kanunu (Federal Decree-Law No. 45/2021 — PDPL) kapsamındaki
+                            yükümlülükler de ayrıca yerine getirilecektir</li>
+                        <li>Yeni aktarım bölgeleri hakkında güncellenmiş aydınlatma metni ve ek açık rıza alınacaktır
+                        </li>
+                        <li>Mevcut KVKK hakları ve güvenlik standartları tüm bölgelerde geçerliliğini koruyacaktır</li>
+                    </ul>
+                    <div class="alert alert-success">
+                        <span class="alert-icon">🔒</span>
+                        <div>Verileriniz, açık rızanız olmaksızın hiçbir üçüncü taraf reklam şirketine satılmaz,
+                            kiralanmaz veya paylaşılmaz.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — Veri Toplamanın Yöntemi ve Hukuki Sebebi</h3>
+                    <p>Verileriniz uygulama üzerinden tamamen dijital ve otomatik yollarla toplanmaktadır.</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Veri Kategorisi</th>
+                                    <th>Hukuki Sebep</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Genel kişisel veriler</td>
+                                    <td>Sözleşmenin kurulması veya ifası (KVKK md. 5/2-c)</td>
+                                </tr>
+                                <tr>
+                                    <td>Sağlık verileri</td>
+                                    <td>Açık rıza (KVKK md. 6/2)</td>
+                                </tr>
+                                <tr>
+                                    <td>Yurt dışı aktarım</td>
+                                    <td>Açık rıza (KVKK md. 9/1)</td>
+                                </tr>
+                                <tr>
+                                    <td>Biyometrik veriler</td>
+                                    <td>Açık rıza (KVKK md. 6/2) + Just-in-Time Consent</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 6 — Veri Saklama Süresi</h3>
+                    <p>Kişisel verileriniz, hesabınız aktif olduğu sürece saklanır. Hesabınızı sildiğinizde:</p>
+                    <ul>
+                        <li>Kişisel verileriniz <strong>30 gün</strong> içinde sistemden kalıcı olarak imha edilir</li>
+                        <li>Yedek sistemlerden <strong>90 gün</strong> içinde silinir</li>
+                        <li>Anonim istatistiki veriler korunabilir (kişisel veri niteliği taşımaz)</li>
+                        <li>Biyometrik veriler (postür koordinatları vb.) analiz tamamlandıktan sonra cihazdan otomatik
+                            silinir, sunucuda saklanmaz</li>
+                        <li>Yasal yükümlülükler kapsamında saklanması gereken veriler ilgili mevzuatta belirtilen süre
+                            boyunca muhafaza edilir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 7 — İlgili Kişinin Hakları (KVKK Madde 11)</h3>
+                    <p>KVKK'nın 11. maddesi kapsamında aşağıdaki haklara sahipsiniz:</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Hak</th>
+                                    <th>Açıklama</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>a</strong></td>
+                                    <td>Kişisel verilerinizin işlenip işlenmediğini öğrenme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>b</strong></td>
+                                    <td>İşlenmiş ise buna ilişkin bilgi talep etme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>c</strong></td>
+                                    <td>İşlenme amacını ve bunların amacına uygun kullanılıp kullanılmadığını öğrenme
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>d</strong></td>
+                                    <td>Yurt içinde veya yurt dışında aktarıldığı üçüncü kişileri bilme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>e</strong></td>
+                                    <td>Eksik veya yanlış işlenmiş ise düzeltilmesini isteme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>f</strong></td>
+                                    <td>KVKK md. 7 kapsamındaki şartlar çerçevesinde silinmesini veya yok edilmesini
+                                        isteme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>g</strong></td>
+                                    <td>Yapılan işlemlerin aktarıldığı üçüncü kişilere bildirilmesini isteme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>h</strong></td>
+                                    <td>Otomatik sistemler vasıtasıyla analiz edilmesi suretiyle aleyhinize sonuç
+                                        çıkmasına itiraz etme</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ı</strong></td>
+                                    <td>Kanuna aykırı işleme sebebiyle zarara uğramanız hâlinde zararın giderilmesini
+                                        talep etme</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Başvuru Kanalları:</h4>
+                    <ul>
+                        <li><strong>E-posta:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>Uygulama İçi:</strong> Ayarlar > Gizlilik > Veri Talebi</li>
+                        <li><strong>Yanıt süresi:</strong> 30 gün (KVKK md. 13)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Personal Data Protection
+                    Law (No. 6698) Disclosure Notice — 7 Articles</p>
+
+                <div class="article">
+                    <h3>Article 1 — Identity of the Data Controller</h3>
+                    <p>BioSync ("Application") acts as a data controller within the scope of the Personal Data
+                        Protection Law No. 6698 ("KVKK"). This disclosure notice has been prepared in accordance with
+                        Article 10 of the KVKK.</p>
+                    <p style="margin-top: 0.5rem;">Contact: <a href="mailto:app.biosync@gmail.com"
+                            style="color: var(--accent);">app.biosync@gmail.com</a></p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Personal Data Processed</h3>
+                    <p>The following personal data is processed within the scope of the Application:</p>
+                    <ul>
+                        <li><strong>Identity Data:</strong> Name, surname, username, date of birth, gender</li>
+                        <li><strong>Contact Data:</strong> Email address</li>
+                        <li><strong>Physical Data:</strong> Height, weight, body measurements, body fat percentage</li>
+                        <li><strong>Health Data (Sensitive):</strong> Workout history, dietary habits, calorie tracking,
+                            water intake, step count, sleep patterns, health goals</li>
+                        <li><strong>Usage Data:</strong> In-app interactions, preferences, device information</li>
+                        <li><strong>Biometric Data:</strong> Joint angles and body posture coordinates obtained via
+                            camera for posture analysis (processed on-device, only anonymous coordinates are sent to AI)
+                        </li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div><strong>IMPORTANT:</strong> Data such as height, weight, dietary habits, workout history,
+                            health goals, and biometric data are classified as "Sensitive Personal Data (Health Data)"
+                            under KVKK. You must also approve the Explicit Consent Form for processing of this data.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Purposes of Processing</h3>
+                    <p>Your personal data is processed in accordance with Articles 5 and 6 of the KVKK for the following
+                        purposes:</p>
+                    <ul>
+                        <li>Creating AI-based personalized workout and nutrition programs</li>
+                        <li>Automatic program and task generation through AI algorithms (AI Coach, AI Dietitian, AI
+                            Chef, AI Program Creator)</li>
+                        <li>Posture analysis and body form assessment</li>
+                        <li>Nutritional value analysis from food photos (Food Scanner)</li>
+                        <li>Facilitating data sharing with your selected professionals (Personal Trainer / Dietitian)
+                        </li>
+                        <li>Personalizing user experience within the gamification system (leagues, XP, missions, coins)
+                        </li>
+                        <li>Community features (forum, rankings, achievements)</li>
+                        <li>Improving application performance and error detection</li>
+                        <li>Fulfilling legal obligations</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — Transfer of Personal Data</h3>
+                    <p>Your personal data is transferred to the following recipient groups:</p>
+                    <h4>International Transfers:</h4>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Service Provider</th>
+                                    <th>Location</th>
+                                    <th>Purpose</th>
+                                    <th>Security</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>AWS/Google Cloud (US/EU)</td>
+                                    <td>Data storage and management</td>
+                                    <td>Row Level Security (RLS)</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek AI</td>
+                                    <td>China (Hangzhou)</td>
+                                    <td>AI model provider</td>
+                                    <td>Anonymization — Identity, photos, IP not sent</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>USA</td>
+                                    <td>Error tracking and performance</td>
+                                    <td>User identity not sent</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Turkey</td>
+                                    <td>Payment processing</td>
+                                    <td>PCI DSS / 3D Secure — Card info not stored on BioSync (BRSA licensed)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>International Expansion Plan:</h4>
+                    <ul>
+                        <li>BioSync plans to expand to the United Arab Emirates (Dubai) and other international regions
+                            in the future</li>
+                        <li>Your data may be transferred to UAE servers (DIFC Data Protection Law No. 5/2020 compliant)
+                        </li>
+                        <li>Obligations under UAE Federal Data Protection Law (Federal Decree-Law No. 45/2021 — PDPL)
+                            will also be fulfilled</li>
+                        <li>Updated disclosure notice and additional explicit consent will be obtained for new transfer
+                            regions</li>
+                        <li>Existing KVKK rights and security standards will remain valid across all regions</li>
+                    </ul>
+                    <div class="alert alert-success">
+                        <span class="alert-icon">🔒</span>
+                        <div>Your data will not be sold, rented, or shared with any third-party advertising company
+                            without your explicit consent.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Method and Legal Basis of Data Collection</h3>
+                    <p>Your data is collected entirely through digital and automated means via the application.</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data Category</th>
+                                    <th>Legal Basis</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>General personal data</td>
+                                    <td>Establishment or performance of contract (KVKK Art. 5/2-c)</td>
+                                </tr>
+                                <tr>
+                                    <td>Health data</td>
+                                    <td>Explicit consent (KVKK Art. 6/2)</td>
+                                </tr>
+                                <tr>
+                                    <td>International transfer</td>
+                                    <td>Explicit consent (KVKK Art. 9/1)</td>
+                                </tr>
+                                <tr>
+                                    <td>Biometric data</td>
+                                    <td>Explicit consent (KVKK Art. 6/2) + Just-in-Time Consent</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 6 — Data Retention Period</h3>
+                    <p>Your personal data is retained as long as your account is active. When you delete your account:
+                    </p>
+                    <ul>
+                        <li>Your personal data is permanently destroyed within <strong>30 days</strong></li>
+                        <li>Deleted from backup systems within <strong>90 days</strong></li>
+                        <li>Anonymous statistical data may be retained (does not constitute personal data)</li>
+                        <li>Biometric data (posture coordinates, etc.) is automatically deleted from the device after
+                            analysis is complete; not stored on servers</li>
+                        <li>Data required to be retained under legal obligations is preserved for the period specified
+                            in the relevant legislation</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 7 — Rights of the Data Subject (KVKK Article 11)</h3>
+                    <p>You have the following rights under Article 11 of the KVKK:</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Right</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>a</strong></td>
+                                    <td>To learn whether your personal data is processed</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>b</strong></td>
+                                    <td>To request information if your data has been processed</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>c</strong></td>
+                                    <td>To learn the purpose of processing and whether data is used in accordance with
+                                        its purpose</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>d</strong></td>
+                                    <td>To know the third parties to whom data is transferred domestically or abroad
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>e</strong></td>
+                                    <td>To request correction if data is incomplete or inaccurate</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>f</strong></td>
+                                    <td>To request deletion or destruction under conditions of KVKK Art. 7</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>g</strong></td>
+                                    <td>To request notification of corrections/deletions to third parties</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>h</strong></td>
+                                    <td>To object to any adverse result arising from automated analysis</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>i</strong></td>
+                                    <td>To claim compensation for damages resulting from unlawful processing</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Application Channels:</h4>
+                    <ul>
+                        <li><strong>Email:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>In-App:</strong> Settings > Privacy > Data Request</li>
+                        <li><strong>Response time:</strong> 30 days (KVKK Art. 13)</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 2. AÇIK RIZA ==================== -->
+        <section class="section" id="acik-riza">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 2</span>
+                <span class="section-badge" data-lang="en">Section 2</span>
+                <h2 class="section-title" data-lang="tr">Açık Rıza Metni</h2>
+                <h2 class="section-title" data-lang="en">Explicit Consent Form</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">6698 Sayılı KVKK
+                    Kapsamında Açık Rıza Beyanı — 5 Madde</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Özel Nitelikli Kişisel Verilerin İşlenmesi</h3>
+                    <p>6698 sayılı KVKK'nın 6. maddesi uyarınca, aşağıdaki özel nitelikli kişisel verilerimin
+                        işlenmesine açık rızam ile onay veriyorum:</p>
+                    <h4>İşlenen Özel Nitelikli Veriler:</h4>
+                    <ul>
+                        <li>Boy, kilo, vücut ölçüleri, vücut yağ oranı</li>
+                        <li>Beslenme alışkanlıkları, kalori takibi, makro değerleri</li>
+                        <li>Antrenman geçmişi, egzersiz performansı</li>
+                        <li>Su tüketimi, adım sayısı, aktivite verileri</li>
+                        <li>Uyku düzeni ve sağlık hedefleri</li>
+                        <li>Apple HealthKit / Google Health Connect entegrasyon verileri (yalnızca kullanıcı izni ile)
+                        </li>
+                        <li>Biyometrik veriler: Postür analizi kapsamında kamera ile elde edilen eklem açıları ve vücut
+                            duruş koordinatları</li>
+                    </ul>
+                    <h4>İşleme Amaçları:</h4>
+                    <ul>
+                        <li>AI Coach ile kişiselleştirilmiş fitness programları</li>
+                        <li>AI Dietitian ile beslenme planları</li>
+                        <li>AI Chef ile makro hedeflerine uygun tarifler</li>
+                        <li>AI Program Creator ile otomatik antrenman programları</li>
+                        <li>Postür/form analizi ile hareket düzeltme önerileri</li>
+                        <li>Food Scanner ile fotoğraftan besin değeri tespiti</li>
+                        <li>Seçilen profesyonellerle (PT / Diyetisyen) paylaşım</li>
+                        <li>Gamification sistemi (lig, XP, görev, günlük streak)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — Yurt Dışına Veri Aktarımı Rızası</h3>
+                    <p>KVKK'nın 9. maddesi uyarınca, kişisel verilerimin aşağıdaki yurt dışı hizmet sağlayıcılarına
+                        aktarılmasına açık rızam ile onay veriyorum:</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Sağlayıcı</th>
+                                    <th>Lokasyon</th>
+                                    <th>Amaç</th>
+                                    <th>Güvenlik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>ABD/AB</td>
+                                    <td>Veritabanı &amp; auth</td>
+                                    <td>Row Level Security</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek AI</td>
+                                    <td>Çin (Hangzhou)</td>
+                                    <td>AI modeli</td>
+                                    <td>Anonimleştirme</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>ABD</td>
+                                    <td>Hata izleme</td>
+                                    <td>Kimlik gönderilmez</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Türkiye</td>
+                                    <td>Ödeme</td>
+                                    <td>PCI DSS / 3D Secure</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Güvenlik Tedbirleri:</h4>
+                    <ul>
+                        <li>Tüm veri aktarımları SSL/TLS 1.3 şifreleme ile korunur</li>
+                        <li>DeepSeek'e gönderilen veriler anonimleştirilerek kişisel veri niteliği ortadan kaldırılır
+                            (kullanıcı adı, e-posta, IP adresi, fotoğraf gönderilmez)</li>
+                        <li>Supabase'de Row Level Security (RLS) politikaları ile kullanıcılar yalnızca kendi verilerine
+                            erişebilir</li>
+                        <li>Meta-veri sıyırma uygulanarak HTTP header'larında tanımlayıcı bilgi iletilmez</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — Yapay Zeka ile Otomatik Karar Alma Rızası</h3>
+                    <p>BioSync uygulamasında yapay zeka (DeepSeek AI) ile otomatik olarak oluşturulan:</p>
+                    <ul>
+                        <li>Antrenman programları ve egzersiz önerileri</li>
+                        <li>Beslenme planları ve kalori hedefleri</li>
+                        <li>Günlük/haftalık görevler ve zorluk seviyeleri</li>
+                        <li>Postür analizi sonuçları ve düzeltme önerileri</li>
+                        <li>Yemek fotoğraflarından besin değeri tahminleri</li>
+                    </ul>
+                    <p>gibi kararların üretilmesine açık rızam ile onay veriyorum.</p>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div>
+                            <strong>ÖNEMLİ UYARILAR:</strong><br>
+                            • AI tarafından üretilen tüm içerikler yalnızca bilgilendirme ve öneri niteliğindedir<br>
+                            • Hiçbir AI yanıtı tıbbi tavsiye, teşhis veya tedavi yerine geçmez<br>
+                            • Bireysel sağlık durumunuza göre sonuçları kontrol ediniz<br>
+                            • Herhangi bir programa başlamadan önce sağlık profesyoneline danışınız<br>
+                            • AI halüsinasyonu nedeniyle hatalı bilgi üretilebilir; %100 doğruluk garanti edilmez
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — Biyometrik ve Görsel Veri İşleme Rızası</h3>
+                    <p>Aşağıdaki biyometrik ve görsel veri işleme faaliyetlerine açık rızam ile onay veriyorum:</p>
+                    <div class="sub-section">
+                        <h4>a) Postür Analizi (PostureAnalysisScreen)</h4>
+                        <ul>
+                            <li>Kamera ile vücut duruşunun görüntülenmesi</li>
+                            <li>Eklem açıları ve vücut koordinatlarının cihaz üzerinde hesaplanması</li>
+                            <li>Yalnızca anonim koordinat verilerinin (ör: lumbar: 32°, knee: 88°, shoulder: 15°)
+                                DeepSeek AI'a gönderilmesi</li>
+                            <li>Ham fotoğraf/video verisi DeepSeek'e gönderilmez, sunucuda saklanmaz</li>
+                            <li>İşleme öncesinde ayrıca anlık onam (Just-in-Time Consent) modalı gösterilir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) Yemek Fotoğrafı Tarama (FoodScannerScreen)</h4>
+                        <ul>
+                            <li>Kamera veya galeriden alınan yemek fotoğrafının AI ile analizi</li>
+                            <li>Besin değeri, kalori, makro ve mikro besin tespiti</li>
+                            <li>Fotoğraf yalnızca analiz süresince işlenir, kalıcı saklanmaz</li>
+                            <li>İşleme öncesinde ayrıca anlık onam modalı gösterilir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Vücut/Fizik Analizi (AICoachScreen)</h4>
+                        <ul>
+                            <li>Fotoğraf ile kas grupları ve fiziksel gelişim analizi</li>
+                            <li>Güçlü ve geliştirilmesi gereken bölgelerin tespiti</li>
+                            <li>Kişiselleştirilmiş antrenman önerilerinin oluşturulması</li>
+                            <li>Fotoğraf yalnızca analiz süresince işlenir, kalıcı saklanmaz</li>
+                            <li>İşleme öncesinde ayrıca anlık onam modalı gösterilir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) Barkod Tarama (BarcodeScannerScreen)</h4>
+                        <ul>
+                            <li>Kamera ile ürün barkodunun okunması</li>
+                            <li>OpenFoodFacts vb. veritabanlarından ürün bilgisi çekilmesi</li>
+                            <li>İşleme öncesinde ayrıca anlık onam modalı gösterilir</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div><strong>NOT:</strong> Tüm biyometrik veri işleme faaliyetleri için KVKK md. 6 kapsamında
+                            burada verilen genel onaya ek olarak, her özelliğin ilk kullanımında ayrıca anlık onam
+                            (Just-in-Time Consent) modalı gösterilir. Bu onam 24 saat geçerlidir ve süre sonunda yeniden
+                            istenir.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — Rızanın Geri Alınması</h3>
+                    <p>KVKK'nın 7. maddesi uyarınca, işbu metinle verdiğim açık rızamı her zaman, herhangi bir gerekçe
+                        göstermeksizin geri alma hakkına sahibim.</p>
+                    <p>Rızanın geri alınması durumunda:</p>
+                    <ul>
+                        <li>Geri alma öncesinde gerçekleştirilen işlemler hukuka uygunluğunu korur</li>
+                        <li>Verileriniz <strong>30 gün</strong> içinde sistemden silinir</li>
+                        <li>Bazı uygulama özellikleri (AI tabanlı özellikler, biyometrik analizler) kullanılamaz hale
+                            gelebilir</li>
+                        <li>Geri alma talebi derhal işleme alınır</li>
+                    </ul>
+                    <h4>Rıza Geri Alma Kanalları:</h4>
+                    <ul>
+                        <li><strong>Uygulama İçi:</strong> Ayarlar > Gizlilik > Veri İşleme İzni</li>
+                        <li><strong>E-posta:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>Yanıt süresi:</strong> En geç 30 gün</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Explicit Consent
+                    Declaration under KVKK (Law No. 6698) — 5 Articles</p>
+
+                <div class="article">
+                    <h3>Article 1 — Processing of Sensitive Personal Data</h3>
+                    <p>Pursuant to Article 6 of the KVKK (Law No. 6698), I hereby give my explicit consent for the
+                        processing of the following sensitive personal data:</p>
+                    <h4>Sensitive Data Processed:</h4>
+                    <ul>
+                        <li>Height, weight, body measurements, body fat percentage</li>
+                        <li>Dietary habits, calorie tracking, macro values</li>
+                        <li>Workout history, exercise performance</li>
+                        <li>Water intake, step count, activity data</li>
+                        <li>Sleep patterns and health goals</li>
+                        <li>Apple HealthKit / Google Health Connect integration data (only with user permission)</li>
+                        <li>Biometric data: Joint angles and body posture coordinates obtained via camera for posture
+                            analysis</li>
+                    </ul>
+                    <h4>Processing Purposes:</h4>
+                    <ul>
+                        <li>Personalized fitness programs with AI Coach</li>
+                        <li>Nutrition plans with AI Dietitian</li>
+                        <li>Macro-targeted recipes with AI Chef</li>
+                        <li>Automatic workout programs with AI Program Creator</li>
+                        <li>Posture/form analysis with movement correction suggestions</li>
+                        <li>Nutritional value detection from photos with Food Scanner</li>
+                        <li>Sharing with selected professionals (PT / Dietitian)</li>
+                        <li>Gamification system (leagues, XP, missions, daily streaks)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Consent for International Data Transfer</h3>
+                    <p>Pursuant to Article 9 of the KVKK, I hereby give my explicit consent for the transfer of my
+                        personal data to the following international service providers:</p>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>Location</th>
+                                    <th>Purpose</th>
+                                    <th>Security</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>US/EU</td>
+                                    <td>Database &amp; auth</td>
+                                    <td>Row Level Security</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek AI</td>
+                                    <td>China (Hangzhou)</td>
+                                    <td>AI model</td>
+                                    <td>Anonymization</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>USA</td>
+                                    <td>Error tracking</td>
+                                    <td>Identity not sent</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Turkey</td>
+                                    <td>Payment</td>
+                                    <td>PCI DSS / 3D Secure</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Security Measures:</h4>
+                    <ul>
+                        <li>All data transfers are protected with SSL/TLS 1.3 encryption</li>
+                        <li>Data sent to DeepSeek is anonymized, removing personal data characteristics (username,
+                            email, IP address, photos are not sent)</li>
+                        <li>Row Level Security (RLS) policies in Supabase ensure users can only access their own data
+                        </li>
+                        <li>Metadata stripping is applied; no identifying information is transmitted in HTTP headers
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Consent for Automated AI Decision-Making</h3>
+                    <p>I hereby give my explicit consent for the automatic generation of the following by artificial
+                        intelligence (DeepSeek AI) within the BioSync application:</p>
+                    <ul>
+                        <li>Workout programs and exercise recommendations</li>
+                        <li>Nutrition plans and calorie targets</li>
+                        <li>Daily/weekly missions and difficulty levels</li>
+                        <li>Posture analysis results and correction suggestions</li>
+                        <li>Nutritional value estimates from food photos</li>
+                    </ul>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div>
+                            <strong>IMPORTANT WARNINGS:</strong><br>
+                            • All AI-generated content is for informational and recommendation purposes only<br>
+                            • No AI response replaces medical advice, diagnosis, or treatment<br>
+                            • Verify results according to your individual health condition<br>
+                            • Consult a healthcare professional before starting any program<br>
+                            • AI hallucination may produce inaccurate information; 100% accuracy is not guaranteed
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — Consent for Biometric and Visual Data Processing</h3>
+                    <p>I hereby give my explicit consent for the following biometric and visual data processing
+                        activities:</p>
+                    <div class="sub-section">
+                        <h4>a) Posture Analysis (PostureAnalysisScreen)</h4>
+                        <ul>
+                            <li>Viewing body posture via camera</li>
+                            <li>On-device calculation of joint angles and body coordinates</li>
+                            <li>Sending only anonymous coordinate data (e.g., lumbar: 32°, knee: 88°, shoulder: 15°) to
+                                DeepSeek AI</li>
+                            <li>Raw photo/video data is not sent to DeepSeek and is not stored on servers</li>
+                            <li>A Just-in-Time Consent modal is shown before processing</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) Food Photo Scanning (FoodScannerScreen)</h4>
+                        <ul>
+                            <li>AI analysis of food photos from camera or gallery</li>
+                            <li>Detection of nutritional value, calories, macro and micro nutrients</li>
+                            <li>Photos are processed only during analysis and not permanently stored</li>
+                            <li>A Just-in-Time Consent modal is shown before processing</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Body/Physique Analysis (AICoachScreen)</h4>
+                        <ul>
+                            <li>Analysis of muscle groups and physical development via photo</li>
+                            <li>Identification of strong areas and areas needing improvement</li>
+                            <li>Creation of personalized workout recommendations</li>
+                            <li>Photos are processed only during analysis and not permanently stored</li>
+                            <li>A Just-in-Time Consent modal is shown before processing</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) Barcode Scanning (BarcodeScannerScreen)</h4>
+                        <ul>
+                            <li>Reading product barcodes via camera</li>
+                            <li>Retrieving product information from databases such as OpenFoodFacts</li>
+                            <li>A Just-in-Time Consent modal is shown before processing</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div><strong>NOTE:</strong> In addition to the general consent given here under KVKK Art. 6 for
+                            all biometric data processing activities, a separate Just-in-Time Consent modal is shown on
+                            first use of each feature. This consent is valid for 24 hours and is re-requested upon
+                            expiration.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Withdrawal of Consent</h3>
+                    <p>Pursuant to Article 7 of the KVKK, I have the right to withdraw my explicit consent given in this
+                        form at any time without providing any reason.</p>
+                    <p>In case of consent withdrawal:</p>
+                    <ul>
+                        <li>Processing performed prior to withdrawal remains lawful</li>
+                        <li>Your data will be deleted from the system within <strong>30 days</strong></li>
+                        <li>Some application features (AI-based features, biometric analyses) may become unavailable
+                        </li>
+                        <li>Withdrawal requests are processed immediately</li>
+                    </ul>
+                    <h4>Consent Withdrawal Channels:</h4>
+                    <ul>
+                        <li><strong>In-App:</strong> Settings > Privacy > Data Processing Permission</li>
+                        <li><strong>Email:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>Response time:</strong> Maximum 30 days</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 3. GİZLİLİK POLİTİKASI ==================== -->
+        <section class="section" id="gizlilik">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 3</span>
+                <span class="section-badge" data-lang="en">Section 3</span>
+                <h2 class="section-title" data-lang="tr">Gizlilik Politikası</h2>
+                <h2 class="section-title" data-lang="en">Privacy Policy</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Kişisel Verilerin
+                    Korunması ve Gizlilik Politikası — 7 Madde</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Veri Güvenliği Tedbirleri</h3>
+                    <p>BioSync, kişisel verilerinizi en üst düzey güvenlik standartlarına uygun olarak korumaktadır:</p>
+                    <h4>Teknik Tedbirler:</h4>
+                    <ul>
+                        <li><strong>Supabase Row Level Security (RLS):</strong> Her kullanıcı yalnızca kendi verilerine
+                            erişebilir</li>
+                        <li><strong>AES-256 Şifreleme:</strong> Hassas veriler depolama sırasında şifrelenir</li>
+                        <li><strong>SSL/TLS 1.3:</strong> Tüm veri iletişimi şifrelenmiş kanallar üzerinden gerçekleşir
+                        </li>
+                        <li><strong>API Key Güvenliği:</strong> Anahtarlar environment variable'larda saklanır, kod
+                            içinde bulunmaz</li>
+                        <li><strong>Rate Limiting:</strong> API isteklerine hız sınırlaması uygulanır</li>
+                        <li><strong>Input Validation:</strong> Tüm kullanıcı girdileri doğrulanır ve temizlenir</li>
+                    </ul>
+                    <h4>İdari Tedbirler:</h4>
+                    <ul>
+                        <li>Minimum yetki prensibi uygulanır</li>
+                        <li>Düzenli güvenlik denetimleri yapılır</li>
+                        <li>Veri ihlali prosedürleri tanımlanmıştır</li>
+                        <li>Personel gizlilik eğitimleri verilmektedir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — Toplanan Sağlık Verileri</h3>
+                    <p>Uygulama kapsamında toplanan sağlık verileri KVKK md. 6 kapsamında "Özel Nitelikli Kişisel Veri"
+                        olarak sınıflandırılmaktadır:</p>
+                    <ul>
+                        <li>Fiziksel ölçümler (boy, kilo, vücut yağ oranı, kas kitlesi)</li>
+                        <li>Beslenme verileri (kalori, protein, karbonhidrat, yağ takibi)</li>
+                        <li>Aktivite verileri (adım sayısı, aktif dakika, kalori yakımı)</li>
+                        <li>Su tüketim verileri</li>
+                        <li>Uyku düzeni (süre, kalite)</li>
+                        <li>Antrenman geçmişi ve performans metrikleri</li>
+                        <li>Sağlık hedefleri ve ilerleme kayıtları</li>
+                        <li>Biyometrik veriler (eklem açıları, vücut duruş koordinatları — yalnızca analiz sırasında)
+                        </li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>Bu verilerin işlenmesi için ayrıca "Açık Rıza Metni" onayınız alınmaktadır.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — Üçüncü Taraf Entegrasyonlar</h3>
+                    <div class="sub-section">
+                        <h4>a) Apple HealthKit / Google Health Connect:</h4>
+                        <ul>
+                            <li>Yalnızca kullanıcının açıkça izin verdiği veri kategorileri</li>
+                            <li>Kullanıcı izni her zaman cihaz ayarlarından iptal edilebilir</li>
+                            <li>HealthKit verileri DeepSeek AI'a gönderilmez</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) DeepSeek AI (Yapay Zeka):</h4>
+                        <ul>
+                            <li>Yalnızca anonimleştirilerek veri gönderilir</li>
+                            <li>Kullanıcı kimlik bilgisi (ad, e-posta, user_id) iletilmez</li>
+                            <li>Fotoğraf/video ham verisi gönderilmez; yalnızca metin veya sayısal koordinatlar</li>
+                            <li>Meta-veri sıyırma uygulanır (IP, User-Agent, Referer gönderilmez)</li>
+                            <li>Her istek bağımsızdır; oturum/konuşma takibi yapılmaz</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Sentry (Hata İzleme):</h4>
+                        <ul>
+                            <li>Yalnızca hata logları ve performans metrikleri</li>
+                            <li>Kişisel sağlık verileri Sentry'ye gönderilmez</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) iyzico (Ödeme):</h4>
+                        <ul>
+                            <li>Kredi kartı bilgileri yalnızca iyzico tarafından işlenir</li>
+                            <li>BioSync sunucularında kart bilgisi saklanmaz</li>
+                            <li>PCI DSS ve 3D Secure uyumlu altyapı</li>
+                            <li>Türkiye merkezli lisanslı ödeme kuruluşu (BDDK)</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-success">
+                        <span class="alert-icon">🔒</span>
+                        <div>Verileriniz hiçbir reklam ağıyla paylaşılmaz. Verileriniz üçüncü taraflara satılmaz.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — Yurt Dışına Veri Aktarımı</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Sağlayıcı</th>
+                                    <th>Lokasyon</th>
+                                    <th>Güvenlik</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>AWS (us-east-1) / Google Cloud (europe-west-1)</td>
+                                    <td>AES-256, RLS, yedekleme</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek</td>
+                                    <td>Çin (Hangzhou)</td>
+                                    <td>Yalnızca anonim veri, TLS 1.3</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>ABD</td>
+                                    <td>Yalnızca hata logları</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Türkiye</td>
+                                    <td>PCI DSS / 3D Secure uyumlu</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>BAE/Dubai Genişleme:</h4>
+                    <ul>
+                        <li>Ek olarak DIFC (Dubai International Financial Centre) ve ADGM sunucuları kullanılabilir</li>
+                        <li>BAE PDPL (Federal Law No. 45/2021) uyumluluğu sağlanır</li>
+                        <li>Anonimleştirilmiş veri, BAE PDPL kapsamında "kişisel veri" sayılmaz (Madde 2/1 istisnası)
+                        </li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>Tüm yurt dışı aktarımlar KVKK md. 9 uyarınca açık rızanıza dayanmaktadır.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — Veri Saklama ve İmha Politikası</h3>
+                    <h4>Saklama Süreleri:</h4>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Veri Türü</th>
+                                    <th>Süre</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Hesap verileri</td>
+                                    <td>Hesap aktifken</td>
+                                </tr>
+                                <tr>
+                                    <td>İşlem logları</td>
+                                    <td>12 ay</td>
+                                </tr>
+                                <tr>
+                                    <td>Hata logları (Sentry)</td>
+                                    <td>90 gün</td>
+                                </tr>
+                                <tr>
+                                    <td>Ödeme kayıtları</td>
+                                    <td>10 yıl (VUK md. 253)</td>
+                                </tr>
+                                <tr>
+                                    <td>Biyometrik veriler</td>
+                                    <td>Analiz sonrası derhal silinir</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Hesap Silme Durumunda:</h4>
+                    <ul>
+                        <li>Kişisel veriler <strong>30 gün</strong> içinde kalıcı olarak imha edilir</li>
+                        <li>Yedek sistemlerden <strong>90 gün</strong> içinde silinir</li>
+                        <li>Anonim istatistiki veriler korunabilir</li>
+                        <li>Yasal zorunluluk verileri ilgili süre boyunca saklanır</li>
+                        <li>İmha sertifikası talep üzerine sunulur</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 6 — Çerez ve İzleme Teknolojileri</h3>
+                    <h4>BioSync Mobil Uygulama:</h4>
+                    <ul>
+                        <li>Üçüncü taraf çerez kullanılmaz</li>
+                        <li>Reklam izleme (advertising tracking) yapılmaz</li>
+                        <li>Yalnızca Sentry hata izleme sistemi aktiftir</li>
+                        <li>IDFA / Advertising ID toplanmaz</li>
+                    </ul>
+                    <h4>BioSync Web Dashboard:</h4>
+                    <ul>
+                        <li>Yalnızca oturum yönetimi için temel çerezler kullanılır</li>
+                        <li>Analitik veya reklam çerezi yoktur</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 7 — Çocukların Gizliliği (COPPA / KVKK)</h3>
+                    <p>BioSync, <strong>13 yaş ve üzeri</strong> kullanıcılar için tasarlanmıştır.</p>
+                    <ul>
+                        <li>13 yaş altı bireylerin kişisel verileri bilerek toplanmaz</li>
+                        <li>13 yaş altı olduğu tespit edilen kullanıcıların verileri derhal ve otomatik olarak silinir
+                        </li>
+                        <li>13-18 yaş arası kullanıcılar için veli/vasi gözetiminde kullanım önerilir</li>
+                        <li>Yaş doğrulama mekanizması kayıt ekranında uygulanır</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Personal Data Protection
+                    and Privacy Policy — 7 Articles</p>
+
+                <div class="article">
+                    <h3>Article 1 — Data Security Measures</h3>
+                    <p>BioSync protects your personal data in accordance with the highest security standards:</p>
+                    <h4>Technical Measures:</h4>
+                    <ul>
+                        <li><strong>Supabase Row Level Security (RLS):</strong> Each user can only access their own data
+                        </li>
+                        <li><strong>AES-256 Encryption:</strong> Sensitive data is encrypted at rest</li>
+                        <li><strong>SSL/TLS 1.3:</strong> All data communication occurs over encrypted channels</li>
+                        <li><strong>API Key Security:</strong> Keys are stored in environment variables, not in code
+                        </li>
+                        <li><strong>Rate Limiting:</strong> Rate limits are applied to API requests</li>
+                        <li><strong>Input Validation:</strong> All user inputs are validated and sanitized</li>
+                    </ul>
+                    <h4>Administrative Measures:</h4>
+                    <ul>
+                        <li>Principle of least privilege is applied</li>
+                        <li>Regular security audits are conducted</li>
+                        <li>Data breach procedures are defined</li>
+                        <li>Staff privacy training is provided</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Health Data Collected</h3>
+                    <p>Health data collected within the application is classified as "Sensitive Personal Data" under
+                        KVKK Art. 6:</p>
+                    <ul>
+                        <li>Physical measurements (height, weight, body fat percentage, muscle mass)</li>
+                        <li>Nutrition data (calorie, protein, carbohydrate, fat tracking)</li>
+                        <li>Activity data (step count, active minutes, calories burned)</li>
+                        <li>Water consumption data</li>
+                        <li>Sleep patterns (duration, quality)</li>
+                        <li>Workout history and performance metrics</li>
+                        <li>Health goals and progress records</li>
+                        <li>Biometric data (joint angles, body posture coordinates — only during analysis)</li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>Your "Explicit Consent Form" approval is separately obtained for processing this data.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Third-Party Integrations</h3>
+                    <div class="sub-section">
+                        <h4>a) Apple HealthKit / Google Health Connect:</h4>
+                        <ul>
+                            <li>Only data categories explicitly permitted by the user</li>
+                            <li>User permission can always be revoked from device settings</li>
+                            <li>HealthKit data is not sent to DeepSeek AI</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) DeepSeek AI (Artificial Intelligence):</h4>
+                        <ul>
+                            <li>Data is sent only after anonymization</li>
+                            <li>User identity information (name, email, user_id) is not transmitted</li>
+                            <li>Raw photo/video data is not sent; only text or numerical coordinates</li>
+                            <li>Metadata stripping is applied (IP, User-Agent, Referer not sent)</li>
+                            <li>Each request is independent; no session/conversation tracking</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Sentry (Error Tracking):</h4>
+                        <ul>
+                            <li>Only error logs and performance metrics</li>
+                            <li>Personal health data is not sent to Sentry</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) iyzico (Payment):</h4>
+                        <ul>
+                            <li>Credit card information is processed only by iyzico</li>
+                            <li>Card information is not stored on BioSync servers</li>
+                            <li>PCI DSS and 3D Secure compliant infrastructure</li>
+                            <li>Turkey-based licensed payment institution (BRSA)</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-success">
+                        <span class="alert-icon">🔒</span>
+                        <div>Your data is not shared with any advertising network. Your data is not sold to third
+                            parties.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — International Data Transfer</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>Location</th>
+                                    <th>Security</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Supabase</td>
+                                    <td>AWS (us-east-1) / Google Cloud (europe-west-1)</td>
+                                    <td>AES-256, RLS, backups</td>
+                                </tr>
+                                <tr>
+                                    <td>DeepSeek</td>
+                                    <td>China (Hangzhou)</td>
+                                    <td>Anonymous data only, TLS 1.3</td>
+                                </tr>
+                                <tr>
+                                    <td>Sentry</td>
+                                    <td>USA</td>
+                                    <td>Error logs only</td>
+                                </tr>
+                                <tr>
+                                    <td>iyzico</td>
+                                    <td>Turkey</td>
+                                    <td>PCI DSS / 3D Secure compliant</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>UAE/Dubai Expansion:</h4>
+                    <ul>
+                        <li>Additionally, DIFC (Dubai International Financial Centre) and ADGM servers may be used</li>
+                        <li>UAE PDPL (Federal Law No. 45/2021) compliance is ensured</li>
+                        <li>Anonymized data is not considered "personal data" under UAE PDPL (Article 2/1 exception)
+                        </li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>All international transfers are based on your explicit consent pursuant to KVKK Art. 9.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Data Retention and Destruction Policy</h3>
+                    <h4>Retention Periods:</h4>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data Type</th>
+                                    <th>Period</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Account data</td>
+                                    <td>While account is active</td>
+                                </tr>
+                                <tr>
+                                    <td>Transaction logs</td>
+                                    <td>12 months</td>
+                                </tr>
+                                <tr>
+                                    <td>Error logs (Sentry)</td>
+                                    <td>90 days</td>
+                                </tr>
+                                <tr>
+                                    <td>Payment records</td>
+                                    <td>10 years (Tax Procedure Law Art. 253)</td>
+                                </tr>
+                                <tr>
+                                    <td>Biometric data</td>
+                                    <td>Immediately deleted after analysis</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Upon Account Deletion:</h4>
+                    <ul>
+                        <li>Personal data is permanently destroyed within <strong>30 days</strong></li>
+                        <li>Deleted from backup systems within <strong>90 days</strong></li>
+                        <li>Anonymous statistical data may be retained</li>
+                        <li>Legally required data is retained for the applicable period</li>
+                        <li>A destruction certificate is provided upon request</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 6 — Cookies and Tracking Technologies</h3>
+                    <h4>BioSync Mobile Application:</h4>
+                    <ul>
+                        <li>No third-party cookies are used</li>
+                        <li>No advertising tracking is performed</li>
+                        <li>Only Sentry error tracking system is active</li>
+                        <li>IDFA / Advertising ID is not collected</li>
+                    </ul>
+                    <h4>BioSync Web Dashboard:</h4>
+                    <ul>
+                        <li>Only essential cookies for session management are used</li>
+                        <li>No analytics or advertising cookies</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 7 — Children's Privacy (COPPA / KVKK)</h3>
+                    <p>BioSync is designed for users <strong>aged 13 and above</strong>.</p>
+                    <ul>
+                        <li>Personal data of individuals under 13 is not knowingly collected</li>
+                        <li>Data of users found to be under 13 is immediately and automatically deleted</li>
+                        <li>Parental/guardian supervision is recommended for users aged 13-18</li>
+                        <li>Age verification mechanism is implemented on the registration screen</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 4. ABONELİK VE İADE ==================== -->
+        <section class="section" id="abonelik">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 4</span>
+                <span class="section-badge" data-lang="en">Section 4</span>
+                <h2 class="section-title" data-lang="tr">Abonelik ve İade Politikası</h2>
+                <h2 class="section-title" data-lang="en">Subscription &amp; Refund Policy</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">6502 Sayılı Tüketicinin
+                    Korunması Hakkında Kanun Kapsamında — 7 Madde</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Hizmet Sağlayıcı Bilgileri</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Bilgi</th>
+                                    <th>Değer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Hizmet Adı</td>
+                                    <td>BioSync</td>
+                                </tr>
+                                <tr>
+                                    <td>Hizmet Türü</td>
+                                    <td>Dijital fitness ve sağlık uygulaması (SaaS)</td>
+                                </tr>
+                                <tr>
+                                    <td>İletişim</td>
+                                    <td><a href="mailto:app.biosync@gmail.com"
+                                            style="color: var(--accent);">app.biosync@gmail.com</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Uygulanacak Hukuk</td>
+                                    <td>6502 Sayılı Kanun, Mesafeli Sözleşmeler Yönetmeliği</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — Abonelik Planları</h3>
+                    <div class="sub-section">
+                        <h4>Ücretsiz Plan (Free):</h4>
+                        <ul>
+                            <li>Temel antrenman takibi ve kayıt</li>
+                            <li>Sınırlı AI Coach erişimi (günlük 3 soru)</li>
+                            <li>Günlük görev ve XP sistemi</li>
+                            <li>Topluluk forum erişimi</li>
+                            <li>Temel besin takibi</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>Premium Plan (Aylık / Yıllık):</h4>
+                        <ul>
+                            <li>Sınırsız AI Coach, AI Dietitian, AI Chef erişimi</li>
+                            <li>AI Program Creator — Otomatik program oluşturma</li>
+                            <li>Postür Analizi — Hareket formu değerlendirmesi</li>
+                            <li>Food Scanner — Fotoğraftan besin değeri analizi</li>
+                            <li>Gelişmiş analitik ve grafikler</li>
+                            <li>Öncelikli müşteri desteği</li>
+                            <li>Reklamsız deneyim</li>
+                            <li>Tüm gamification özellikleri (ligler, görevler, rozetler)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — Ön Bilgilendirme (Mesafeli Satış)</h3>
+                    <p>İşbu abonelik, 6502 Sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği kapsamında bir mesafeli
+                        satış sözleşmesidir.</p>
+                    <ul>
+                        <li>AI destekli kişiselleştirilmiş fitness ve beslenme programları</li>
+                        <li>Dijital içerik sunumu (anlık erişim)</li>
+                        <li>Otomatik yenilenen abonelik modeli</li>
+                        <li>Kredi kartı / Banka kartı (iyzico — PCI DSS ve 3D Secure uyumlu)</li>
+                        <li>Kart bilgileri BioSync sunucularında saklanmaz</li>
+                        <li>Her abonelik işleminde ayrı MSS düzenlenir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — Cayma Hakkı ve İstisnalar (14 Gün Kuralı)</h3>
+                    <p>6502 Sayılı Kanun'un 48. maddesi uyarınca:</p>
+                    <h4>Cayma Hakkı:</h4>
+                    <ul>
+                        <li>Sözleşme tarihinden itibaren <strong>14 gün</strong> içinde gerekçe göstermeksizin
+                            cayabilirsiniz</li>
+                        <li>Cayma bildirimi app.biosync@gmail.com adresine yazılı olarak yapılmalıdır</li>
+                        <li>Cayma hakkı kullanıldığında ödeme <strong>14 iş günü</strong> içinde iade edilir</li>
+                        <li>İade, ödemenin yapıldığı yöntemle gerçekleştirilir</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div><strong>İstisna — Dijital İçerik (Yönetmelik md. 15/ğ):</strong> Dijital içerik teslimine
+                            başlanmışsa (abonelik etkinleştirilmişse) cayma hakkı kullanılamaz. Kullanıcı, dijital
+                            içerik teslimine onay verdiğini ve cayma hakkından feragat ettiğini kabul eder.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — İade Koşulları</h3>
+                    <div class="sub-section">
+                        <h4>a) 14 Gün İçinde Cayma (Dijital içerik kullanılmamışsa):</h4>
+                        <ul>
+                            <li>Ödeme 14 iş günü içinde iade edilir</li>
+                            <li>Kısmi kullanım durumunda orantılı iade yapılabilir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) Teknik Sorunlar:</h4>
+                        <ul>
+                            <li>7 gün boyunca kesintisiz kullanılamama durumunda tam iade</li>
+                            <li>Teknik sorunlar app.biosync@gmail.com adresine bildirilmelidir</li>
+                            <li>48 saat içinde değerlendirilir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Platform İadeleri:</h4>
+                        <ul>
+                            <li>Apple App Store / Google Play Store iade politikasına tabidir</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) İade Edilemeyecek Durumlar:</h4>
+                        <ul>
+                            <li>14 günlük cayma süresini aşan talepler</li>
+                            <li>Dijital içeriğin kullanılmaya başlandığı durumlar</li>
+                            <li>Fikir değişikliği (14 gün sonrası)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 6 — Abonelik İptali</h3>
+                    <ul>
+                        <li>Aboneliğinizi istediğiniz zaman iptal edebilirsiniz</li>
+                        <li>İptal, mevcut fatura döneminin sonunda geçerli olur</li>
+                        <li>Kalan sürede premium özellikler devam eder</li>
+                        <li>Verileriniz korunur (silinmez)</li>
+                        <li>Yeniden abonelikte verilerinize erişim devam eder</li>
+                    </ul>
+                    <h4>İptal Kanalları:</h4>
+                    <ul>
+                        <li><strong>Uygulama İçi:</strong> Ayarlar > Abonelik > İptal Et</li>
+                        <li><strong>E-posta:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>Apple App Store / Google Play Store</strong> abonelik yönetimi</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 7 — Fiyat Değişiklikleri</h3>
+                    <ul>
+                        <li>Fiyat değişiklikleri en az <strong>30 gün</strong> önceden bildirilir</li>
+                        <li>Uygulama içi bildirim ve e-posta ile bilgilendirilir</li>
+                        <li>Yeni fiyatlar mevcut dönem sonrasında uygulanır</li>
+                        <li>Kabul etmemeniz durumunda ücretsiz iptal hakkınız vardır</li>
+                        <li>Mevcut dönem ücreti değişmez</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Under Consumer
+                    Protection Law No. 6502 — 7 Articles</p>
+
+                <div class="article">
+                    <h3>Article 1 — Service Provider Information</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Information</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Service Name</td>
+                                    <td>BioSync</td>
+                                </tr>
+                                <tr>
+                                    <td>Service Type</td>
+                                    <td>Digital fitness and health application (SaaS)</td>
+                                </tr>
+                                <tr>
+                                    <td>Contact</td>
+                                    <td><a href="mailto:app.biosync@gmail.com"
+                                            style="color: var(--accent);">app.biosync@gmail.com</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Applicable Law</td>
+                                    <td>Law No. 6502, Distance Contracts Regulation</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Subscription Plans</h3>
+                    <div class="sub-section">
+                        <h4>Free Plan:</h4>
+                        <ul>
+                            <li>Basic workout tracking and logging</li>
+                            <li>Limited AI Coach access (3 questions per day)</li>
+                            <li>Daily missions and XP system</li>
+                            <li>Community forum access</li>
+                            <li>Basic nutrition tracking</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>Premium Plan (Monthly / Annual):</h4>
+                        <ul>
+                            <li>Unlimited AI Coach, AI Dietitian, AI Chef access</li>
+                            <li>AI Program Creator — Automatic program generation</li>
+                            <li>Posture Analysis — Movement form assessment</li>
+                            <li>Food Scanner — Nutritional value analysis from photos</li>
+                            <li>Advanced analytics and charts</li>
+                            <li>Priority customer support</li>
+                            <li>Ad-free experience</li>
+                            <li>All gamification features (leagues, missions, badges)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Pre-Contractual Information (Distance Sales)</h3>
+                    <p>This subscription constitutes a distance sales agreement under Law No. 6502 and the Distance
+                        Contracts Regulation.</p>
+                    <ul>
+                        <li>AI-powered personalized fitness and nutrition programs</li>
+                        <li>Digital content delivery (instant access)</li>
+                        <li>Auto-renewing subscription model</li>
+                        <li>Credit card / Debit card (iyzico — PCI DSS and 3D Secure compliant)</li>
+                        <li>Card information is not stored on BioSync servers</li>
+                        <li>A separate Distance Sales Agreement is issued for each subscription transaction</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — Right of Withdrawal &amp; Exceptions (14-Day Rule)</h3>
+                    <p>Pursuant to Article 48 of Law No. 6502:</p>
+                    <h4>Right of Withdrawal:</h4>
+                    <ul>
+                        <li>You may withdraw within <strong>14 days</strong> of the agreement date without providing a
+                            reason</li>
+                        <li>Withdrawal notice must be sent in writing to app.biosync@gmail.com</li>
+                        <li>Payment will be refunded within <strong>14 business days</strong> upon withdrawal</li>
+                        <li>Refund is made via the same payment method</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div><strong>Exception — Digital Content (Regulation Art. 15/g):</strong> The right of
+                            withdrawal cannot be exercised once digital content delivery has begun (subscription
+                            activated). The user acknowledges consent to digital content delivery and waiver of the
+                            right of withdrawal.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Refund Conditions</h3>
+                    <div class="sub-section">
+                        <h4>a) Withdrawal Within 14 Days (If digital content not used):</h4>
+                        <ul>
+                            <li>Payment is refunded within 14 business days</li>
+                            <li>Proportional refund may be applied for partial usage</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>b) Technical Issues:</h4>
+                        <ul>
+                            <li>Full refund if service is continuously unavailable for 7 days</li>
+                            <li>Technical issues must be reported to app.biosync@gmail.com</li>
+                            <li>Evaluated within 48 hours</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>c) Platform Refunds:</h4>
+                        <ul>
+                            <li>Subject to Apple App Store / Google Play Store refund policies</li>
+                        </ul>
+                    </div>
+                    <div class="sub-section">
+                        <h4>d) Non-Refundable Cases:</h4>
+                        <ul>
+                            <li>Requests exceeding the 14-day withdrawal period</li>
+                            <li>Cases where digital content usage has begun</li>
+                            <li>Change of mind (after 14 days)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 6 — Subscription Cancellation</h3>
+                    <ul>
+                        <li>You can cancel your subscription at any time</li>
+                        <li>Cancellation takes effect at the end of the current billing period</li>
+                        <li>Premium features continue for the remaining period</li>
+                        <li>Your data is preserved (not deleted)</li>
+                        <li>Access to your data continues upon resubscription</li>
+                    </ul>
+                    <h4>Cancellation Channels:</h4>
+                    <ul>
+                        <li><strong>In-App:</strong> Settings > Subscription > Cancel</li>
+                        <li><strong>Email:</strong> <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li><strong>Apple App Store / Google Play Store</strong> subscription management</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 7 — Price Changes</h3>
+                    <ul>
+                        <li>Price changes are notified at least <strong>30 days</strong> in advance</li>
+                        <li>Notification via in-app notification and email</li>
+                        <li>New prices apply after the current period</li>
+                        <li>You have the right to cancel for free if you do not accept</li>
+                        <li>The current period fee remains unchanged</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 5. MSS ==================== -->
+        <section class="section" id="mss">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 5</span>
+                <span class="section-badge" data-lang="en">Section 5</span>
+                <h2 class="section-title" data-lang="tr">Mesafeli Satış Sözleşmesi (MSS)</h2>
+                <h2 class="section-title" data-lang="en">Distance Sales Agreement</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">6502 Sayılı Tüketicinin
+                    Korunması Hakkında Kanun Ön Bilgilendirme Formu — 9 Madde</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Satıcı Bilgileri</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Bilgi</th>
+                                    <th>Değer</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Hizmet Adı</td>
+                                    <td>BioSync</td>
+                                </tr>
+                                <tr>
+                                    <td>E-posta</td>
+                                    <td><a href="mailto:app.biosync@gmail.com"
+                                            style="color: var(--accent);">app.biosync@gmail.com</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Ülke</td>
+                                    <td>Türkiye</td>
+                                </tr>
+                                <tr>
+                                    <td>Uygulanacak Hukuk</td>
+                                    <td>Türkiye Cumhuriyeti Kanunları</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — Sözleşmenin Konusu</h3>
+                    <p>İşbu sözleşme, BioSync mobil uygulaması üzerinden dijital içerik ve abonelik hizmetlerinin
+                        satışına ilişkin 6502 sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümlerine uygun olarak
+                        düzenlenmiştir. Her abonelik işleminde alıcı bilgilerini, plan detaylarını, fiyat ve KDV
+                        bilgisini içeren dinamik bir sözleşme otomatik olarak oluşturulur.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — Ürün/Hizmet Bilgileri</h3>
+                    <p>BioSync Premium abonelik hizmeti aşağıdaki dijital içerikleri kapsar:</p>
+                    <ul>
+                        <li><strong>AI Coach</strong> — Yapay zeka destekli kişisel antrenman asistanı (sınırsız)</li>
+                        <li><strong>AI Dietitian</strong> — Kişiselleştirilmiş beslenme planları ve diyet yönetimi</li>
+                        <li><strong>AI Chef</strong> — Makro hedeflerine uygun tarif önerileri</li>
+                        <li><strong>AI Program Creator</strong> — Otomatik antrenman programı oluşturma</li>
+                        <li><strong>Postür Analizi</strong> — Kamera ile hareket formu analizi ve düzeltme önerileri
+                        </li>
+                        <li><strong>Besin Tarama (Food Scanner)</strong> — Fotoğraftan besin değeri, kalori ve makro
+                            analizi</li>
+                        <li><strong>Barkod Tarama</strong> — Ürün barkodundan besin bilgisi çekme</li>
+                        <li><strong>Gamification</strong> — Ligler, görevler, günlük streak, XP ve coin sistemi</li>
+                        <li><strong>Gelişmiş Analitik</strong> — Detaylı grafikler ve ilerleme raporları</li>
+                        <li>Sınırsız AI kullanımı ve öncelikli destek</li>
+                        <li>Reklamsız deneyim</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — Fiyat ve Ödeme</h3>
+                    <p>Abonelik bedeli, seçilen plana ve ödeme dönemine göre belirlenir. Tüm fiyatlar KDV (%20)
+                        dahildir.</p>
+                    <h4>Ödeme Yöntemi:</h4>
+                    <ul>
+                        <li>Kredi kartı / Banka kartı (iyzico — PCI DSS ve 3D Secure uyumlu)</li>
+                        <li>Kart bilgileri yalnızca iyzico tarafından işlenir, BioSync'te saklanmaz</li>
+                    </ul>
+                    <h4>Otomatik Yenileme:</h4>
+                    <ul>
+                        <li>Abonelikler dönem sonunda otomatik yenilenir</li>
+                        <li>Yenileme öncesinde bildirim gönderilir</li>
+                        <li>İstediğiniz zaman otomatik yenilemeyi iptal edebilirsiniz</li>
+                    </ul>
+                    <p style="margin-top: 0.8rem;"><strong>Sözleşme Numarası:</strong> Her işlemde benzersiz sözleşme
+                        numarası (MSS-YYYYMMDD-XXXXX formatında) otomatik atanır.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — Cayma Hakkı (14 Gün)</h3>
+                    <p>6502 sayılı Kanun'un 48. maddesi uyarınca, mesafeli sözleşmelerde tüketici sözleşmenin kurulduğu
+                        tarihten itibaren <strong>14 gün</strong> içinde herhangi bir gerekçe göstermeksizin ve cezai
+                        şart ödemeksizin sözleşmeden cayma hakkına sahiptir.</p>
+                    <h4>Cayma hakkını kullanmak için:</h4>
+                    <ul>
+                        <li>app.biosync@gmail.com adresine yazılı bildirim gönderilmelidir</li>
+                        <li>Uygulama içi: Ayarlar > Abonelik > Cayma Hakkı</li>
+                        <li>Ödeme <strong>14 iş günü</strong> içinde iade edilir</li>
+                        <li>İade aynı ödeme yöntemiyle gerçekleştirilir</li>
+                    </ul>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div><strong>ÖNEMLİ — Dijital İçerik İstisnası (Yönetmelik md. 15/ğ):</strong> Elektronik
+                            ortamda anında ifa edilen hizmetlerde cayma hakkı kullanılamaz. Kullanıcı, aboneliği
+                            etkinleştirerek dijital içerik teslimine onay verdiğini ve cayma hakkından feragat ettiğini
+                            kabul eder. Bu feragat ödeme sırasında ayrıca onaylanır.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 6 — Teslimat Şekli</h3>
+                    <p>Dijital hizmet, abonelik işlemi tamamlandıktan hemen sonra anında kullanıma açılır. Fiziksel
+                        teslimat söz konusu değildir. Hizmet erişimi 7/24 (bakım süreleri hariç) sağlanır.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 7 — Garanti ve Sorumluluk</h3>
+                    <ul>
+                        <li>Dijital içerik hizmetleri açıklanan özelliklere uygun sunulur</li>
+                        <li>Teknik aksaklıklar için destek sağlanır (<a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a>)</li>
+                        <li><strong>7 gün</strong> kesintisiz kullanılamama durumunda tam iade hakkı doğar</li>
+                        <li>AI içerikleri bilgilendirme amaçlıdır; tıbbi tavsiye niteliği taşımaz</li>
+                        <li>Hizmet kalitesi SLA ile belirlenir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 8 — Uyuşmazlık Çözümü</h3>
+                    <ul>
+                        <li>İstanbul (Anadolu) Tüketici Hakem Heyetleri yetkilidir (yıllık üst limit dahilinde)</li>
+                        <li>Üst limit üzerinde İstanbul Tüketici Mahkemeleri yetkilidir</li>
+                        <li>Tüketici Hakem Heyeti başvurusu ücretsizdir</li>
+                        <li>Online uyuşmazlık çözümü (ODR): <a href="https://ec.europa.eu/odr" target="_blank"
+                                style="color: var(--accent);">https://ec.europa.eu/odr</a> (AB kullanıcıları için)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 9 — Yürürlük</h3>
+                    <p>İşbu ön bilgilendirme formu, alıcının elektronik ortamda onayı ile yürürlüğe girer ve abonelik
+                        sözleşme süresi boyunca geçerlidir. Sözleşme metni, kullanıcının hesap sayfasından ve web
+                        panelinden her zaman erişilebilir durumdadır.</p>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">Consumer Protection Law
+                    No. 6502 Pre-Contractual Information Form — 9 Articles</p>
+
+                <div class="article">
+                    <h3>Article 1 — Seller Information</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Information</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Service Name</td>
+                                    <td>BioSync</td>
+                                </tr>
+                                <tr>
+                                    <td>Email</td>
+                                    <td><a href="mailto:app.biosync@gmail.com"
+                                            style="color: var(--accent);">app.biosync@gmail.com</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Country</td>
+                                    <td>Turkey</td>
+                                </tr>
+                                <tr>
+                                    <td>Applicable Law</td>
+                                    <td>Laws of the Republic of Turkey</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Subject of the Agreement</h3>
+                    <p>This agreement has been prepared in accordance with Law No. 6502 and the Distance Contracts
+                        Regulation regarding the sale of digital content and subscription services through the BioSync
+                        mobile application. A dynamic agreement containing buyer information, plan details, price and
+                        VAT information is automatically generated for each subscription transaction.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Product/Service Information</h3>
+                    <p>BioSync Premium subscription service includes the following digital content:</p>
+                    <ul>
+                        <li><strong>AI Coach</strong> — AI-powered personal workout assistant (unlimited)</li>
+                        <li><strong>AI Dietitian</strong> — Personalized nutrition plans and diet management</li>
+                        <li><strong>AI Chef</strong> — Macro-targeted recipe suggestions</li>
+                        <li><strong>AI Program Creator</strong> — Automatic workout program creation</li>
+                        <li><strong>Posture Analysis</strong> — Camera-based movement form analysis and correction
+                            suggestions</li>
+                        <li><strong>Food Scanner</strong> — Nutritional value, calorie and macro analysis from photos
+                        </li>
+                        <li><strong>Barcode Scanner</strong> — Retrieving nutritional information from product barcodes
+                        </li>
+                        <li><strong>Gamification</strong> — Leagues, missions, daily streaks, XP and coin system</li>
+                        <li><strong>Advanced Analytics</strong> — Detailed charts and progress reports</li>
+                        <li>Unlimited AI usage and priority support</li>
+                        <li>Ad-free experience</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — Price and Payment</h3>
+                    <p>Subscription fees are determined by the selected plan and billing period. All prices include VAT
+                        (20%).</p>
+                    <h4>Payment Method:</h4>
+                    <ul>
+                        <li>Credit card / Debit card (iyzico — PCI DSS and 3D Secure compliant)</li>
+                        <li>Card information is processed only by iyzico and not stored on BioSync</li>
+                    </ul>
+                    <h4>Auto-Renewal:</h4>
+                    <ul>
+                        <li>Subscriptions are automatically renewed at the end of each period</li>
+                        <li>A notification is sent before renewal</li>
+                        <li>You can cancel auto-renewal at any time</li>
+                    </ul>
+                    <p style="margin-top: 0.8rem;"><strong>Agreement Number:</strong> A unique agreement number (in
+                        MSS-YYYYMMDD-XXXXX format) is automatically assigned for each transaction.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Right of Withdrawal (14 Days)</h3>
+                    <p>Pursuant to Article 48 of Law No. 6502, the consumer has the right to withdraw from the agreement
+                        within <strong>14 days</strong> from the date of the agreement without providing any reason and
+                        without paying any penalty.</p>
+                    <h4>To exercise the right of withdrawal:</h4>
+                    <ul>
+                        <li>A written notification must be sent to app.biosync@gmail.com</li>
+                        <li>In-App: Settings > Subscription > Right of Withdrawal</li>
+                        <li>Payment will be refunded within <strong>14 business days</strong></li>
+                        <li>Refund is made via the same payment method</li>
+                    </ul>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div><strong>IMPORTANT — Digital Content Exception (Regulation Art. 15/g):</strong> The right of
+                            withdrawal cannot be exercised for services instantly performed in electronic media. The
+                            user acknowledges consent to digital content delivery by activating the subscription and
+                            waiver of the right of withdrawal. This waiver is additionally confirmed during payment.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 6 — Delivery Method</h3>
+                    <p>The digital service becomes instantly available upon completion of the subscription process.
+                        There is no physical delivery. Service access is provided 24/7 (excluding maintenance periods).
+                    </p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 7 — Warranty and Liability</h3>
+                    <ul>
+                        <li>Digital content services are provided in accordance with the described features</li>
+                        <li>Support is provided for technical issues (<a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a>)</li>
+                        <li>Full refund right arises if service is continuously unavailable for <strong>7 days</strong>
+                        </li>
+                        <li>AI content is for informational purposes; it does not constitute medical advice</li>
+                        <li>Service quality is determined by SLA</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 8 — Dispute Resolution</h3>
+                    <ul>
+                        <li>Istanbul (Anatolian Side) Consumer Arbitration Boards are authorized (within annual upper
+                            limit)</li>
+                        <li>Istanbul Consumer Courts are authorized above the upper limit</li>
+                        <li>Consumer Arbitration Board application is free</li>
+                        <li>Online dispute resolution (ODR): <a href="https://ec.europa.eu/odr" target="_blank"
+                                style="color: var(--accent);">https://ec.europa.eu/odr</a> (for EU users)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 9 — Effective Date</h3>
+                    <p>This pre-contractual information form takes effect upon the buyer's electronic approval and
+                        remains valid throughout the subscription agreement period. The agreement text is always
+                        accessible from the user's account page and web panel.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 6. KULLANIM KOŞULLARI ==================== -->
+        <section class="section" id="kullanim">
+            <div class="section-header" onclick="toggleSection(this)">
+                <span class="section-badge" data-lang="tr">Bölüm 6</span>
+                <span class="section-badge" data-lang="en">Section 6</span>
+                <h2 class="section-title" data-lang="tr">Kullanım Koşulları</h2>
+                <h2 class="section-title" data-lang="en">Terms of Use</h2>
+                <span class="section-toggle">▼</span>
+            </div>
+
+            <!-- TR -->
+            <div class="section-body" data-lang="tr">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">BioSync Servis Kullanım
+                    Koşulları — 11 Madde | Son Güncelleme: Mart 2026</p>
+
+                <div class="article">
+                    <h3>Madde 1 — Tıbbi Feragatname (Medical Disclaimer)</h3>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div><strong>ÖNEMLİ:</strong> BioSync bir sağlık kuruluşu, tıbbi cihaz veya doktor değildir.
+                            Uygulama tarafından sunulan tüm AI yanıtları (AI Coach, AI Dietitian, AI Chef, AI Program
+                            Creator), antrenman programları, beslenme planları, postür analizi sonuçları ve sağlık
+                            önerileri yalnızca bilgilendirme ve öneri niteliğindedir; hiçbir koşulda tıbbi tavsiye,
+                            teşhis veya tedavi yerine geçmez.</div>
+                    </div>
+                    <p>Kullanıcı, herhangi bir egzersiz veya diyet programına başlamadan önce mutlaka bir doktora veya
+                        sağlık profesyoneline danışmalıdır. Özellikle:</p>
+                    <ul>
+                        <li>Kronik hastalığı olan bireyler (kalp, diyabet, tansiyon, astım vb.)</li>
+                        <li>Hamile veya emziren bireyler</li>
+                        <li>Ameliyat sonrası iyileşme sürecinde olanlar</li>
+                        <li>Kas-iskelet sistemi problemi olanlar (bel fıtığı, dizkapağı, omuz sıkışması vb.)</li>
+                        <li>18 yaş altı bireyler (veli gözetiminde kullanılmalıdır)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 2 — Fiziksel Yaralanma ve Sorumluluk Reddi</h3>
+                    <p>Uygulamada sunulan antrenman programları, egzersiz önerileri, postür düzeltme tavsiyeleri ve
+                        beslenme planlarının uygulanması tamamen kullanıcının kendi sorumluluğundadır.</p>
+                    <p>BioSync, uygulamanın kullanımı sonucunda meydana gelebilecek:</p>
+                    <ul>
+                        <li>Fiziksel yaralanma, sakatlık veya kas/eklem hasarı</li>
+                        <li>Yanlış egzersiz formundan kaynaklanan sakatlıklar</li>
+                        <li>Yanlış beslenme uygulamalarından kaynaklanan sağlık sorunları</li>
+                        <li>Alerji, intolerans veya metabolik sorunlar</li>
+                        <li>AI tarafından önerilen yanlış hedeflerden kaynaklanan sorunlar</li>
+                        <li>Maddi veya manevi her türlü zarar</li>
+                    </ul>
+                    <p>konularında hiçbir sorumluluk kabul etmez.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 3 — Yapay Zeka ve Algoritmik Kararlar</h3>
+                    <p>BioSync, kullanıcılara çeşitli içerikler oluşturmak için yapay zeka (DeepSeek AI) kullanmaktadır.
+                    </p>
+                    <h4>AI Sistemi Hakkında:</h4>
+                    <ul>
+                        <li>AI yanıtları otomatik olarak üretilir ve önceden incelenmez</li>
+                        <li>AI, kullanıcının kişisel sağlık geçmişini tam olarak bilmez</li>
+                        <li>AI "halüsinasyonu" her zaman mümkündür</li>
+                        <li>%100 doğruluk, uygunluk veya güvenlik garanti edilemez</li>
+                        <li>Postür analizi sonuçları yaklaşık değerlerdir</li>
+                        <li>Food Scanner sonuçları tahminidir; gıda alerjileri için güvenilir kaynak değildir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 4 — Hesap Güvenliği</h3>
+                    <ul>
+                        <li>Kullanıcı, hesabının güvenliğinden şahsen sorumludur</li>
+                        <li>Güçlü şifre kullanımı ve paylaşmaması tavsiye edilir</li>
+                        <li>Her oturum JWT token ile korunur (otomatik süre sonu)</li>
+                        <li>Şüpheli aktivitede derhal <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a>'a bildiriniz</li>
+                        <li>Kullanıcı ihmalinden kaynaklanan zararlardan BioSync sorumlu değildir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 5 — Yaş Sınırı</h3>
+                    <ul>
+                        <li>BioSync, <strong>13 yaş ve üzeri</strong> kullanıcılar için tasarlanmıştır</li>
+                        <li>13-18 yaş arası kullanıcılar için veli/vasi onayı ve gözetimi önerilir</li>
+                        <li>13 yaş altı kullanıcıların verileri tespit halinde derhal silinir</li>
+                        <li>Yaş doğrulama kayıt ekranında doğum tarihi ile yapılır</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 6 — Fikri Mülkiyet Hakları</h3>
+                    <ul>
+                        <li>BioSync uygulaması, logosu, tasarımı, içerikleri ve tüm AI algoritmaları telif hakkı ile
+                            korunmaktadır</li>
+                        <li>Kullanıcılar içeriği kopyalayamaz, dağıtamaz, ters mühendislik yapamaz</li>
+                        <li>Kullanıcı tarafından üretilen içerikler kullanıcının mülkiyetindedir</li>
+                        <li>BioSync, kullanıcı içeriklerini platform içi görüntüleme amacıyla lisans hakkına sahiptir
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 7 — Hizmet Değişiklikleri ve Kesintiler</h3>
+                    <ul>
+                        <li>Özellikler önceden bildirimde bulunarak değiştirilebilir</li>
+                        <li>Planlı bakım süreleri önceden bildirilir</li>
+                        <li>Zorunlu güncellemeler için yeniden başlatma gerekebilir</li>
+                        <li>Ücretsiz plan özellikleri değiştirilebilir</li>
+                        <li>Premium plan özellikleri abonelik süresince korunur</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 8 — Uyuşmazlık Çözümü ve Yetkili Mahkeme</h3>
+                    <ul>
+                        <li>Türkiye Cumhuriyeti kanunları uygulanır</li>
+                        <li>İstanbul (Anadolu) Mahkemeleri ve İcra Daireleri yetkilidir</li>
+                        <li>Tüketici Hakem Heyeti başvurusu ücretsizdir</li>
+                        <li>Önce dostane çözüm yolu (mediation) aranır</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 9 — Yapay Zeka Halüsinasyonu ve Hatalı Bilgi Uyarısı</h3>
+                    <p>DeepSeek AI modeli nadiren de olsa hatalı içerik üretebilir:</p>
+                    <ul>
+                        <li>Bilimsel olarak desteklenmeyen egzersiz tavsiyeleri</li>
+                        <li>Yanlış kalori veya besin değeri hesaplamaları</li>
+                        <li>Bireyin sağlık durumuna uygun olmayan program önerileri</li>
+                        <li>Mevcut olmayan egzersiz veya gıda isimleri (halüsinasyon)</li>
+                        <li>Postür analizinde hatalı açı yorumlamaları</li>
+                        <li>Food Scanner'da yanlış yiyecek tanımlama</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div>BioSync, AI halüsinasyonundan kaynaklanan hatalı bilgilerden doğan zararlardan sorumlu
+                            tutulamaz.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 10 — Aracılık ve Komisyon Politikası (PT / Diyetisyen)</h3>
+                    <p>BioSync, kullanıcıları bağımsız Personal Trainer'lar ve Diyetisyenlerle buluşturan bir aracı
+                        platformdur.</p>
+                    <h4>Platform Sorumluluğu:</h4>
+                    <ul>
+                        <li>Profesyonellerin lisans ve yetkinliklerini doğrulamaya çalışır; ancak garanti etmez</li>
+                        <li>Profesyonel-müşteri ilişkisindeki hizmet kalitesinden sorumlu değildir</li>
+                        <li>Anlaşmalar kullanıcı ile profesyonel arasındadır</li>
+                    </ul>
+                    <h4>Komisyon:</h4>
+                    <ul>
+                        <li>Profesyonel hizmet bedeli üzerinden <strong>%10</strong> platform komisyonu alınır</li>
+                        <li>Komisyon oranı değişikliğinde 30 gün önceden bildirim yapılır</li>
+                        <li>Komisyon yalnızca profesyonel tarafından ödenir</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 11 — Sanal Ekonomi Sistemi (XP, Gem, Coin)</h3>
+                    <h4>Sanal Birimler:</h4>
+                    <ul>
+                        <li><strong>XP (Deneyim Puanı):</strong> Aktivite ve görev tamamlamalarından kazanılır; lig
+                            sıralamasını belirler</li>
+                        <li><strong>Gem:</strong> Premium puan birimi; özel ödüller ve rozetler için kullanılır</li>
+                        <li><strong>Coin:</strong> Günlük görev ödülleri; sanal mağaza alışverişi için kullanılır</li>
+                    </ul>
+                    <h4>Kurallar:</h4>
+                    <ul>
+                        <li>Sanal birimler gerçek paraya çevrilemez, nakde dönüştürülemez</li>
+                        <li>Başka kullanıcılara devredilemez veya hediye edilemez</li>
+                        <li>Sanal birimler üzerinde mülkiyet hakkı yoktur</li>
+                        <li>BioSync, değerleri ve kazanım oranlarını değiştirme hakkını saklı tutar</li>
+                        <li>Hile/suistimal tespit edilen hesaplar uyarı yapılmaksızın kapatılabilir</li>
+                        <li>Hesap kapatıldığında tüm sanal birimler geçersiz olur</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 12 — Spotify Entegrasyonu ve Üçüncü Taraf Müzik Hizmetleri</h3>
+                    <p>BioSync, antrenman deneyimini iyileştirmek amacıyla Spotify müzik hizmetiyle entegrasyon sunar.
+                    </p>
+                    <h4>Erişilen Veriler:</h4>
+                    <ul>
+                        <li>Spotify kullanıcı kimliği (anonim token)</li>
+                        <li>Çalma listeleri ve şarkı adları</li>
+                        <li>Anlık dinleme durumu (çalan parça, albüm kapağı)</li>
+                        <li>Çalma kontrolü (oynat/duraklat/atla)</li>
+                    </ul>
+                    <h4>İşlenmeyen Veriler:</h4>
+                    <ul>
+                        <li>Spotify şifreniz BioSync tarafından hiçbir şekilde görülmez veya saklanmaz</li>
+                        <li>Spotify hesap bilgileriniz (e-posta, ödeme bilgileri) BioSync'e aktarılmaz</li>
+                        <li>Dinleme geçmişiniz kalıcı olarak depolanmaz</li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>Spotify kullanımı, <a href="https://www.spotify.com/legal/end-user-agreement/"
+                                target="_blank">Spotify Kullanım Koşulları</a> ve <a
+                                href="https://www.spotify.com/legal/privacy-policy/" target="_blank">Spotify Gizlilik
+                                Politikası</a>'na tabidir.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 13 — Topluluk Kuralları ve İçerik Moderasyonu</h3>
+                    <h4>Yasak İçerikler:</h4>
+                    <ul>
+                        <li>Nefret söylemi, ırkçılık, cinsiyet ayrımcılığı</li>
+                        <li>Uygunsuz, cinsel veya pornografik içerik</li>
+                        <li>Şiddet içeren veya tehditlere sahip mesajlar</li>
+                        <li>Spam, reklam veya tanıtım amaçlı paylaşımlar</li>
+                        <li>Kişisel bilgi paylaşımı (doxxing)</li>
+                        <li>Tıbbi tavsiye niteliğinde yanıltıcı sağlık bilgileri</li>
+                        <li>Telif hakkı ihlali oluşturan içerikler</li>
+                    </ul>
+                    <p>Uygunsuz içerikler önceden haber verilmeksizin kaldırılabilir. Telif hakkı ihlali iddialarında <a
+                            href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a> adresine başvurunuz.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 14 — Hesap Askıya Alma ve Fesih</h3>
+                    <h4>Askıya Alma Süreci:</h4>
+                    <ul>
+                        <li><strong>1. İhlal:</strong> Yazılı uyarı (uygulama içi bildirim + e-posta)</li>
+                        <li><strong>2. İhlal:</strong> 7 gün geçici hesap askıya alma</li>
+                        <li><strong>3. İhlal:</strong> Kalıcı hesap kapatma</li>
+                    </ul>
+                    <p>Ciddi ihlallerde BioSync doğrudan kalıcı kapatma uygulayabilir. Askıya alınan kullanıcılar 15 gün
+                        içinde <a href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a> adresine itiraz
+                        başvurusunda bulunabilir.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 15 — Profesyonel (PT/Diyetisyen) Veri İşleme Koşulları</h3>
+                    <p>PT ve Diyetisyen hesapları müşteri verilerine erişim sağlayan özel yetkili hesaplardır.</p>
+                    <h4>Profesyonelin Sorumlulukları:</h4>
+                    <ul>
+                        <li>Müşteri verilerine yalnızca hizmet sunumu amacıyla erişir</li>
+                        <li>Müşteri verilerini üçüncü taraflarla paylaşamaz</li>
+                        <li>Müşteri verilerini BioSync platformu dışına aktaramaz</li>
+                        <li>Müşteri ilişkisi sona erdiğinde erişim otomatik olarak sonlandırılır</li>
+                    </ul>
+                    <p>KVKK Madde 12 uyarınca, profesyonel kullanıcılar veri güvenliğini sağlamakla müteselsilen
+                        yükümlüdür.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Madde 16 — Bildirim ve İletişim İzinleri</h3>
+                    <h4>Push Bildirimleri:</h4>
+                    <ul>
+                        <li>Su içme hatırlatmaları</li>
+                        <li>Antrenman zamanı hatırlatmaları</li>
+                        <li>Sağlık metrikleri uyarıları</li>
+                        <li>Supplement alma hatırlatmaları</li>
+                        <li>Öğün zamanı bildirimleri</li>
+                        <li>Günlük ipuçları ve motivasyon</li>
+                    </ul>
+                    <p>Kullanıcı, Ayarlar ekranından bildirim türlerini ayrı ayrı açıp kapatabilir. Bildirim tokenleri
+                        anonim olarak saklanır ve üçüncü taraflarla paylaşılmaz.</p>
+                </div>
+            </div>
+
+            <!-- EN -->
+            <div class="section-body" data-lang="en">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.88rem;">BioSync Service Terms of
+                    Use — 11 Articles | Last Updated: March 2026</p>
+
+                <div class="article">
+                    <h3>Article 1 — Medical Disclaimer</h3>
+                    <div class="alert alert-danger">
+                        <span class="alert-icon">🚨</span>
+                        <div><strong>IMPORTANT:</strong> BioSync is not a healthcare institution, medical device, or
+                            doctor. All AI responses (AI Coach, AI Dietitian, AI Chef, AI Program Creator), workout
+                            programs, nutrition plans, posture analysis results, and health recommendations provided by
+                            the application are for informational and advisory purposes only; they do not replace
+                            medical advice, diagnosis, or treatment under any circumstances.</div>
+                    </div>
+                    <p>Users must consult a doctor or healthcare professional before starting any exercise or diet
+                        program. Especially:</p>
+                    <ul>
+                        <li>Individuals with chronic conditions (heart disease, diabetes, hypertension, asthma, etc.)
+                        </li>
+                        <li>Pregnant or breastfeeding individuals</li>
+                        <li>Those in post-surgery recovery</li>
+                        <li>Those with musculoskeletal problems (herniated disc, knee problems, shoulder impingement,
+                            etc.)</li>
+                        <li>Individuals under 18 (should be used under parental supervision)</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 2 — Physical Injury and Liability Disclaimer</h3>
+                    <p>The implementation of workout programs, exercise recommendations, posture correction advice, and
+                        nutrition plans provided in the application is entirely the user's own responsibility.</p>
+                    <p>BioSync accepts no liability for any of the following that may arise from use of the application:
+                    </p>
+                    <ul>
+                        <li>Physical injury, disability, or muscle/joint damage</li>
+                        <li>Injuries resulting from incorrect exercise form</li>
+                        <li>Health problems resulting from incorrect dietary practices</li>
+                        <li>Allergies, intolerances, or metabolic issues</li>
+                        <li>Problems arising from incorrect targets recommended by AI</li>
+                        <li>Any material or moral damages</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 3 — Artificial Intelligence and Algorithmic Decisions</h3>
+                    <p>BioSync uses artificial intelligence (DeepSeek AI) to generate various content for users.</p>
+                    <h4>About the AI System:</h4>
+                    <ul>
+                        <li>AI responses are generated automatically and not pre-reviewed</li>
+                        <li>AI does not fully know the user's personal health history</li>
+                        <li>AI "hallucination" is always possible</li>
+                        <li>100% accuracy, appropriateness, or safety cannot be guaranteed</li>
+                        <li>Posture analysis results are approximate values</li>
+                        <li>Food Scanner results are estimates; not a reliable source for food allergies</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 4 — Account Security</h3>
+                    <ul>
+                        <li>Users are personally responsible for the security of their accounts</li>
+                        <li>Using strong passwords and not sharing them is recommended</li>
+                        <li>Each session is protected with JWT tokens (automatic expiration)</li>
+                        <li>Report suspicious activity immediately to <a href="mailto:app.biosync@gmail.com"
+                                style="color: var(--accent);">app.biosync@gmail.com</a></li>
+                        <li>BioSync is not responsible for damages resulting from user negligence</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 5 — Age Restriction</h3>
+                    <ul>
+                        <li>BioSync is designed for users <strong>aged 13 and above</strong></li>
+                        <li>Parental/guardian approval and supervision is recommended for users aged 13-18</li>
+                        <li>Data of users under 13 is immediately deleted upon detection</li>
+                        <li>Age verification is done via date of birth on the registration screen</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 6 — Intellectual Property Rights</h3>
+                    <ul>
+                        <li>BioSync application, logo, design, content, and all AI algorithms are protected by copyright
+                        </li>
+                        <li>Users may not copy, distribute, or reverse-engineer the content</li>
+                        <li>Content generated by users belongs to the user</li>
+                        <li>BioSync has a license right to display user content within the platform</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 7 — Service Changes and Interruptions</h3>
+                    <ul>
+                        <li>Features may be changed with prior notice</li>
+                        <li>Planned maintenance periods are announced in advance</li>
+                        <li>Restart may be required for mandatory updates</li>
+                        <li>Free plan features may be modified</li>
+                        <li>Premium plan features are preserved during the subscription period</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 8 — Dispute Resolution and Jurisdiction</h3>
+                    <ul>
+                        <li>Laws of the Republic of Turkey apply</li>
+                        <li>Istanbul (Anatolian Side) Courts and Enforcement Offices are authorized</li>
+                        <li>Consumer Arbitration Board application is free of charge</li>
+                        <li>Amicable resolution (mediation) is sought first</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 9 — AI Hallucination and Inaccurate Information Warning</h3>
+                    <p>The DeepSeek AI model may rarely produce inaccurate content:</p>
+                    <ul>
+                        <li>Scientifically unsupported exercise recommendations</li>
+                        <li>Incorrect calorie or nutritional value calculations</li>
+                        <li>Program recommendations unsuitable for the individual's health condition</li>
+                        <li>Non-existent exercise or food names (hallucination)</li>
+                        <li>Incorrect angle interpretations in posture analysis</li>
+                        <li>Incorrect food identification in Food Scanner</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div>BioSync cannot be held liable for damages arising from inaccurate information caused by AI
+                            hallucination.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 10 — Intermediation and Commission Policy (PT / Dietitian)</h3>
+                    <p>BioSync is an intermediary platform that connects users with independent Personal Trainers and
+                        Dietitians.</p>
+                    <h4>Platform Responsibility:</h4>
+                    <ul>
+                        <li>Attempts to verify professionals' licenses and qualifications; however, does not guarantee
+                            them</li>
+                        <li>Not responsible for service quality in professional-client relationships</li>
+                        <li>Agreements are between the user and the professional</li>
+                    </ul>
+                    <h4>Commission:</h4>
+                    <ul>
+                        <li>A <strong>10%</strong> platform commission is charged on professional service fees</li>
+                        <li>30 days' notice is given for commission rate changes</li>
+                        <li>Commission is paid only by the professional</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 11 — Virtual Economy System (XP, Gem, Coin)</h3>
+                    <h4>Virtual Units:</h4>
+                    <ul>
+                        <li><strong>XP (Experience Points):</strong> Earned from activity and mission completions;
+                            determines league rankings</li>
+                        <li><strong>Gem:</strong> Premium point unit; used for special rewards and badges</li>
+                        <li><strong>Coin:</strong> Daily mission rewards; used for virtual store purchases</li>
+                    </ul>
+                    <h4>Rules:</h4>
+                    <ul>
+                        <li>Virtual units cannot be converted to real money or cashed out</li>
+                        <li>Cannot be transferred or gifted to other users</li>
+                        <li>No ownership rights exist over virtual units</li>
+                        <li>BioSync reserves the right to change values and earning rates</li>
+                        <li>Accounts found cheating/abusing may be closed without warning</li>
+                        <li>All virtual units become void when an account is closed</li>
+                    </ul>
+                </div>
+
+                <div class="article">
+                    <h3>Article 12 — Spotify Integration and Third-Party Music Services</h3>
+                    <p>BioSync offers integration with Spotify music service to enhance the workout experience.</p>
+                    <h4>Data Accessed:</h4>
+                    <ul>
+                        <li>Spotify user identifier (anonymous token)</li>
+                        <li>Playlists and track names</li>
+                        <li>Current playback status (now playing track, album art)</li>
+                        <li>Playback controls (play/pause/skip)</li>
+                    </ul>
+                    <h4>Data NOT Processed:</h4>
+                    <ul>
+                        <li>Your Spotify password is never seen or stored by BioSync</li>
+                        <li>Your Spotify account details (email, payment info) are not transferred to BioSync</li>
+                        <li>Your listening history is not permanently stored</li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ️</span>
+                        <div>Spotify usage is subject to <a href="https://www.spotify.com/legal/end-user-agreement/"
+                                target="_blank">Spotify's Terms of Use</a> and <a
+                                href="https://www.spotify.com/legal/privacy-policy/" target="_blank">Spotify's Privacy
+                                Policy</a>.</div>
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3>Article 13 — Community Guidelines and Content Moderation</h3>
+                    <h4>Prohibited Content:</h4>
+                    <ul>
+                        <li>Hate speech, racism, gender discrimination</li>
+                        <li>Inappropriate, sexual, or pornographic content</li>
+                        <li>Messages containing violence or threats</li>
+                        <li>Spam, advertising, or promotional posts</li>
+                        <li>Sharing personal information (doxxing)</li>
+                        <li>Misleading health information presented as medical advice</li>
+                        <li>Content that constitutes copyright infringement</li>
+                    </ul>
+                    <p>Inappropriate content may be removed without prior notice. For copyright infringement claims,
+                        contact <a href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a>.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 14 — Account Suspension and Termination</h3>
+                    <h4>Suspension Process:</h4>
+                    <ul>
+                        <li><strong>1st Violation:</strong> Written warning (in-app notification + email)</li>
+                        <li><strong>2nd Violation:</strong> 7-day temporary account suspension</li>
+                        <li><strong>3rd Violation:</strong> Permanent account closure</li>
+                    </ul>
+                    <p>For serious violations, BioSync may apply permanent closure directly. Suspended users may appeal
+                        within 15 days by contacting <a href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a>.
+                    </p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 15 — Professional (PT/Dietitian) Data Processing Terms</h3>
+                    <p>PT and Dietitian accounts are specially authorized accounts that access client data.</p>
+                    <h4>Professional Responsibilities:</h4>
+                    <ul>
+                        <li>Access client data solely for service delivery purposes</li>
+                        <li>Cannot share client data with third parties</li>
+                        <li>Cannot export client data outside the BioSync platform</li>
+                        <li>Access automatically terminates when the client relationship ends</li>
+                    </ul>
+                    <p>Under KVKK Article 12, professional users are jointly liable for ensuring data security.</p>
+                </div>
+
+                <div class="article">
+                    <h3>Article 16 — Notification and Communication Permissions</h3>
+                    <h4>Push Notifications:</h4>
+                    <ul>
+                        <li>Water intake reminders</li>
+                        <li>Workout time reminders</li>
+                        <li>Health metric alerts</li>
+                        <li>Supplement reminders</li>
+                        <li>Meal time notifications</li>
+                        <li>Daily tips and motivation</li>
+                    </ul>
+                    <p>Users can enable/disable notification categories individually from Settings. Notification tokens
+                        are stored anonymously and not shared with third parties.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p data-lang="tr">&copy; 2026 BioSync — Tüm hakları saklıdır.</p>
+        <p data-lang="en">&copy; 2026 BioSync — All rights reserved.</p>
+        <p style="margin-top: 0.5rem;"><span data-lang="tr">İletişim:</span><span data-lang="en">Contact:</span> <a
+                href="mailto:app.biosync@gmail.com">app.biosync@gmail.com</a></p>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+
+    <script>
+        // Language switcher
+        let currentLang = localStorage.getItem('biosync-lang') || 'tr';
+
+        function setLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('biosync-lang', lang);
+
+            if (lang === 'en') {
+                document.body.classList.add('lang-en');
+                document.documentElement.lang = 'en';
+            } else {
+                document.body.classList.remove('lang-en');
+                document.documentElement.lang = 'tr';
+            }
+
+            document.getElementById('btn-tr').classList.toggle('active', lang === 'tr');
+            document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+        }
+
+        // Initialize language on page load
+        setLang(currentLang);
+
+        // Toggle sections
+        function toggleSection(header) {
+            const section = header.parentElement;
+            section.classList.toggle('collapsed');
+        }
+
+        // Smooth scroll for TOC links
+        document.querySelectorAll('.toc-item').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.classList.remove('collapsed');
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Back to top button visibility
+        window.addEventListener('scroll', function () {
+            const btn = document.getElementById('backToTop');
+            if (window.scrollY > 500) {
+                btn.classList.add('visible');
+            } else {
+                btn.classList.remove('visible');
+            }
+        });
+
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+
+</html>

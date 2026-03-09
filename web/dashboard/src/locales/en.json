@@ -1,0 +1,69 @@
+{
+    "translation": {
+        "login": {
+            "title": "BioSync Professional",
+            "subtitle": "Sign in to the Personal Trainer & Dietitian Dashboard",
+            "email": "Email address",
+            "password": "Password",
+            "remember": "Remember me",
+            "forgot": "Forgot your password?",
+            "signIn": "Sign in",
+            "signingIn": "Signing in...",
+            "noAccount": "Don't have an account?",
+            "register": "Register here"
+        },
+        "register": {
+            "title": "Join BioSync Professional",
+            "subtitle": "Create your Personal Trainer or Dietitian account",
+            "iam": "I am a...",
+            "pt": "Personal Trainer",
+            "dietitian": "Dietitian",
+            "fullName": "Full Name",
+            "email": "Email address",
+            "password": "Password",
+            "confirmPassword": "Confirm Password",
+            "createAccount": "Create Account",
+            "registering": "Registering...",
+            "hasAccount": "Already have an account?",
+            "signIn": "Sign in here"
+        },
+        "sidebar": {
+            "dashboard": "Dashboard",
+            "users": "Users",
+            "assignments": "Assignments",
+            "messages": "Messages",
+            "workouts": "Workouts",
+            "nutrition": "Nutrition",
+            "analytics": "Analytics",
+            "courses": "Courses",
+            "calendar": "Calendar",
+            "progress": "Progress Reports",
+            "settings": "Settings",
+            "legal": "Legal Agreements",
+            "logout": "Sign Out"
+        },
+        "users": {
+            "title": "Users",
+            "subtitle": "Manage all registered users",
+            "addUser": "Add User",
+            "search": "Search users by name or email...",
+            "filters": "Filters",
+            "user": "User",
+            "email": "Email",
+            "joined": "Joined",
+            "status": "Status",
+            "actions": "Actions",
+            "qr": "Generate Session QR",
+            "edit": "Edit",
+            "delete": "Delete",
+            "totalUsers": "Total Users",
+            "activeToday": "Active Today",
+            "newThisWeek": "New This Week"
+        },
+        "dashboard": {
+            "title": "Dashboard",
+            "welcome": "Welcome back",
+            "overview": "Here's an overview of your practice today."
+        }
+    }
+}

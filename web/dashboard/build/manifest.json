@@ -1,0 +1,53 @@
+{
+    "short_name": "BioSync Pro",
+    "name": "BioSync Professional Dashboard",
+    "description": "Professional dashboard for Fitness & Wellness App management",
+    "icons": [
+        {
+            "src": "favicon.png",
+            "sizes": "64x64",
+            "type": "image/png"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#0ea5e9",
+    "background_color": "#ffffff",
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "lang": "en",
+    "categories": [
+        "business",
+        "productivity",
+        "utilities"
+    ],
+    "shortcuts": [
+        {
+            "name": "Dashboard",
+            "short_name": "Dashboard",
+            "description": "View dashboard overview",
+            "url": "/",
+            "icons": [
+                {
+                    "src": "favicon.ico",
+                    "sizes": "64x64"
+                }
+            ]
+        },
+        {
+            "name": "Users",
+            "short_name": "Users",
+            "description": "Manage users",
+            "url": "/users",
+            "icons": [
+                {
+                    "src": "favicon.ico",
+                    "sizes": "64x64"
+                }
+            ]
+        }
+    ],
+    "screenshots": [],
+    "prefer_related_applications": false,
+    "related_applications": []
+}

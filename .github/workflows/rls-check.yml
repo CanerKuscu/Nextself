@@ -1,0 +1,40 @@
+name: RLS Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  rls-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run RLS checks
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "ERROR: SUPABASE_DB_URL secret not set (DATABASE_URL empty)."; exit 1
+          fi
+
+          echo "Checking for tables without RLS enabled..."
+          NO_RLS=$(psql "$DATABASE_URL" -t -A -c "SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND NOT c.relrowsecurity;")
+          if [ -n "$NO_RLS" ]; then
+            echo "Tables without RLS found:"; echo "$NO_RLS"; exit 1
+          fi
+
+          echo "Checking for tables without any policies defined..."
+          NO_POL=$(psql "$DATABASE_URL" -t -A -c "SELECT t.schemaname||'.'||t.tablename FROM pg_tables t WHERE t.schemaname='public' AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = t.schemaname AND p.tablename = t.tablename);")
+          if [ -n "$NO_POL" ]; then
+            echo "Tables without policies found:"; echo "$NO_POL"; exit 1
+          fi
+
+          echo "RLS checks passed."
