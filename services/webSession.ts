@@ -33,8 +33,7 @@ export async function clearClientSession(supabaseClient: any) {
     try {
         // Best-effort: supabase-js v2 exposes auth.setSession - if present, call with nulls
         if (supabaseClient?.auth?.setSession && typeof supabaseClient.auth.setSession === 'function') {
-            // @ts-ignore
-            await supabaseClient.auth.setSession({ access_token: null, refresh_token: null });
+            await supabaseClient.auth.setSession({ access_token: '', refresh_token: '' });
             return { ok: true };
         }
 
