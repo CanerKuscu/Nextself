@@ -15,6 +15,10 @@ const SecureStoreAdapter = {
 export class SupabaseService {
   private static instance: SupabaseService;
   private client: SupabaseClient;
+  // Single-flight refresh promise
+  private refreshPromise: Promise<boolean> | null = null;
+  // Optional handler to notify when refresh ultimately fails
+  private refreshFailureHandler: (() => void) | null = null;
 
   /** Escape special PostgreSQL LIKE/ILIKE wildcard characters to prevent injection */
   private escapeLike(value: string): string {
@@ -65,6 +69,88 @@ export class SupabaseService {
     this.client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_PUBLISHABLE_KEY, {
       auth: authOptions,
     });
+
+    // Install a lightweight global fetch wrapper that intercepts 401 responses
+    // for requests to the Supabase REST endpoint and attempts a single-flight
+    // refresh. This minimizes duplicate refresh attempts when many requests
+    // fail at the same time.
+    try {
+      const origFetch = (globalThis as any).fetch?.bind(globalThis);
+      if (origFetch && !(origFetch as any).__supabase_wrapped) {
+        const self = this;
+        const wrapped = async (input: RequestInfo, init?: RequestInit) => {
+          const url = typeof input === 'string' ? input : (input as Request).url;
+          let resp = await origFetch(input, init);
+
+          // Only act on Supabase origin 401 responses
+          if (resp && resp.status === 401 && typeof url === 'string' && url.startsWith(CONFIG.SUPABASE_URL)) {
+            // Attempt single-flight refresh
+            const refreshed = await self.performSingleFlightRefresh();
+            if (refreshed) {
+              // Retry original request once
+              try {
+                resp = await origFetch(input, init);
+              } catch (e) {
+                // ignore retry errors, return original resp if available
+              }
+            } else {
+              // Notify failure handler so upper layers (context) can run deterministic logout
+              try {
+                self.refreshFailureHandler?.();
+              } catch (_) { }
+            }
+          }
+
+          return resp;
+        };
+
+        (wrapped as any).__supabase_wrapped = true;
+        (globalThis as any).fetch = wrapped as any;
+      }
+    } catch (e) {
+      // best-effort only
+    }
+  }
+
+  /**
+   * Register a callback to be invoked when a refresh fails.
+   */
+  public onRefreshFailure(handler: () => void) {
+    this.refreshFailureHandler = handler;
+  }
+
+  /**
+   * Perform a single-flight refresh. Returns true on success, false on failure.
+   */
+  private async performSingleFlightRefresh(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      try {
+        // Get current session to extract refresh token
+        const sessionRes: any = await this.client.auth.getSession();
+        const session = sessionRes?.data?.session;
+        if (!session || !session.refresh_token) {
+          return false;
+        }
+
+        // Call refreshSession with current refresh token
+        const refreshRes: any = await this.client.auth.refreshSession({ refresh_token: session.refresh_token });
+        const ok = !(refreshRes?.error);
+        if (!ok) {
+          return false;
+        }
+
+        return true;
+      } catch (err) {
+        return false;
+      } finally {
+        // clear the promise so future refresh attempts can run
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   public static getInstance(): SupabaseService {

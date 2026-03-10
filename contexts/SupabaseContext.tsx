@@ -41,6 +41,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
   const supabaseService = SupabaseService.getInstance();
 
+
   // Edge function URL for proxy calls (web)
   // Resolve edge function URL, preferring explicit config, then importMeta fallback, then env
   const EDGE_FN = defaultEdgeFunctionUrl() || (importMetaFallback.env && importMetaFallback.env.EXPO_PUBLIC_SESSION_EXCHANGE_URL) || (importMetaFallback.env && importMetaFallback.env.SESSION_EXCHANGE_URL) || '';
@@ -129,6 +130,26 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       setUser(null);
     }
   }, [supabaseService]);
+
+  // Register handler for refresh failures so the app can run deterministic logout
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        // Use the same signOut flow so queues are paused and cleared
+        await signOut();
+      } catch (_) { }
+    };
+
+    try {
+      supabaseService.onRefreshFailure(handler);
+    } catch (_) { }
+
+    return () => {
+      try {
+        supabaseService.onRefreshFailure(() => { });
+      } catch (_) { }
+    };
+  }, [supabaseService, signOut]);
 
   // Sign-in wrapper that uses signInAndExchange on web to set HttpOnly cookie and clear client session
   const signIn = useCallback(async (email: string, password: string) => {
