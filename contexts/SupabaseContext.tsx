@@ -106,12 +106,24 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
 
   const signOut = useCallback(async () => {
     try {
+      const offline = OfflineService.getInstance();
+
+      // Pause offline processing and wait for any in-flight sync to finish
+      // to avoid operations being sent under the wrong user context.
+      await offline.pauseAndWait();
+
       await supabaseService.signOut();
+
       // Clear offline queue to prevent cross-user data leakage
-      await OfflineService.getInstance().clearQueue();
+      await offline.clearQueue();
     } catch (error) {
       console.error('Error signing out:', error);
     } finally {
+      // Resume offline processor so the service can continue operating
+      try {
+        OfflineService.getInstance().resume();
+      } catch (_) { }
+
       // Always clear local state regardless of signOut success
       setSession(null);
       setUser(null);

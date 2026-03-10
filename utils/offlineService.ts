@@ -21,6 +21,9 @@ export class OfflineService {
     private syncCallbacks: Map<string, SyncCallback> = new Map();
     private syncInterval: NodeJS.Timeout | null = null;
     private isProcessing: boolean = false;
+    private isPaused: boolean = false;
+    private processingPromise: Promise<void> | null = null;
+    private resolveProcessingPromise: (() => void) | null = null;
     private readonly STORAGE_KEY = '@biosync_offline_queue';
     private readonly MAX_RETRIES = 3;
     private readonly SYNC_INTERVAL = 30000; // 30 seconds
@@ -121,8 +124,14 @@ export class OfflineService {
         this.syncQueue.push(operation);
         await this.saveQueue();
 
-        if (this.isOnline) {
-            this.processOperation(operation);
+        // Always enqueue; let the single processor handle operations to avoid
+        // concurrent processing of the same item. If not paused and online,
+        // trigger the centralized queue processor.
+        if (this.isOnline && !this.isPaused) {
+            // Defer processing to next tick to avoid racing with multiple rapid enqueues
+            setTimeout(() => {
+                this.processQueue();
+            }, 0);
         }
 
         return operation.id;
@@ -171,16 +180,22 @@ export class OfflineService {
     }
 
     private async processQueue() {
-        if (!this.isOnline || this.syncQueue.length === 0 || this.isProcessing) {
+        if (!this.isOnline || this.syncQueue.length === 0 || this.isProcessing || this.isPaused) {
             return;
         }
 
+        // Mark processing and expose a promise that callers can await to know
+        // when processing is complete (used by sign-out to wait for quiescence).
         this.isProcessing = true;
+        this.processingPromise = new Promise<void>((resolve) => {
+            this.resolveProcessingPromise = resolve;
+        });
+
         try {
             const operations = [...this.syncQueue];
 
             for (const operation of operations) {
-                if (!this.isOnline) {
+                if (!this.isOnline || this.isPaused) {
                     break;
                 }
 
@@ -188,7 +203,49 @@ export class OfflineService {
             }
         } finally {
             this.isProcessing = false;
+            if (this.resolveProcessingPromise) {
+                this.resolveProcessingPromise();
+            }
+            this.processingPromise = null;
+            this.resolveProcessingPromise = null;
         }
+    }
+
+    /**
+     * Pause processing and wait for any in-flight processing to finish.
+     * After this resolves, no further processing will start until `resume()` is called.
+     */
+    public async pauseAndWait(timeoutMs: number = 4000): Promise<void> {
+        this.isPaused = true;
+
+        if (!this.isProcessing) return;
+
+        // Race between quiescence and a fail-safe timeout to avoid hanging forever
+        const quiescentPromise = this.awaitQuiescent();
+        const timeoutPromise = new Promise<void>((resolve) => {
+            setTimeout(() => {
+                // If timeout fires, log a warning and resolve so callers can proceed
+                try {
+                    console.warn(`[OfflineService] pauseAndWait timed out after ${timeoutMs}ms; proceeding with paused queue.`);
+                } catch (_) { }
+                resolve();
+            }, timeoutMs);
+        });
+
+        await Promise.race([quiescentPromise, timeoutPromise]);
+    }
+
+    public resume(): void {
+        this.isPaused = false;
+        if (this.isOnline && this.syncQueue.length > 0) {
+            // kick the processor again
+            this.processQueue();
+        }
+    }
+
+    public async awaitQuiescent(): Promise<void> {
+        if (!this.isProcessing) return;
+        return this.processingPromise ?? Promise.resolve();
     }
 
     public getQueueStatus() {
