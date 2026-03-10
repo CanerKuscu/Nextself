@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MissionService, WeeklyMission, DailyMission } from '../services/missionService';
 import { LeagueService } from '../services/leagueService';
 import { useTranslation } from '../hooks/useTranslation';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { COLORS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -24,8 +24,8 @@ const CATEGORY_META: Record<string, { icon: string; color: string; gradient: str
 };
 
 const MissionsScreen = ({ navigation }: any) => {
-  const { colors, isDark } = useTheme();
-  const st = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const st = React.useMemo(() => getStyles(colors), [colors]);
 
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();

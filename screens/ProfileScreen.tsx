@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensio
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedButton from '../components/AnimatedButton';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SupabaseService } from '../services/supabase';
 import { LeagueService, LEAGUE_TIERS, UserLeagueData } from '../services/leagueService';
 import { StreakService, StreakData } from '../services/streakService';

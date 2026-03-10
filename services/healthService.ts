@@ -1,31 +1,5 @@
 import { Platform, Linking } from 'react-native';
-
-// Platform-aware secure storage helper
-const PlatformStorage = {
-  getItem: async (key: string): Promise<string | null> => {
-    if (Platform.OS === 'web') {
-      try { return localStorage.getItem(key); } catch { return null; }
-    }
-    const SecureStore = require('expo-secure-store');
-    return SecureStore.getItemAsync(key);
-  },
-  setItem: async (key: string, value: string): Promise<void> => {
-    if (Platform.OS === 'web') {
-      try { localStorage.setItem(key, value); } catch { /* ignore */ }
-      return;
-    }
-    const SecureStore = require('expo-secure-store');
-    return SecureStore.setItemAsync(key, value);
-  },
-  removeItem: async (key: string): Promise<void> => {
-    if (Platform.OS === 'web') {
-      try { localStorage.removeItem(key); } catch { /* ignore */ }
-      return;
-    }
-    const SecureStore = require('expo-secure-store');
-    return SecureStore.deleteItemAsync(key);
-  },
-};
+import PlatformStorage from '../utils/platformStorage';
 
 const HEALTH_CACHE_KEY = 'biosync_health_cache';
 const HEALTH_CONNECTED_KEY = 'biosync_health_connected';

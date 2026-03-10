@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import PremiumBadge from '../components/PremiumBadge';
 import PremiumFeaturesModal from '../components/PremiumFeaturesModal';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { DeepSeekService } from '../services/deepseek';
 import { PaymentService } from '../services/paymentService';
 import { SupabaseService } from '../services/supabase';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -96,7 +96,7 @@ const SupplementScreen = () => {
     }
   };
 
-  const toggleReminder = async (item: any) => {
+  const toggleReminder = useCallback(async (item: any) => {
     const isScheduled = scheduledNotifs[item.id];
     const identifier = `supplement-${item.id}`;
 
@@ -113,9 +113,9 @@ const SupplementScreen = () => {
       );
       setScheduledNotifs(prev => ({ ...prev, [item.id]: true }));
     }
-  };
+  }, [scheduledNotifs, isTurkish]);
 
-  const renderItem = ({ item }: { item: any }) => {
+  const renderItem = useCallback(({ item }: { item: any }) => {
     const isExpanded = expandedId === item.id;
     const isScheduled = scheduledNotifs[item.id];
     const catInfo = getCategoryIcon(item.category || item.type);
@@ -197,7 +197,7 @@ const SupplementScreen = () => {
         </AnimatedCard>
       </TouchableOpacity>
     );
-  };
+  }, [expandedId, scheduledNotifs, isTurkish, colors, toggleReminder]);
 
   return (
     <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]}>
@@ -259,13 +259,18 @@ const SupplementScreen = () => {
         <FlatList
           data={getItems()}
           renderItem={renderItem}
-          keyExtractor={item => item.id}
+          keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}
           maxToRenderPerBatch={10}
           windowSize={5}
           removeClippedSubviews={true}
+          getItemLayout={(data, index) => ({
+            length: 120, // Estimated supplement item height
+            offset: 120 * index,
+            index,
+          })}
           ListEmptyComponent={
             <View style={[COMMON_STYLES.center, { paddingTop: SPACING.section }]}>
               <Text style={{ ...TYPOGRAPHY.body, color: colors.textTertiary }}>

@@ -313,7 +313,7 @@ export class ProgressReportService {
         period: 'week' | 'month' | 'quarter' = 'month'
     ): Promise<{ date: string; value: number }[]> {
         try {
-            let startDate = new Date();
+            const startDate = new Date();
             switch (period) {
                 case 'week':
                     startDate.setDate(startDate.getDate() - 7);

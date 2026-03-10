@@ -195,8 +195,9 @@ export class SecurityUtils {
     return this.generateSecureToken(64);
   }
 
-  // CSRF comparison key — should be in env vars in production
-  private static readonly CSRF_COMPARE_KEY = process.env.EXPO_PUBLIC_CSRF_KEY || CryptoJS.lib.WordArray.random(32).toString();
+  // CSRF comparison key — MUST be set in env vars in production
+  // Falls back to empty string which will cause validation to fail safely
+  private static readonly CSRF_COMPARE_KEY = process.env.EXPO_PUBLIC_CSRF_KEY || '';
 
   // Validate CSRF token using constant-time comparison to prevent timing attacks
   static validateCSRFToken(token: string, sessionToken: string): boolean {

@@ -4,7 +4,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
 import { SupabaseService } from '../services/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 
 export default function QRScannerScreen() {
     const navigation = useNavigation();

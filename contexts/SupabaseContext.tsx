@@ -48,9 +48,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
   // Debug: log the resolved Edge Function URL on provider mount so web startup reveals runtime value
   useEffect(() => {
     try {
-      console.debug('[SupabaseProvider] EDGE_FN:', EDGE_FN, 'Platform:', Platform.OS);
+      if (__DEV__) {
+        console.debug('[SupabaseProvider] EDGE_FN:', EDGE_FN, 'Platform:', Platform.OS);
+      }
     } catch (e) {
-      console.debug('[SupabaseProvider] EDGE_FN log failed', e);
+      if (__DEV__) {
+        console.debug('[SupabaseProvider] EDGE_FN log failed', e);
+      }
     }
   }, [EDGE_FN]);
 

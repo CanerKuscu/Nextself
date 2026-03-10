@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import FloatingInput from '../components/FloatingInput';
 import AnimatedButton from '../components/AnimatedButton';
 import AnimatedCard from '../components/AnimatedCard';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SupabaseService } from '../services/supabase';
 import { ContentModerationService } from '../services/contentModerationService';
 import { useSupabaseAuth } from '../contexts/SupabaseContext';

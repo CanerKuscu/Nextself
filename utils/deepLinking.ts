@@ -141,7 +141,22 @@ export class DeepLinkingService {
                 query = queryPart || '';
             } else if (url.includes(this.HOST)) {
                 // Universal link: https://app.biosync.com/path?param=value
-                const urlObj = new URL(url);
+                // SECURITY: Validate host strictly to prevent malicious redirects
+                let urlObj: URL;
+                try {
+                    urlObj = new URL(url);
+                } catch {
+                    console.error('Invalid URL format');
+                    return null;
+                }
+
+                // Strict host validation - only allow exact match or www subdomain
+                const allowedHosts = [this.HOST, `www.${this.HOST}`];
+                if (!allowedHosts.includes(urlObj.host)) {
+                    console.warn(`Rejected deep link from unauthorized host: ${urlObj.host}`);
+                    return null;
+                }
+
                 path = urlObj.pathname.substring(1); // Remove leading slash
                 query = urlObj.search.substring(1); // Remove leading ?
             } else {
@@ -374,12 +389,48 @@ export class DeepLinkingService {
 
     /**
      * Open web browser
+     * SECURITY: Only allows http:// and https:// URLs to prevent malicious schemes
      */
     public async openBrowser(url: string): Promise<boolean> {
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            url = `https://${url}`;
+        try {
+            // Parse URL to validate scheme and host
+            let urlObj: URL;
+            try {
+                urlObj = new URL(url);
+            } catch {
+                // If URL is invalid, try prepending https://
+                if (!url.includes('://')) {
+                    url = `https://${url}`;
+                    try {
+                        urlObj = new URL(url);
+                    } catch {
+                        console.error('Invalid URL format');
+                        return false;
+                    }
+                } else {
+                    console.error('Invalid URL format');
+                    return false;
+                }
+            }
+
+            // SECURITY: Only allow http and https schemes
+            const allowedSchemes = ['http:', 'https:'];
+            if (!allowedSchemes.includes(urlObj.protocol)) {
+                console.warn(`Rejected URL with disallowed scheme: ${urlObj.protocol}`);
+                return false;
+            }
+
+            // Reject URLs with embedded credentials
+            if (urlObj.username || urlObj.password) {
+                console.warn('Rejected URL with embedded credentials');
+                return false;
+            }
+
+            return this.openURL(url);
+        } catch (error) {
+            console.error('Failed to open browser:', error);
+            return false;
         }
-        return this.openURL(url);
     }
 
     /**

@@ -12,7 +12,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { CONFIG } from '../config/config';
 import PlatformStorage from '../utils/platformStorage';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import FoodCategoryIcon from '../components/FoodCategoryIcon';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -177,7 +177,7 @@ const NutritionScreen = ({ navigation }: any) => {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={foods}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 12 }]}
         showsVerticalScrollIndicator={false}
         initialNumToRender={8}

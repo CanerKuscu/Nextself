@@ -10,7 +10,6 @@ import {
   TextInput,
   Dimensions,
   Animated,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,12 +17,11 @@ import AnimatedCard from '../components/AnimatedCard';
 import AnimatedButton from '../components/AnimatedButton';
 import { SupabaseService } from '../services/supabase';
 import { useTranslation } from '../hooks/useTranslation';
-import { CONFIG } from '../config/config';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
+import { useAlert } from '../components/CustomAlert';
 import { useTheme } from '../contexts/ThemeContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// window width not required currently
 
 const isTrainerType = (type?: string) => {
   if (!type) return false;
@@ -32,7 +30,7 @@ const isTrainerType = (type?: string) => {
 };
 
 const ProfessionalSearchScreen = ({ navigation }: any) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
   const [professionals, setProfessionals] = useState<any[]>([]);
@@ -41,11 +39,10 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [sortBy, setSortBy] = useState<'rating' | 'name' | 'city'>('rating');
-  const [showSortMenu, setShowSortMenu] = useState(false);
+
   const { isTurkish } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, AlertComponent } = useAlert();
-  const scrollY = useRef(new Animated.Value(0)).current;
 
   // Stable random fallback values per professional (persists across renders)
   const randomValuesRef = useRef<Map<string, { specCount: number; clients: number; years: number; courses: number }>>(new Map());
@@ -421,7 +418,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
           // Optimize FlatList performance with windowing and batching
           data={professionals}
           renderItem={renderProfessional}
-          keyExtractor={item => item.id}
+          keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}

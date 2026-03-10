@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { SupabaseService } from '../services/supabase';
 import { useTranslation } from '../hooks/useTranslation';
 import GlassCard from '../components/GlassCard';
-import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
+import { GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function ChatListScreen() {
@@ -108,7 +108,7 @@ export default function ChatListScreen() {
                 <FlatList
                     data={chats}
                     renderItem={renderChatItem}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => String(item.id)}
                     contentContainerStyle={styles.listContent}
                     // Optimize FlatList performance with windowing and batching
                     initialNumToRender={10}

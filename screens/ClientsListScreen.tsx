@@ -165,7 +165,7 @@ const ClientsListScreen = ({ navigation }: any) => {
             ) : (
                 <FlatList
                     data={filteredClients}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => String(item.id)}
                     renderItem={renderClient}
                     // Optimize FlatList performance with windowing and batching
                     initialNumToRender={10}

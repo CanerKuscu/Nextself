@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { useTranslation } from '../hooks/useTranslation';
 import { HealthService, HealthData, HealthInsight } from '../services/healthService';
 import * as Sentry from '@sentry/react-native';

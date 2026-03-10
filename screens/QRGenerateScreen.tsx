@@ -4,7 +4,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { SupabaseService } from '../services/supabase';
 import { useRoute } from '@react-navigation/native';
 import { useLanguage } from '../contexts/LanguageContext';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 
 export default function QRGenerateScreen() {
     const route = useRoute();

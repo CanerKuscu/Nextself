@@ -465,9 +465,14 @@ const ProfessionalCoursesScreen = ({ navigation, route }: any) => {
                     removeClippedSubviews={true}
                     data={filteredCourses}
                     renderItem={renderCourse}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => String(item.id)}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
+                    getItemLayout={(data, index) => ({
+                        length: 140, // Estimated course card height
+                        offset: 140 * index,
+                        index,
+                    })}
                     ListEmptyComponent={
                         <View style={[COMMON_STYLES.center, { paddingTop: 60 }]}>
                             <Ionicons name="book-outline" size={48} color={colors.border} />

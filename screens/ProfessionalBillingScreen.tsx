@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity }
 import { SupabaseService } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 
 export default function ProfessionalBillingScreen() {
     const navigation = useNavigation();
@@ -116,7 +116,18 @@ export default function ProfessionalBillingScreen() {
             ) : (
                 <FlatList
                     data={billingData}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => String(item.id)}
+                    // Optimize FlatList performance with windowing and fixed-layout
+                    initialNumToRender={8}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    removeClippedSubviews={true}
+                    updateCellsBatchingPeriod={50}
+                    getItemLayout={(data, index) => ({
+                        length: 120, // Estimated billing item height
+                        offset: 120 * index,
+                        index,
+                    })}
                     ListHeaderComponent={() => (
                         <View style={styles.summaryBox}>
                             <Text style={styles.summaryTitle}>Bu Ayki Tahmini Durum</Text>

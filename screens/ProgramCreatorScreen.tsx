@@ -11,7 +11,7 @@ import { DeepSeekService } from '../services/deepseek';
 import { LeagueService } from '../services/leagueService';
 import { NotificationService } from '../services/notificationService';
 import { useTranslation } from '../hooks/useTranslation';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import AnimatedButton from '../components/AnimatedButton';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';

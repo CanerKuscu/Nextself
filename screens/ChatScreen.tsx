@@ -83,7 +83,7 @@ export default function ChatScreen() {
         }
     };
 
-    const renderMessage = ({ item }: { item: any }) => {
+    const renderMessage = useCallback(({ item }: { item: any }) => {
         const isMe = item.sender_id === currentUserId;
 
         return (
@@ -101,7 +101,7 @@ export default function ChatScreen() {
                 </Text>
             </View>
         );
-    };
+    }, [currentUserId, styles]);
 
     return (
         <KeyboardAvoidingView
@@ -124,7 +124,7 @@ export default function ChatScreen() {
                     ref={flatListRef}
                     data={messages}
                     renderItem={renderMessage}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => String(item.id)}
                     contentContainerStyle={styles.listContent}
                     initialNumToRender={15}
                     maxToRenderPerBatch={10}

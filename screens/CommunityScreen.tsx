@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { useTranslation } from '../hooks/useTranslation';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
+import { TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { SupabaseService } from '../services/supabase';
 
@@ -273,7 +273,7 @@ export default function CommunityScreen() {
                         })}
                         data={leaderboardData}
                         renderItem={renderUser}
-                        keyExtractor={item => item.id}
+                        keyExtractor={item => String(item.id)}
                         contentContainerStyle={styles.listContent}
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={

@@ -12,7 +12,7 @@ import GlassCard from '../components/GlassCard';
 import GradientButton from '../components/GradientButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { RatingService } from '../services/ratingService';
 import { useSupabaseAuth } from '../contexts/SupabaseContext';
 import { useTheme } from '../contexts/ThemeContext';

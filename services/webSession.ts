@@ -21,7 +21,7 @@ export async function setSessionCookieFromRefreshToken(edgeFunctionUrl: string, 
     });
 
     const text = await res.text().catch(() => '');
-    let json: any = null;
+    let json: any;
     try { json = text ? JSON.parse(text) : null; } catch { json = { ok: false, text }; }
     if (!res.ok) {
         return { error: json || { status: res.status, text } };
@@ -87,7 +87,7 @@ export async function proxiedRequest(edgeFunctionUrl: string, method: string, pa
         body: JSON.stringify({ method, path, query: options?.query, body: options?.body }),
     });
     const text = await res.text().catch(() => '');
-    let json: any = null;
+    let json: any;
     try { json = text ? JSON.parse(text) : null; } catch { json = { text }; }
     return { status: res.status, ok: res.ok, data: json };
 }

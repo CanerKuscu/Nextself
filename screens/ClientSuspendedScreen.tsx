@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Linking, Dimensions, Alert } 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useLanguage } from '../contexts/LanguageContext';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 

@@ -121,9 +121,9 @@ export class SecurityMiddleware {
 
             // Add rate limit headers
             const record = requests.get(ip)!;
-            res.setHeader('X-RateLimit-Limit', maxRequests);
-            res.setHeader('X-RateLimit-Remaining', maxRequests - record.count);
-            res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000));
+            res.setHeader('X-RateLimit-Limit', String(maxRequests));
+            res.setHeader('X-RateLimit-Remaining', String(maxRequests - record.count));
+            res.setHeader('X-RateLimit-Reset', String(Math.ceil(record.resetTime / 1000)));
 
             next();
         };
@@ -135,7 +135,7 @@ export class SecurityMiddleware {
     static sanitizeInput(input: string): string {
         if (!input) return '';
 
-        let sanitized = input
+        const sanitized = input
             .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags
             .replace(/javascript:[\s\S]*/gi, '') // Remove javascript: protocol
             .replace(/on\w+\s*=\s*(['"]).*?\1/gi, '') // Remove event handlers

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 
 import { SupabaseService } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';

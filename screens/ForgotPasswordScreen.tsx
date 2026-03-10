@@ -17,15 +17,15 @@ import FloatingInput from '../components/FloatingInput';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SupabaseService } from '../services/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 
 type Phase = 'email' | 'code' | 'newPassword';
 
 const ForgotPasswordScreen = ({ navigation }: any) => {
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
 
     const [phase, setPhase] = useState<Phase>('email');
     const [email, setEmail] = useState('');

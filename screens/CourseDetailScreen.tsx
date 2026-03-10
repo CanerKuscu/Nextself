@@ -17,14 +17,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { useTheme } from '../contexts/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CourseDetailScreen = ({ navigation, route }: any) => {
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
 
     const { course, professionalName } = route.params || {};
     const { isTurkish } = useTranslation();

@@ -50,6 +50,11 @@ export const CONFIG = {
       return '';
     }
 
+    // Protection: Do NOT allow embedding an encryption key into production client builds.
+    if (IS_PRODUCTION) {
+      throw new Error('EXPO_PUBLIC_ENCRYPTION_KEY must NOT be set in production builds. Use server-side encryption (Edge Functions/KMS) and a secure key store.');
+    }
+
     // Validate key length (should be 32 bytes for AES-256)
     if (envKey.length !== 32) {
       throw new Error('ENCRYPTION_KEY must be exactly 32 characters long for AES-256 encryption.');

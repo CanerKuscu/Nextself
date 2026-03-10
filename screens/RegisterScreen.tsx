@@ -18,7 +18,7 @@ import { SupabaseService } from '../services/supabase';
 import { useTranslation } from '../hooks/useTranslation';
 import { useDebounce } from '../hooks/useDebounce';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SecurityUtils } from '../utils/security';
 import { AgreementService } from '../services/agreementService';
 import DateTimePicker from '@react-native-community/datetimepicker';

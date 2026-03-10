@@ -3,46 +3,14 @@ import { Platform } from 'react-native';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '../config/config';
 import { ValidationUtils } from '../utils/validation';
+import PlatformStorage from '../utils/platformStorage';
 
-// Platform-aware storage adapter: SecureStore on native, localStorage on web
-const createStorageAdapter = () => {
-  if (Platform.OS === 'web') {
-    return {
-      getItem: (key: string) => {
-        try {
-          return Promise.resolve(localStorage.getItem(key));
-        } catch {
-          return Promise.resolve(null);
-        }
-      },
-      setItem: (key: string, value: string) => {
-        try {
-          localStorage.setItem(key, value);
-        } catch {
-          // quota exceeded or private browsing
-        }
-        return Promise.resolve();
-      },
-      removeItem: (key: string) => {
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          // ignore
-        }
-        return Promise.resolve();
-      },
-    };
-  }
-  // Native: use SecureStore
-  const SecureStore = require('expo-secure-store');
-  return {
-    getItem: (key: string) => SecureStore.getItemAsync(key),
-    setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-    removeItem: (key: string) => SecureStore.deleteItemAsync(key),
-  };
+// Supabase auth storage adapter using shared PlatformStorage
+const SecureStoreAdapter = {
+  getItem: (key: string) => PlatformStorage.getItem(key),
+  setItem: (key: string, value: string) => PlatformStorage.setItem(key, value),
+  removeItem: (key: string) => PlatformStorage.removeItem(key),
 };
-
-const SecureStoreAdapter = createStorageAdapter();
 
 export class SupabaseService {
   private static instance: SupabaseService;

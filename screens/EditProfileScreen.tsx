@@ -8,7 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { getLocalDateString } from '../utils/dateUtils';
 import GlassCard from '../components/GlassCard';
 import GradientButton from '../components/GradientButton';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SupabaseService } from '../services/supabase';
 import { useTranslation } from '../hooks/useTranslation';
 import { SecurityUtils } from '../utils/security';

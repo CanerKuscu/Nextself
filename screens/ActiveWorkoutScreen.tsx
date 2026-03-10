@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
 import { useTranslation } from '../hooks/useTranslation';
 import AnimatedButton from '../components/AnimatedButton';
-import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { useAlert } from '../components/CustomAlert';
 import { SupabaseService } from '../services/supabase';
 import { LeagueService } from '../services/leagueService';
 import { StreakService } from '../services/streakService';
