@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -141,7 +141,7 @@ const useLeaderboard = () => {
         };
     }, []);
 
-    return { leaderboardData, loading, error };
+    return { leaderboardData, loading, error } as { leaderboardData: LeaderboardUser[]; loading: boolean; error: string | null };
 };
 
 export default function CommunityScreen() {
@@ -156,6 +156,15 @@ export default function CommunityScreen() {
 
     // Fetch real leaderboard data from API
     const { leaderboardData, loading: leaderboardLoading } = useLeaderboard();
+
+    // Memoize leaderboard data processing to prevent unnecessary re-renders
+    const processedLeaderboardData = useMemo(() => {
+        return leaderboardData.map((item: LeaderboardUser, index: number) => ({
+            ...item,
+            // Ensure stable references for FlatList optimization
+            key: `${item.id}-${index}`,
+        }));
+    }, [leaderboardData]);
 
     const getZoneColor = useCallback((rank: number) => {
         if (rank <= 7) return '#58CC02'; if (rank >= 25) return '#FF4B4B'; return 'transparent';
@@ -271,7 +280,7 @@ export default function CommunityScreen() {
                             offset: 70 * index,
                             index,
                         })}
-                        data={leaderboardData}
+                        data={processedLeaderboardData}
                         renderItem={renderUser}
                         keyExtractor={item => String(item.id)}
                         contentContainerStyle={styles.listContent}

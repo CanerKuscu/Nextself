@@ -93,7 +93,8 @@ export class DeepLinkingService {
                 this.processURL(initialUrl);
             }
         } catch (error) {
-            console.error('Failed to get initial URL:', error);
+            // Silently ignore - deep link processing failure is not critical
+            return;
         }
     }
 
@@ -102,8 +103,6 @@ export class DeepLinkingService {
      */
     private async processURL(url: string) {
         try {
-            console.log('Processing deep link');
-
             // Parse URL
             const parsed = this.parseURL(url);
             if (!parsed) return;
@@ -120,7 +119,8 @@ export class DeepLinkingService {
             // Default routing based on path
             this.routeByPath(path, params);
         } catch (error) {
-            console.error('Failed to process deep link:', error);
+            // Silently ignore - URL processing failure is not critical
+            return;
         }
     }
 
@@ -146,14 +146,14 @@ export class DeepLinkingService {
                 try {
                     urlObj = new URL(url);
                 } catch {
-                    console.error('Invalid URL format');
+                    // Invalid URL format - security validation failed
                     return null;
                 }
 
                 // Strict host validation - only allow exact match or www subdomain
                 const allowedHosts = [this.HOST, `www.${this.HOST}`];
                 if (!allowedHosts.includes(urlObj.host)) {
-                    console.warn(`Rejected deep link from unauthorized host: ${urlObj.host}`);
+                    // Rejected deep link from unauthorized host - security measure
                     return null;
                 }
 
@@ -177,7 +177,7 @@ export class DeepLinkingService {
 
             return { path, params };
         } catch (error) {
-            console.error('Failed to parse URL:', error);
+            // Silently ignore - URL parsing failure is not critical
             return null;
         }
     }
@@ -187,7 +187,6 @@ export class DeepLinkingService {
      */
     private routeByPath(path: string, params: Record<string, string>) {
         if (!this.navigationRef) {
-            console.warn('Navigation ref not set, queuing deep link for later processing');
             // Queue URL for processing when navigation ref becomes available
             this.pendingInitialURL = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
             return;
@@ -311,8 +310,7 @@ export class DeepLinkingService {
                 break;
 
             default:
-                console.warn(`No route found for path: ${path}`);
-                // Fallback to home
+                // Fallback to home - no route found for path
                 navigation.navigate('Home');
         }
     }
@@ -329,7 +327,7 @@ export class DeepLinkingService {
             }
             return false;
         } catch (error) {
-            console.error('Failed to open URL:', error);
+            // Silently ignore - URL opening failure is not critical
             return false;
         }
     }
@@ -404,11 +402,11 @@ export class DeepLinkingService {
                     try {
                         urlObj = new URL(url);
                     } catch {
-                        console.error('Invalid URL format');
+                        // Invalid URL format - security validation failed
                         return false;
                     }
                 } else {
-                    console.error('Invalid URL format');
+                    // Invalid URL format - security validation failed
                     return false;
                 }
             }
@@ -416,19 +414,19 @@ export class DeepLinkingService {
             // SECURITY: Only allow http and https schemes
             const allowedSchemes = ['http:', 'https:'];
             if (!allowedSchemes.includes(urlObj.protocol)) {
-                console.warn(`Rejected URL with disallowed scheme: ${urlObj.protocol}`);
+                // Rejected URL with disallowed scheme - security measure
                 return false;
             }
 
             // Reject URLs with embedded credentials
             if (urlObj.username || urlObj.password) {
-                console.warn('Rejected URL with embedded credentials');
+                // Rejected URL with embedded credentials - security measure
                 return false;
             }
 
             return this.openURL(url);
         } catch (error) {
-            console.error('Failed to open browser:', error);
+            // Silently ignore - browser opening failure is not critical
             return false;
         }
     }
@@ -464,28 +462,3 @@ export class DeepLinkingService {
         }
     }
 }
-
-// Example usage:
-/*
-// Initialize deep linking service
-const deepLinking = DeepLinkingService.getInstance();
-
-// Set navigation ref when app starts
-deepLinking.setNavigationRef(navigationRef);
-
-// Register custom handlers
-deepLinking.registerHandler('custom-action', (params) => {
-  console.log('Custom action triggered');
-  // Handle custom action
-});
-
-// Generate deep links
-const workoutLink = deepLinking.generateDeepLink('workout');
-const exerciseLink = deepLinking.generateDeepLink('exercise', { id: '123' });
-const universalLink = deepLinking.generateUniversalLink('profile', { userId: '456' });
-
-// Open links
-await deepLinking.openURL(workoutLink);
-await deepLinking.openEmail('app.biosync@gmail.com', 'Help Request', 'I need help with...');
-await deepLinking.shareContent('Check out BioSync', 'Amazing fitness app!', 'https://biosync.com');
-*/

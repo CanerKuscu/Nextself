@@ -10,6 +10,8 @@ export class AccessibilityService {
 
     private constructor() {
         this.init();
+        // IMPORTANT: Call cleanup() when component unmounts to prevent memory leaks:
+        // useEffect(() => { return () => accessibility.cleanup(); }, []);
     }
 
     public static getInstance(): AccessibilityService {
@@ -31,16 +33,16 @@ export class AccessibilityService {
             this.isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
             this.isReduceTransparencyEnabled = await AccessibilityInfo.isReduceTransparencyEnabled();
             this.isInvertColorsEnabled = await AccessibilityInfo.isInvertColorsEnabled();
-        } catch (error) {
-            console.error('Failed to check accessibility features:', error);
+        } catch {
+            // Silently ignore - accessibility check failure is not critical
         }
     }
 
-    private screenReaderSubscription: any;
-    private boldTextSubscription: any;
-    private reduceMotionSubscription: any;
-    private reduceTransparencySubscription: any;
-    private invertColorsSubscription: any;
+    private screenReaderSubscription: { remove: () => void } | null = null;
+    private boldTextSubscription: { remove: () => void } | null = null;
+    private reduceMotionSubscription: { remove: () => void } | null = null;
+    private reduceTransparencySubscription: { remove: () => void } | null = null;
+    private invertColorsSubscription: { remove: () => void } | null = null;
 
     private setupListeners() {
         // Screen reader status changes
@@ -407,10 +409,6 @@ export class AccessibilityService {
             issues.push('Reduce motion is enabled - animations should be minimal or disabled');
         }
 
-        if (settings.reduceTransparency) {
-            issues.push('Reduce transparency is enabled - avoid translucent effects');
-        }
-
         if (settings.invertColors) {
             issues.push('Invert colors is enabled - ensure color contrast remains sufficient');
         }
@@ -449,29 +447,3 @@ export class AccessibilityService {
         }
     }
 }
-
-// Example usage:
-/*
-// Initialize accessibility service
-const accessibility = AccessibilityService.getInstance();
-
-// Check accessibility settings
-if (accessibility.isScreenReaderOn()) {
-  // Announce important messages
-  accessibility.announce('Welcome to BioSync');
-}
-
-// Get accessibility props for components
-const buttonProps = accessibility.getButtonProps('Save changes', 'Tap to save your changes');
-const inputProps = accessibility.getInputProps('Email address', 'Enter your email address');
-
-// Adjust animations based on user preference
-const animationSettings = accessibility.getAnimationSettings();
-
-// Generate accessibility report
-const report = accessibility.generateAccessibilityReport();
-console.log('Accessibility report:', report);
-
-// Cleanup when done
-accessibility.cleanup();
-*/

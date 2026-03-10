@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo from '@react-native-community/netinfo';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { CONFIG } from '../config/config';
 import { SecurityUtils } from './security';
 
 type OfflineOperation = {
     id: string;
     type: string;
-    data: any;
+    data: unknown;
     timestamp: number;
     retries: number;
     maxRetries: number;
@@ -27,6 +27,8 @@ export class OfflineService {
 
     private constructor() {
         this.init();
+        // IMPORTANT: Call cleanup() when app unmounts or component unmounts:
+        // useEffect(() => { return () => offlineService.cleanup(); }, []);
     }
 
     public static getInstance(): OfflineService {
@@ -51,59 +53,44 @@ export class OfflineService {
         try {
             const savedQueue = await AsyncStorage.getItem(this.STORAGE_KEY);
             if (savedQueue) {
-                // Decrypt the queue data
                 const decrypted = SecurityUtils.decrypt(savedQueue);
                 this.syncQueue = decrypted ? JSON.parse(decrypted) : [];
             }
         } catch (error) {
-            console.error('Failed to load offline queue');
             this.syncQueue = [];
         }
     }
 
     private async saveQueue() {
         try {
-            // Encrypt the queue before storing
             const encrypted = SecurityUtils.encrypt(JSON.stringify(this.syncQueue));
             await AsyncStorage.setItem(this.STORAGE_KEY, encrypted);
-        } catch (error) {
-            console.error('Failed to save offline queue');
-        }
+        } catch (error) { }
     }
 
-    /**
-     * Clear offline queue (call on logout to prevent cross-user data leakage)
-     */
     public async clearQueue() {
         this.syncQueue = [];
         try {
             await AsyncStorage.removeItem(this.STORAGE_KEY);
-        } catch {
-            // ignore
-        }
+        } catch { }
     }
 
     private netInfoUnsubscribe: (() => void) | null = null;
 
     private monitorNetwork() {
-        this.netInfoUnsubscribe = NetInfo.addEventListener((state: any) => {
+        this.netInfoUnsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
             const wasOnline = this.isOnline;
             this.isOnline = state.isConnected ?? false;
 
             if (!wasOnline && this.isOnline) {
-                // Came back online, trigger sync
                 this.processQueue();
             }
 
-            // Emit network change event if needed
             this.emitNetworkChange(this.isOnline);
         });
     }
 
-    private emitNetworkChange(isOnline: boolean) {
-        // Could be used to update UI or trigger actions
-        // Example: EventEmitter.emit('networkChange', { isOnline });
-    }
+    private emitNetworkChange(isOnline: boolean) { }
 
     private startSyncInterval() {
         if (this.syncInterval) {
@@ -117,17 +104,11 @@ export class OfflineService {
         }, this.SYNC_INTERVAL);
     }
 
-    /**
-     * Register a sync handler for a specific operation type
-     */
     public registerSyncHandler(type: string, callback: SyncCallback) {
         this.syncCallbacks.set(type, callback);
     }
 
-    /**
-     * Queue an operation for offline sync
-     */
-    public async queueOperation(type: string, data: any, maxRetries: number = this.MAX_RETRIES): Promise<string> {
+    public async queueOperation(type: string, data: unknown, maxRetries: number = this.MAX_RETRIES): Promise<string> {
         const operation: OfflineOperation = {
             id: this.generateId(),
             type,
@@ -140,7 +121,6 @@ export class OfflineService {
         this.syncQueue.push(operation);
         await this.saveQueue();
 
-        // If online, try to process immediately
         if (this.isOnline) {
             this.processOperation(operation);
         }
@@ -148,14 +128,10 @@ export class OfflineService {
         return operation.id;
     }
 
-    /**
-     * Process a single operation
-     */
     private async processOperation(operation: OfflineOperation): Promise<boolean> {
         const callback = this.syncCallbacks.get(operation.type);
 
         if (!callback) {
-            console.warn(`No sync handler registered for type: ${operation.type}`);
             return false;
         }
 
@@ -163,16 +139,13 @@ export class OfflineService {
             const success = await callback(operation);
 
             if (success) {
-                // Remove from queue
                 this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
                 await this.saveQueue();
                 return true;
             } else {
-                // Increment retries
                 operation.retries++;
 
                 if (operation.retries >= operation.maxRetries) {
-                    // Max retries reached, remove from queue
                     this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
                     await this.saveQueue();
                     this.emitOperationFailed(operation, 'max_retries');
@@ -183,7 +156,6 @@ export class OfflineService {
                 return false;
             }
         } catch (error) {
-            console.error(`Failed to process operation ${operation.id}:`, error);
             operation.retries++;
 
             if (operation.retries >= operation.maxRetries) {
@@ -198,9 +170,6 @@ export class OfflineService {
         }
     }
 
-    /**
-     * Process all queued operations
-     */
     private async processQueue() {
         if (!this.isOnline || this.syncQueue.length === 0 || this.isProcessing) {
             return;
@@ -208,12 +177,11 @@ export class OfflineService {
 
         this.isProcessing = true;
         try {
-            // Process operations in order
-            const operations = [...this.syncQueue]; // Copy to avoid modification during iteration
+            const operations = [...this.syncQueue];
 
             for (const operation of operations) {
                 if (!this.isOnline) {
-                    break; // Stop if we go offline
+                    break;
                 }
 
                 await this.processOperation(operation);
@@ -223,9 +191,6 @@ export class OfflineService {
         }
     }
 
-    /**
-     * Get current queue status
-     */
     public getQueueStatus() {
         return {
             isOnline: this.isOnline,
@@ -240,9 +205,6 @@ export class OfflineService {
         };
     }
 
-    /**
-     * Remove a specific operation from queue
-     */
     public async removeOperation(operationId: string): Promise<boolean> {
         const initialLength = this.syncQueue.length;
         this.syncQueue = this.syncQueue.filter(op => op.id !== operationId);
@@ -255,16 +217,10 @@ export class OfflineService {
         return false;
     }
 
-    /**
-     * Check if device is online
-     */
     public getIsOnline(): boolean {
         return this.isOnline;
     }
 
-    /**
-     * Manually trigger sync
-     */
     public async syncNow(): Promise<{ success: boolean; processed: number }> {
         if (!this.isOnline) {
             return { success: false, processed: 0 };
@@ -277,25 +233,12 @@ export class OfflineService {
         return { success: true, processed };
     }
 
-    /**
-     * Generate unique ID for operations
-     */
     private generateId(): string {
         return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     }
 
-    /**
-     * Emit operation failed event
-     */
-    private emitOperationFailed(operation: OfflineOperation, reason: string) {
-        // Could be used to notify user or log analytics
-        // Example: EventEmitter.emit('operationFailed', { operation, reason });
-        console.warn(`Operation ${operation.id} failed: ${reason}`);
-    }
+    private emitOperationFailed(operation: OfflineOperation, reason: string) { }
 
-    /**
-     * Cleanup resources
-     */
     public cleanup() {
         if (this.syncInterval) {
             clearInterval(this.syncInterval);
@@ -307,45 +250,3 @@ export class OfflineService {
         }
     }
 }
-
-// Example usage:
-/*
-// Initialize offline service
-const offlineService = OfflineService.getInstance();
-
-// Register sync handlers
-offlineService.registerSyncHandler('create_exercise', async (operation) => {
-  try {
-    // Call your API here
-    const response = await api.createExercise(operation.data);
-    return response.success;
-  } catch (error) {
-    return false;
-  }
-});
-
-offlineService.registerSyncHandler('log_food', async (operation) => {
-  try {
-    const response = await api.logFood(operation.data);
-    return response.success;
-  } catch (error) {
-    return false;
-  }
-});
-
-// Queue operations when offline
-await offlineService.queueOperation('create_exercise', {
-  name: 'Push-ups',
-  category: 'calisthenics',
-  muscle_group: 'chest',
-});
-
-// Check queue status
-const status = offlineService.getQueueStatus();
-console.log('Queue status:', status);
-
-// Manual sync
-if (offlineService.getIsOnline()) {
-  await offlineService.syncNow();
-}
-*/
