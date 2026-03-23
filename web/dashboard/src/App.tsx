@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
+import { Session } from '@supabase/supabase-js';
 import Layout from './components/Layout';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Users = lazy(() => import('./pages/Users'));
@@ -21,12 +22,12 @@ const Ratings = lazy(() => import('./pages/Ratings'));
 const ServiceListing = lazy(() => import('./pages/ServiceListing'));
 
 function App() {
-    const [session, setSession] = useState<any>(null);
+    const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [authorized, setAuthorized] = useState(false);
 
     /** Check whether the current user has a professional role (PT or Dietitian). */
-    const checkRole = async (userId) => {
+    const checkRole = async (userId: string) => {
         if (!userId) { setAuthorized(false); return; }
         try {
             const { data, error } = await supabase
@@ -34,10 +35,15 @@ function App() {
                 .select('user_type')
                 .eq('id', userId)
                 .single();
-            if (error || !data) { setAuthorized(false); return; }
+            if (error || !data) { 
+                console.error('Failed to fetch user role:', error);
+                setAuthorized(false); 
+                return; 
+            }
             const role = (data.user_type || '').toLowerCase();
             setAuthorized(role === 'pt' || role === 'dietitian' || role === 'admin');
-        } catch {
+        } catch (error) {
+            console.error('Exception occurred while checking role:', error);
             setAuthorized(false);
         }
     };

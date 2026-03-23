@@ -1,4 +1,4 @@
-import{r as i,O as d,j as e,N as _,T as D,U as T,V as U}from"./index-MxyVAUcF.js";const V=()=>{const[y,S]=i.useState([]),[n,M]=i.useState(null),[b,x]=i.useState([]),[p,j]=i.useState(""),[C,w]=i.useState(!1),[o,$]=i.useState(null),[N,v]=i.useState(!0),E=i.useRef(null),u=i.useRef(null);i.useEffect(()=>{A()},[]);const A=async()=>{const{data:{session:s}}=await d.auth.getSession();s!=null&&s.user&&($(s.user),F(s.user.id))},F=async s=>{try{w(!0);const{data:a,error:h}=await d.from("chat_participants").select(`
+import{r as i,O as d,j as e,N as _,T as D,U as T,V as U}from"./index-BM-QS_z4.js";const V=()=>{const[y,S]=i.useState([]),[n,M]=i.useState(null),[b,x]=i.useState([]),[p,j]=i.useState(""),[C,w]=i.useState(!1),[o,$]=i.useState(null),[N,v]=i.useState(!0),E=i.useRef(null),u=i.useRef(null);i.useEffect(()=>{A()},[]);const A=async()=>{const{data:{session:s}}=await d.auth.getSession();s!=null&&s.user&&($(s.user),F(s.user.id))},F=async s=>{try{w(!0);const{data:a,error:h}=await d.from("chat_participants").select(`
                     chat_id,
                     chats:chat_id (
                         id, updated_at,

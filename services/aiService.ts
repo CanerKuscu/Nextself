@@ -1,4 +1,4 @@
-import { SupabaseService } from '@nextself/shared';
+import { SupabaseService, UserProfile, HealthMetrics, WorkoutSession } from '@nextself/shared';
 import { DeepSeekService, PrivacyUtils } from './deepseek';
 import { AIValidationUtils } from '@nextself/shared';
 import { HealthValidator } from '../utils/HealthValidator';
@@ -31,6 +31,13 @@ export interface AIRecipe {
     ingredients: string[];
     instructions: string[];
     difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface SupplementData {
+    id: string;
+    name: string;
+    dosage: string;
+    frequency: string;
 }
 
 export class AIService {
@@ -80,7 +87,8 @@ export class AIService {
                 vitamins: Array.isArray(payload.vitamins) ? payload.vitamins : [],
             };
         } catch (error) {
-            console.error('AI Scan Error:', error);
+            const logManager = LogManager.getInstance();
+            logManager.error('AI Scan Error', error);
             return {
                 name: language === 'tr' ? 'Yemek Öğesi' : 'Food Item',
                 calories: 0,
@@ -98,7 +106,7 @@ export class AIService {
      * Şef AI - Generates a recipe based on ingredients or dietary preferences
      * Uses DeepSeek Edge Function
      */
-    async generateRecipe(ingredients: string[], dietPreference?: string, userProfile?: any): Promise<AIRecipe> {
+    async generateRecipe(ingredients: string[], dietPreference?: string, userProfile?: Partial<UserProfile>): Promise<AIRecipe> {
         const logManager = LogManager.getInstance();
         const startTime = Date.now();
 
@@ -141,11 +149,11 @@ export class AIService {
                     throw new Error('Invalid JSON response from AI.');
                 }
             } catch (parseError) {
-                console.error('JSON Parsing Error:', parseError);
+                logManager.error('JSON Parsing Error', parseError);
                 throw new Error('Failed to parse AI response.');
             }
         } catch (error) {
-            console.error('Chef AI Error:', error);
+            logManager.error('Chef AI Error', error);
             logManager.logFailure();
             return {
                 title: 'Fallback Recipe',
@@ -167,7 +175,7 @@ export class AIService {
      * Diyetisyen AI - Ask general nutrition questions
      * Uses DeepSeek Edge Function
      */
-    async askDietitian(query: string, userStats?: any, healthData?: any, supplements?: any[]): Promise<string> {
+    async askDietitian(query: string, userStats?: Partial<UserProfile>, healthData?: Partial<HealthMetrics>, supplements?: SupplementData[]): Promise<string> {
         const logManager = LogManager.getInstance();
         const startTime = Date.now();
 
@@ -201,7 +209,7 @@ export class AIService {
             logManager.logSuccess();
             return response;
         } catch (error) {
-            console.error('Dietitian AI Error:', error);
+            logManager.error('Dietitian AI Error', error);
             logManager.logFailure();
             return 'I\'m having trouble calculating this right now, but generally, staying hydrated is key.';
         } finally {
@@ -214,7 +222,8 @@ export class AIService {
      * PT AI - Ask training/workout questions
      * Uses DeepSeek Edge Function
      */
-    async askPT(query: string, userStats?: any, healthData?: any, workoutHistory?: any[]): Promise<string> {
+    async askPT(query: string, userStats?: Partial<UserProfile>, healthData?: Partial<HealthMetrics>, workoutHistory?: WorkoutSession[]): Promise<string> {
+        const logManager = LogManager.getInstance();
         try {
             // Sanitize and validate input
             const sanitizedQuery = AIValidationUtils.sanitizeInput(query);
@@ -237,7 +246,7 @@ export class AIService {
 
             return response;
         } catch (error) {
-            console.error('PT AI Error:', error);
+            logManager.error('PT AI Error', error);
             return 'The AI generated an unrealistic value, please try again.';
         }
     }
@@ -261,12 +270,12 @@ export class AIService {
      * Professional Program Generator AI
      * Uses DeepSeek Edge Function. Can analyze an image if provided.
      */
-    async generateProfessionalProgram(
+    async generateProfessionalProgram<T = unknown>(
         type: 'workout' | 'nutrition',
-        clientProfile: any,
+        clientProfile: Partial<UserProfile>,
         language: string,
         imageBase64?: string
-    ): Promise<any> {
+    ): Promise<T | null> {
         const logManager = LogManager.getInstance();
         const startTime = Date.now();
 
@@ -294,11 +303,11 @@ export class AIService {
                     throw new Error('Invalid JSON response from AI.');
                 }
             } catch (parseError) {
-                console.error('JSON Parsing Error:', parseError);
+                logManager.error('JSON Parsing Error', parseError);
                 throw new Error('Failed to parse AI response.');
             }
         } catch (error) {
-            console.error('Professional Program Generator AI Error:', error);
+            logManager.error('Professional Program Generator AI Error', error);
             logManager.logFailure();
             return null;
         } finally {

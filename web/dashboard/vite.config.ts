@@ -9,5 +9,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'build'
+  },
+  resolve: {
+    alias: {
+      'react-native': 'react-native-web'
+    }
   }
 });
