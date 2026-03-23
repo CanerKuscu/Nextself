@@ -331,16 +331,16 @@ describe('SecurityUtils', () => {
         it('should encrypt and decrypt data correctly', () => {
             const original = 'sensitive data';
             const key = 'test-encryption-key';
-            const encrypted = SecurityUtils.encrypt(original, key);
-            const decrypted = SecurityUtils.decrypt(encrypted, key);
+            const encrypted = SecurityUtils.encryptWithKey(original, key);
+            const decrypted = SecurityUtils.decryptWithKey(encrypted, key);
             expect(decrypted).toBe(original);
         });
 
         it('should produce different ciphertext for same plaintext', () => {
             const data = 'test data';
             const key = 'test-key';
-            const encrypted1 = SecurityUtils.encrypt(data, key);
-            const encrypted2 = SecurityUtils.encrypt(data, key);
+            const encrypted1 = SecurityUtils.encryptWithKey(data, key);
+            const encrypted2 = SecurityUtils.encryptWithKey(data, key);
             // CryptoJS AES uses random IV, so ciphertexts differ
             expect(encrypted1).not.toBe(encrypted2);
         });
@@ -406,19 +406,21 @@ describe('SecurityUtils', () => {
     });
 
     describe('sanitizeInput', () => {
-        it('should remove script tags', () => {
+        it('should remove null bytes and control characters', () => {
+            const result = SecurityUtils.sanitizeInput('Clean\x00Text\x1F');
+            expect(result).toBe('CleanText');
+        });
+
+        it('should preserve regular characters and html tags safely for React', () => {
             const result = SecurityUtils.sanitizeInput('<script>alert(1)</script>Clean');
-            expect(result).not.toContain('<script>');
+            // React handles HTML escaping during render, so tags are kept intact but control chars are stripped
+            expect(result).toBe('<script>alert(1)</script>Clean');
         });
 
-        it('should remove event handlers', () => {
-            const result = SecurityUtils.sanitizeInput('<img onerror="hack()">');
-            expect(result).not.toContain('onerror');
-        });
-
-        it('should remove javascript protocol', () => {
-            const result = SecurityUtils.sanitizeInput('javascript:alert(1)');
-            expect(result).not.toContain('javascript:');
+        it('should enforce maxLength', () => {
+            const longInput = 'A'.repeat(15000);
+            const result = SecurityUtils.sanitizeInput(longInput, 10000);
+            expect(result.length).toBe(10000);
         });
     });
 

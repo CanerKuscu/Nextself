@@ -131,18 +131,18 @@ export class SecurityMiddleware {
 
     /**
      * Input validation and sanitization
+     * Removes control characters to prevent basic injection vectors.
+     * React's built-in escaping handles XSS at the presentation layer.
      */
-    static sanitizeInput(input: string): string {
-        if (!input) return '';
-
-        const sanitized = input
-            .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags
-            .replace(/javascript:[\s\S]*/gi, '') // Remove javascript: protocol
-            .replace(/on\w+\s*=\s*(['"]).*?\1/gi, '') // Remove event handlers
-            .replace(/\s+/g, ' ') // Collapse multiple spaces
-            .trim();
-
-        return sanitized;
+    static sanitizeInput(input: string, maxLength: number = 10000): string {
+        if (!input || typeof input !== 'string') return '';
+        
+        // Truncate to prevent memory exhaustion / ReDoS
+        const truncated = input.length > maxLength ? input.slice(0, maxLength) : input;
+        
+        // Remove null bytes and non-printable control characters (excluding newlines/tabs)
+        // eslint-disable-next-line no-control-regex
+        return truncated.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
     }
 
     /**

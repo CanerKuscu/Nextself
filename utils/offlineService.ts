@@ -56,7 +56,7 @@ export class OfflineService {
         try {
             const savedQueue = await AsyncStorage.getItem(this.STORAGE_KEY);
             if (savedQueue) {
-                const decrypted = SecurityUtils.decrypt(savedQueue);
+                const decrypted = await SecurityUtils.decryptAsync(savedQueue);
                 this.syncQueue = decrypted ? JSON.parse(decrypted) : [];
             }
         } catch (error) {
@@ -66,7 +66,7 @@ export class OfflineService {
 
     private async saveQueue() {
         try {
-            const encrypted = SecurityUtils.encrypt(JSON.stringify(this.syncQueue));
+            const encrypted = await SecurityUtils.encryptAsync(JSON.stringify(this.syncQueue));
             await AsyncStorage.setItem(this.STORAGE_KEY, encrypted);
         } catch (error) { }
     }

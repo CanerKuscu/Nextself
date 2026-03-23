@@ -1,23 +1,43 @@
 import CryptoJS from 'crypto-js';
+import * as SecureStore from 'expo-secure-store';
 import { CONFIG } from '@nextself/shared';
+import { Platform } from 'react-native';
 
 declare const Buffer: {
   from(data: string, encoding?: string): { toString(encoding?: string): string };
 };
 
 export class SecurityUtils {
-  // SECURITY: Client-side encryption keys MUST NOT be embedded in production builds.
-  // Prefer server-side encryption (Edge Functions/KMS). If an env var is provided
-  // (development/tests), it will be used; otherwise client-side encryption methods
-  // will throw with a clear error instructing to use server-side endpoints.
-  private static readonly ENCRYPTION_KEY = process.env.EXPO_PUBLIC_ENCRYPTION_KEY || '';
+  private static readonly STORE_KEY_NAME = 'nextself_secure_encryption_key';
 
-  // Encrypt sensitive data
-  static encrypt(data: string, key: string = this.ENCRYPTION_KEY): string {
+  /**
+   * Retrieves or generates a secure encryption key using device secure storage.
+   */
+  private static async getOrCreateEncryptionKey(): Promise<string> {
+    if (Platform.OS === 'web') {
+      // SecureStore is not available on web. Fallback to session/local storage or memory
+      // In a real production app, web encryption keys should be managed differently (e.g. KMS)
+      return 'web-fallback-key-not-for-production';
+    }
+
     try {
+      let key = await SecureStore.getItemAsync(this.STORE_KEY_NAME);
       if (!key) {
-        throw new Error('Client-side encryption is disabled. Use server-side encryption (Edge Functions) or provide a key explicitly for development/tests.');
+        // Generate a 256-bit cryptographically secure random key
+        key = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+        await SecureStore.setItemAsync(this.STORE_KEY_NAME, key);
       }
+      return key;
+    } catch (error) {
+      console.warn('SecureStore unavailable or failed, falling back to memory/env', error);
+      return process.env.EXPO_PUBLIC_ENCRYPTION_KEY || 'fallback-dev-key';
+    }
+  }
+
+  // Encrypt sensitive data securely using device-backed key
+  static async encryptAsync(data: string): Promise<string> {
+    try {
+      const key = await this.getOrCreateEncryptionKey();
       return CryptoJS.AES.encrypt(data, key).toString();
     } catch (error) {
       console.error('Encryption failed');
@@ -25,18 +45,28 @@ export class SecurityUtils {
     }
   }
 
-  // Decrypt sensitive data
-  static decrypt(encryptedData: string, key: string = this.ENCRYPTION_KEY): string {
+  // Decrypt sensitive data securely using device-backed key
+  static async decryptAsync(encryptedData: string): Promise<string> {
     try {
-      if (!key) {
-        throw new Error('Client-side decryption is disabled. Use server-side decryption (Edge Functions) or provide a key explicitly for development/tests.');
-      }
+      const key = await this.getOrCreateEncryptionKey();
       const bytes = CryptoJS.AES.decrypt(encryptedData, key);
       return bytes.toString(CryptoJS.enc.Utf8);
     } catch (error) {
       console.error('Decryption failed');
       throw new Error('Failed to decrypt data', { cause: error });
     }
+  }
+
+  // Synchronous fallback only if explicitly providing a key (for tests or specific use-cases)
+  static encryptWithKey(data: string, key: string): string {
+    if (!key) throw new Error('Encryption key is required');
+    return CryptoJS.AES.encrypt(data, key).toString();
+  }
+
+  static decryptWithKey(encryptedData: string, key: string): string {
+    if (!key) throw new Error('Decryption key is required');
+    const bytes = CryptoJS.AES.decrypt(encryptedData, key);
+    return bytes.toString(CryptoJS.enc.Utf8);
   }
 
   /**
@@ -106,18 +136,17 @@ export class SecurityUtils {
     return { score, feedback };
   }
 
-  // Sanitize input to prevent XSS - strip dangerous content
+  // Sanitize input by removing control characters and limiting length.
+  // Note: We rely on React/React Native's built-in escaping for XSS prevention during rendering.
   static sanitizeInput(input: string, maxLength: number = 10000): string {
     if (!input || typeof input !== 'string') return '';
-    // Truncate to prevent ReDoS
+    // Truncate to prevent ReDoS/memory exhaustion
     const truncated = input.length > maxLength ? input.slice(0, maxLength) : input;
-    return truncated
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags
-      .replace(/javascript:[^\s]*/gi, '')                  // Remove javascript: protocol
-      .replace(/\bon\w+\s*=\s*(['"])[^'"]*\1/gi, '')       // Remove event handlers (quoted)
-      .replace(/\bon\w+\s*=\s*\S+/gi, '')                  // Remove event handlers (unquoted)
-      .replace(/\s+/g, ' ')                                 // Collapse multiple spaces
-      .trim();
+    
+    // Remove null bytes and non-printable control characters (excluding newlines/tabs)
+    // React automatically handles HTML escaping during render, so we don't need regex tag stripping
+    // eslint-disable-next-line no-control-regex
+    return truncated.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
   }
 
   // Validate API request
@@ -264,9 +293,10 @@ export class SecurityUtils {
     return true;
   }
 
-  // Encrypt file data
-  static encryptFileData(data: ArrayBuffer, key: string = this.ENCRYPTION_KEY): string {
+  // Encrypt file data securely using device-backed key
+  static async encryptFileDataAsync(data: ArrayBuffer): Promise<string> {
     try {
+      const key = await this.getOrCreateEncryptionKey();
       const wordArray = CryptoJS.lib.WordArray.create(data as any);
       return CryptoJS.AES.encrypt(wordArray, key).toString();
     } catch (error) {
@@ -275,9 +305,10 @@ export class SecurityUtils {
     }
   }
 
-  // Decrypt file data
-  static decryptFileData(encryptedData: string, key: string = this.ENCRYPTION_KEY): ArrayBuffer {
+  // Decrypt file data securely using device-backed key
+  static async decryptFileDataAsync(encryptedData: string): Promise<ArrayBuffer> {
     try {
+      const key = await this.getOrCreateEncryptionKey();
       const decrypted = CryptoJS.AES.decrypt(encryptedData, key);
       const latin1String = decrypted.toString(CryptoJS.enc.Latin1);
       const bytes = new Uint8Array(latin1String.length);

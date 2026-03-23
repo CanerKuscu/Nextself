@@ -2,22 +2,10 @@ import { SecurityMiddleware } from '../utils/securityMiddleware';
 
 describe('SecurityMiddleware', () => {
     describe('sanitizeInput', () => {
-        it('should remove script tags from input', () => {
-            const input = '<script>alert("xss")</script>Hello';
+        it('should remove null bytes and control characters', () => {
+            const input = 'Hello\x00World\x1F!';
             const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).toBe('Hello');
-        });
-
-        it('should remove javascript protocol from input', () => {
-            const input = 'javascript:alert("xss")';
-            const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).toBe('');
-        });
-
-        it('should remove event handlers from input', () => {
-            const input = '<img src="x" onerror="alert(1)" onclick="malicious()">';
-            const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).toBe('<img src="x" >');
+            expect(result).toBe('HelloWorld!');
         });
 
         it('should trim whitespace', () => {
@@ -32,22 +20,10 @@ describe('SecurityMiddleware', () => {
             expect(SecurityMiddleware.sanitizeInput(undefined as any)).toBe('');
         });
 
-        it('should collapse multiple spaces into one', () => {
-            const input = 'hello    world   test';
+        it('should truncate strings exceeding maxLength', () => {
+            const input = 'A'.repeat(15000);
             const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).toBe('hello world test');
-        });
-
-        it('should handle nested script tags', () => {
-            const input = '<script><script>alert(1)</script></script>Safe text';
-            const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).not.toContain('<script');
-        });
-
-        it('should handle case-insensitive script tags', () => {
-            const input = '<SCRIPT>alert(1)</SCRIPT>Clean';
-            const result = SecurityMiddleware.sanitizeInput(input);
-            expect(result).toBe('Clean');
+            expect(result.length).toBe(10000);
         });
     });
 
