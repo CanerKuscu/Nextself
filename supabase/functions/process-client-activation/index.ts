@@ -1,60 +1,163 @@
-// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const configuredOrigins = (Deno.env.get('EDGE_ALLOWED_ORIGINS') ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+const resolveCorsHeaders = (origin: string | null): Record<string, string> => {
+    const fallbackOrigin = configuredOrigins[0] ?? 'https://app.nextself.com';
+    const isAllowed = origin ? configuredOrigins.includes(origin) : false;
+    const allowOrigin = origin && isAllowed ? origin : fallbackOrigin;
+    return {
+        'Access-Control-Allow-Origin': allowOrigin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Vary': 'Origin',
+    };
 };
 
-serve(async (req) => {
+const parseAccessToken = (req: Request): string => {
+    const authHeader = req.headers.get('Authorization') || '';
+    const accessToken = authHeader.replace('Bearer ', '').trim();
+    if (!accessToken) {
+        throw new Error('Unauthorized');
+    }
+    return accessToken;
+};
+
+const calculateDepositAmount = (durationMonths: number): number => {
+    if (durationMonths === 3) return 750;
+    if (durationMonths === 6) return 1250;
+    if (durationMonths === 12) return 2000;
+    return 300 * durationMonths;
+};
+
+serve(async (req: Request) => {
+    const origin = req.headers.get('origin');
+    const corsHeaders = resolveCorsHeaders(origin);
+
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response('ok', { status: 204, headers: corsHeaders });
+    }
+
+    if (origin && configuredOrigins.length > 0 && !configuredOrigins.includes(origin)) {
+        return new Response(JSON.stringify({ error: 'Forbidden origin' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 403,
+        });
     }
 
     try {
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // We need service role to bypass RLS for billing updates
-        );
+        const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+            throw new Error('Supabase credentials are not configured.');
+        }
 
-        // JWT'den kimin istek attığını (Professional ID) bulalım
-        const authHeader = req.headers.get('Authorization')!;
-        const { data: userAuth, error: authError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
-
+        const accessToken = parseAccessToken(req);
+        const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: userAuth, error: authError } = await authClient.auth.getUser(accessToken);
         if (authError || !userAuth.user) {
-            throw new Error("Unauthorized");
+            throw new Error('Unauthorized');
         }
         const professionalId = userAuth.user.id;
+        const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-        const payload = await req.json();
-        const { clientId, agreedPrice, durationMonths = 1 } = payload;
+        const payload = await req.json() as {
+            clientId?: string;
+            agreedPrice?: number;
+            durationMonths?: number;
+            identityNumber?: string;
+        };
+        const clientId = payload.clientId;
+        const agreedPrice = payload.agreedPrice;
+        const durationMonths = payload.durationMonths ?? 1;
+        const identityNumber = payload.identityNumber;
 
-        if (!clientId || !agreedPrice || agreedPrice < 0) {
-            throw new Error("Missing clientId or invalid agreedPrice");
+        if (!clientId || typeof clientId !== 'string') {
+            throw new Error('Missing clientId');
+        }
+        if (typeof agreedPrice !== 'number' || Number.isNaN(agreedPrice) || agreedPrice <= 0) {
+            throw new Error('Invalid agreedPrice');
+        }
+        if (!Number.isInteger(durationMonths) || durationMonths <= 0 || durationMonths > 24) {
+            throw new Error('Invalid durationMonths');
+        }
+        const defaultIdentityNumber = Deno.env.get('IYZICO_DEFAULT_IDENTITY_NUMBER') ?? '';
+        const effectiveIdentityNumber = identityNumber || defaultIdentityNumber;
+        if (!effectiveIdentityNumber || !/^\d{11}$/.test(effectiveIdentityNumber)) {
+            throw new Error('identityNumber is required and must be 11 digits');
         }
 
-        // 1. Hesaplama (Depozito İndirimli Paketler)
         const commissionRate = 0.10;
-        const calculatedCommission = agreedPrice * commissionRate;
+        const depositAmount = calculateDepositAmount(durationMonths);
 
-        let depositAmount = 300;
-        if (durationMonths === 3) depositAmount = 750;
-        else if (durationMonths === 6) depositAmount = 1250;
-        else if (durationMonths === 12) depositAmount = 2000;
-        else depositAmount = 300 * durationMonths;
+        const { data: professional, error: profError } = await serviceClient
+            .from('users')
+            .select(`
+                email,
+                first_name,
+                last_name,
+                phone,
+                professional_profiles (
+                    id,
+                    city,
+                    district,
+                    country
+                )
+            `)
+            .eq('id', professionalId)
+            .single();
 
-        // 2. Iyzico (veya Stripe) Ödeme Altyapısı Entegrasyonu
-        // Gerçek API'ye istek atarak bir ödeme linki (Checkout Form URL) oluşturuyoruz.
-        const IYZICO_API_KEY = Deno.env.get('IYZICO_API_KEY');
-        const IYZICO_SECRET_KEY = Deno.env.get('IYZICO_SECRET_KEY');
-        const IYZICO_BASE_URL = Deno.env.get('IYZICO_BASE_URL') || "https://sandbox-api.iyzipay.com";
-
-        if (!IYZICO_API_KEY || !IYZICO_SECRET_KEY) {
-            throw new Error("Payment gateway keys are missing in environment variables.");
+        if (profError || !professional) {
+            throw new Error(`Professional profile not found: ${profError?.message ?? 'Unknown error'}`);
         }
 
-        // Iyzico Checkout Form Initialize Payload
+        const profProfile = Array.isArray(professional.professional_profiles)
+            ? professional.professional_profiles[0]
+            : professional.professional_profiles;
+
+        if (!profProfile?.id) {
+            throw new Error('Professional profile id not found');
+        }
+
+        const { data: existingRelationship, error: relOwnershipError } = await serviceClient
+            .from('client_relationships')
+            .select('id, billing_status')
+            .eq('professional_id', profProfile.id)
+            .eq('client_id', clientId)
+            .single();
+
+        if (relOwnershipError || !existingRelationship?.id) {
+            throw new Error('Client relationship not found for authenticated professional');
+        }
+
+        const buyerName = professional.first_name || "Professional";
+        const buyerSurname = professional.last_name || "User";
+        const buyerEmail = professional.email;
+        const buyerPhone = professional.phone || "+905550000000";
+        const buyerCity = profProfile.city || "Istanbul";
+        const buyerCountry = profProfile.country || "Turkey";
+        const buyerAddress = `${profProfile.district || ''} ${buyerCity} ${buyerCountry}`.trim() || "Turkey";
+        const buyerId = effectiveIdentityNumber;
+
+        const IYZICO_API_KEY = Deno.env.get('IYZICO_API_KEY');
+        const IYZICO_AUTH_HEADER = Deno.env.get('IYZICO_AUTH_HEADER');
+        const IYZICO_BASE_URL = Deno.env.get('IYZICO_BASE_URL') || "https://sandbox-api.iyzipay.com";
+        const PAYMENT_CALLBACK_URL = Deno.env.get('PAYMENT_CALLBACK_URL');
+        const IS_MOCK_PAYMENT = Deno.env.get('IS_MOCK_PAYMENT') === 'true';
+        const IYZICO_MOCK_PAYMENT_URL = Deno.env.get('IYZICO_MOCK_PAYMENT_URL');
+
+        if (!IYZICO_API_KEY || !IYZICO_AUTH_HEADER) {
+            throw new Error('Payment gateway credentials are missing.');
+        }
+        if (!PAYMENT_CALLBACK_URL) {
+            throw new Error('PAYMENT_CALLBACK_URL is required.');
+        }
+
         const paymentPayload = {
             locale: "tr",
             conversationId: `BIO-${Date.now()}`,
@@ -63,36 +166,36 @@ serve(async (req) => {
             currency: "TRY",
             basketId: `B-${clientId.substring(0, 8)}`,
             paymentGroup: "PRODUCT",
-            callbackUrl: "https://vizin-app-url.com/payment/callback", // Uygulamanın döneceği URL
-            enabledInstallments: [1], // Sadece tek çekim (depozito)
+            callbackUrl: PAYMENT_CALLBACK_URL,
+            enabledInstallments: [1],
             buyer: {
                 id: professionalId,
-                name: "PT",
-                surname: "User",
-                identityNumber: "11111111111", // Gerçekte kullanıcının veritabanı profilinden gelir
-                email: "pt@biosync.com",
-                gsmNumber: "+905555555555",
-                registrationAddress: "Antalya",
-                city: "Antalya",
-                country: "Turkey",
-                ip: "85.34.78.112"
+                name: buyerName,
+                surname: buyerSurname,
+                identityNumber: buyerId,
+                email: buyerEmail,
+                gsmNumber: buyerPhone,
+                registrationAddress: buyerAddress,
+                city: buyerCity,
+                country: buyerCountry,
+                ip: req.headers.get('x-forwarded-for') || "0.0.0.0"
             },
             shippingAddress: {
-                contactName: "PT User",
-                city: "Antalya",
-                country: "Turkey",
-                address: "Konyalti"
+                contactName: `${buyerName} ${buyerSurname}`,
+                city: buyerCity,
+                country: buyerCountry,
+                address: buyerAddress
             },
             billingAddress: {
-                contactName: "PT User",
-                city: "Antalya",
-                country: "Turkey",
-                address: "Konyalti"
+                contactName: `${buyerName} ${buyerSurname}`,
+                city: buyerCity,
+                country: buyerCountry,
+                address: buyerAddress
             },
             basketItems: [
                 {
                     id: `ITEM-${clientId.substring(0, 8)}`,
-                    name: "BioSync Müşteri Aktivasyon Depozitosu",
+                    name: "NextSelf Müşteri Aktivasyon Depozitosu",
                     category1: "Digital Services",
                     itemType: "VIRTUAL",
                     price: depositAmount.toString()
@@ -100,45 +203,50 @@ serve(async (req) => {
             ]
         };
 
-        // NOT: Iyzico PKI Signature (Authorization Header) oluşturulması Deno ortamında Hash tabanlı yapılır. 
-        // Burada Fetch ile gerçek Iyzico sistemine istek gönderilir.
         const iyzicoResponse = await fetch(`${IYZICO_BASE_URL}/payment/checkoutform/initialize/auth/ecom`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Gerçek ortamda Iyzico PKI String imzalama algoritması buraya eklenir
-                'Authorization': `IYZWS ${IYZICO_API_KEY}:HashedSecretString`
+                'x-api-key': IYZICO_API_KEY,
+                'Authorization': IYZICO_AUTH_HEADER
             },
             body: JSON.stringify(paymentPayload)
         });
 
-        const paymentResult = await iyzicoResponse.json();
+        const paymentResult = await iyzicoResponse.json() as {
+            status?: string;
+            errorMessage?: string;
+            token?: string;
+            paymentPageUrl?: string;
+        };
 
-        if (paymentResult.status !== 'success') {
+        if (paymentResult.status !== 'success' && !IS_MOCK_PAYMENT) {
             throw new Error(`Payment gateway error: ${paymentResult.errorMessage || 'Initialization failed'}`);
         }
 
-        const transactionRef = paymentResult.token || `IYZICO_TRX_${Date.now()}`;
-        const paymentPageUrl = paymentResult.paymentPageUrl; // React Native'de WebView ile açılacak link
+        const transactionRef = paymentResult.token || (IS_MOCK_PAYMENT ? `IYZICO_TRX_${Date.now()}` : '');
+        const paymentPageUrl = paymentResult.paymentPageUrl || (IS_MOCK_PAYMENT ? IYZICO_MOCK_PAYMENT_URL : '');
 
-        // 3. Veritabanı İşlemleri (Transaction)
-        // a) Transaction Log kaydı
-        const { error: logError } = await supabaseClient
+        if (!transactionRef) {
+            throw new Error('Payment transaction reference is missing');
+        }
+        if (!paymentPageUrl) {
+            throw new Error('Payment page URL is missing');
+        }
+
+        const { error: logError } = await serviceClient
             .from('transaction_logs')
             .insert({
-                professional_id: professionalId,
+                professional_id: profProfile.id,
                 client_id: clientId,
                 amount: depositAmount,
                 transaction_type: 'deposit_payment',
                 payment_gateway_ref: transactionRef
             });
 
-        if (logError) throw new Error("Failed to log transaction: " + logError.message);
+        if (logError) throw new Error(`Failed to log transaction: ${logError.message}`);
 
-        // b) Client Relationship'i güncelle/aktifleştir
-        // Müşteri zaten pending olarak client_relationships tablosundaysa Update ederiz.
-        // Eğer yoksa insert ederiz. Burada update varsayıyoruz.
-        const { data: relData, error: relError } = await supabaseClient
+        const { error: relError } = await serviceClient
             .from('client_relationships')
             .update({
                 agreed_price: agreedPrice,
@@ -147,28 +255,27 @@ serve(async (req) => {
                 deposit_paid_amount: depositAmount,
                 billing_status: 'active'
             })
-            .eq('professional_id', professionalId)
-            .eq('client_id', clientId)
-            .select()
-            .single();
+            .eq('id', existingRelationship.id);
 
-        if (relError) throw new Error("Failed to activate relationship: " + relError.message);
+        if (relError) throw new Error(`Failed to activate relationship: ${relError.message}`);
 
         return new Response(JSON.stringify({
             success: true,
             message: "Payment initialized successfully",
             deposit_charged: depositAmount,
-            paymentPageUrl: paymentPageUrl, // React Native bu URL'i WebView'da açacak
+            commission_rate: commissionRate,
+            paymentPageUrl: paymentPageUrl,
             token: transactionRef
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });
 
-    } catch (error) {
-        console.error('Edge function error:', error);
-        const status = error.message === 'Unauthorized' ? 401 : 400;
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unexpected error';
+        console.error('Edge function error:', message);
+        const status = message === 'Unauthorized' ? 401 : 400;
+        return new Response(JSON.stringify({ error: message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status,
         });

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface HealthInsightCardProps {
   insights: any[];
@@ -13,6 +14,7 @@ interface HealthInsightCardProps {
 
 const HealthInsightCard = memo(({ insights, refreshing, onRefresh }: HealthInsightCardProps) => {
   const { colors, isDark } = useTheme();
+  const { t, isTurkish } = useTranslation();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
@@ -23,7 +25,7 @@ const HealthInsightCard = memo(({ insights, refreshing, onRefresh }: HealthInsig
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Health Insights</Text>
+        <Text style={styles.cardTitle}>{isTurkish ? 'Sağlık Öngörüleri' : 'Health Insights'}</Text>
         <TouchableOpacity
           onPress={onRefresh}
           style={styles.refreshButton}
@@ -45,7 +47,9 @@ const HealthInsightCard = memo(({ insights, refreshing, onRefresh }: HealthInsig
               size={16}
               color={getInsightColor(insight.type)}
             />
-            <Text style={styles.insightText}>{insight.message}</Text>
+            <Text style={styles.insightText}>
+              {isTurkish ? (insight.message_tr || insight.message) : (insight.message_en || insight.message)}
+            </Text>
           </View>
         ))}
       </View>
@@ -56,7 +60,8 @@ const HealthInsightCard = memo(({ insights, refreshing, onRefresh }: HealthInsig
 function getInsightIcon(type: string): 'walk' | 'heart' | 'moon' | 'scale' | 'information-circle' {
   switch (type) {
     case 'steps': return 'walk';
-    case 'heart': return 'heart';
+    case 'heart': 
+    case 'heart_rate': return 'heart';
     case 'sleep': return 'moon';
     case 'weight': return 'scale';
     default: return 'information-circle';
@@ -66,7 +71,8 @@ function getInsightIcon(type: string): 'walk' | 'heart' | 'moon' | 'scale' | 'in
 function getInsightColor(type: string): string {
   switch (type) {
     case 'steps': return '#10B981';
-    case 'heart': return '#EF4444';
+    case 'heart': 
+    case 'heart_rate': return '#EF4444';
     case 'sleep': return '#6366F1';
     case 'weight': return '#F59E0B';
     default: return '#6B7280';

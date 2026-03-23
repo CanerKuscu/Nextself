@@ -4,11 +4,13 @@ import {
   useWindowDimensions, Animated, Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SpotifyPlayer from '../components/SpotifyPlayer';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAlert } from '../components/CustomAlert';
 
 let BodyHighlighter: any = null;
 try { BodyHighlighter = require('react-native-body-highlighter').default; } catch { BodyHighlighter = null; }
@@ -55,9 +57,10 @@ const WorkoutScreen = ({ navigation }: any) => {
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [showFront, setShowFront] = useState(true);
   const [bodyGender, setBodyGender] = useState<'male' | 'female'>('male');
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { AlertComponent } = useAlert();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -88,12 +91,16 @@ const WorkoutScreen = ({ navigation }: any) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} translucent={false} />
+      <AlertComponent />
       <ScrollView
         contentContainerStyle={[st.scroll]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
-          <Text style={st.headerTitle}>{t('workout')}</Text>
+          <View style={st.headerRow}>
+            <Text style={st.headerTitle}>{t('workout')}</Text>
+          </View>
 
           {/* Spotify */}
           <View style={{ marginBottom: 16 }}><SpotifyPlayer /></View>
@@ -135,8 +142,8 @@ const WorkoutScreen = ({ navigation }: any) => {
                 style={{ width: '100%' }}
                 onPress={() => navigation.navigate('MuscleExercises', {
                   muscleGroup: '',
-                  category: 'all', // We will filter by workoutType in MuscleExercises Screen/Supabase
-                  workoutType: 'cardio',
+                  category: 'all', // Don't filter by category 'cardio' which might not exist in DB columns
+                  workoutType: 'cardio', // This triggers the smart search in SupabaseService
                   muscleName: t('cardio')
                 })}
               >
@@ -228,7 +235,8 @@ const WorkoutScreen = ({ navigation }: any) => {
 
 const getStyles = (colors: any) => StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginBottom: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 },
+  headerTitle: { flex: 1, fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
 
   typeScroll: { gap: 10, marginBottom: 20, paddingRight: 12 },
   typeCard: { paddingHorizontal: 18, height: 50, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#E5E5E5' },

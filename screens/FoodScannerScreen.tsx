@@ -7,11 +7,14 @@ import AnimatedCard from '../components/AnimatedCard';
 import AnimatedButton from '../components/AnimatedButton';
 import BiometricConsentModal from '../components/BiometricConsentModal';
 import { AIService, AIScanResult } from '../services/aiService';
+import { useAlert } from '../components/CustomAlert';
 import { AgreementService } from '../services/agreementService';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
+import { MissionService } from '../services/missionService';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const FoodScannerScreen = ({ navigation }: any) => {
     const { colors, isDark } = useTheme();
@@ -23,10 +26,23 @@ const FoodScannerScreen = ({ navigation }: any) => {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<AIScanResult | null>(null);
     const [weight, setWeight] = useState<string>('100');
+    const [weightError, setWeightError] = useState<string | null>(null);
     const [showConsentModal, setShowConsentModal] = useState(false);
     const [pendingSource, setPendingSource] = useState<'camera' | 'gallery' | null>(null);
 
-    const aiService = AIService.getInstance();
+    const validateWeight = (value: string): boolean => {
+        const num = parseFloat(value);
+        if (isNaN(num) || num <= 0) {
+            setWeightError(isTurkish ? 'Geçerli bir ağırlık girin' : 'Enter a valid weight');
+            return false;
+        }
+        if (num > 5000) {
+            setWeightError(isTurkish ? 'Maksimum 5000g' : 'Maximum 5000g');
+            return false;
+        }
+        setWeightError(null);
+        return true;
+    };
 
     const checkConsentAndPick = async (source: 'camera' | 'gallery') => {
         try {
@@ -101,10 +117,11 @@ const FoodScannerScreen = ({ navigation }: any) => {
         setLoading(true);
         setResult(null);
         try {
-            const scanResult = await aiService.scanFood(uri);
+            const scanResult = await AIService.getInstance().scanFood(uri, isTurkish ? 'tr' : 'en');
             setResult(scanResult);
         } catch (error) {
             console.error('Scan failed:', error);
+            alert(isTurkish ? 'Tarama başarısız oldu, lütfen tekrar deneyin.' : 'Scan failed, please try again.');
         } finally {
             setLoading(false);
         }
@@ -130,7 +147,7 @@ const FoodScannerScreen = ({ navigation }: any) => {
 
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Nutrition')} style={styles.backBtn} activeOpacity={0.7}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'AI Besin Tarama' : 'AI Food Scanner'}</Text>
@@ -201,15 +218,21 @@ const FoodScannerScreen = ({ navigation }: any) => {
                                     <Text style={styles.weightLabel}>{isTurkish ? 'Porsiyon (Gram):' : 'Portion (Grams):'}</Text>
                                     <View style={styles.weightInputWrapper}>
                                         <TextInput
-                                            style={[styles.weightInput, { backgroundColor: colors.background, color: colors.text }]}
+                                            style={[styles.weightInput, { backgroundColor: colors.background, color: colors.text }, weightError && styles.weightInputError]}
                                             keyboardType="numeric"
                                             value={weight}
-                                            onChangeText={setWeight}
+                                            onChangeText={(text) => {
+                                                setWeight(text);
+                                                validateWeight(text);
+                                            }}
                                             maxLength={4}
                                         />
                                         <Text style={styles.weightUnit}>g</Text>
                                     </View>
                                 </View>
+                                {weightError && (
+                                    <Text style={styles.errorText}>{weightError}</Text>
+                                )}
 
                                 <View style={styles.macrosContainer}>
                                     <View style={styles.macroItem}>
@@ -305,17 +328,18 @@ const FoodScannerScreen = ({ navigation }: any) => {
                                                             source: 'ai_scan',
                                                             logged_at: new Date().toISOString(),
                                                         });
-                                                    if (error) {
-                                                        console.error('Save error:', error);
-                                                        alert(isTurkish ? 'Kaydedilemedi. Tekrar deneyin.' : 'Failed to save. Try again.');
-                                                        return;
-                                                    }
+                                                    
+                                                    if (error) throw error;
+                                                    
+                                                    // Update Missions
+                                                    try { await MissionService.getInstance().updateProgressByCategory('nutrition', 1); } catch { }
+                                                    
+                                                    alert(isTurkish ? 'Beslenme günlüğüne eklendi!' : 'Added to nutrition diary!');
+                                                    safeGoBack(navigation, 'Nutrition');
                                                 }
-                                                alert(isTurkish ? 'Beslenme günlüğüne eklendi!' : 'Added to nutrition diary!');
-                                                navigation.goBack();
                                             } catch (err) {
                                                 console.error('Diary save error:', err);
-                                                alert(isTurkish ? 'Bir hata oluştu.' : 'An error occurred.');
+                                                alert(isTurkish ? 'Kaydedilemedi. Tekrar deneyin.' : 'Failed to save. Try again.');
                                             }
                                         }}
                                         style={{ flex: 1, marginRight: SPACING.md }}
@@ -408,7 +432,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     weightInputContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surfaceSecondary, padding: SPACING.md, borderRadius: BORDER_RADIUS.lg, marginBottom: SPACING.md },
     weightLabel: { ...TYPOGRAPHY.bodyBold, color: colors.text },
     weightInputWrapper: { flexDirection: 'row', alignItems: 'center' },
-    weightInput: { ...TYPOGRAPHY.h3, width: 80, textAlign: 'center', borderRadius: BORDER_RADIUS.sm, paddingVertical: 4, paddingHorizontal: 8, marginRight: 8 },
+    weightInput: { ...TYPOGRAPHY.h3, width: 80, textAlign: 'center', borderRadius: BORDER_RADIUS.sm, paddingVertical: 4, paddingHorizontal: 8, marginRight: 8, borderWidth: 1, borderColor: 'transparent', textAlignVertical: 'center' },
+    weightInputError: { borderColor: '#FF4B4B', borderWidth: 1 },
+    errorText: { ...TYPOGRAPHY.caption, color: '#FF4B4B', marginTop: 4, marginLeft: SPACING.md },
     weightUnit: { ...TYPOGRAPHY.body, color: colors.textSecondary },
 
     macrosContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surfaceSecondary, borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.lg },

@@ -1,5 +1,5 @@
-import { SupabaseService } from './supabase';
-import { ValidationUtils } from '../utils/validation';
+import { SupabaseService } from '@nextself/shared';
+import { ValidationUtils } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 

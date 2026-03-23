@@ -17,7 +17,8 @@ import AnimatedCard from '../components/AnimatedCard';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
-import { SupabaseService } from '../services/supabase';
+import { safeGoBack } from '../utils/navigation';
+import { SupabaseService } from '@nextself/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -377,7 +378,7 @@ const ProfessionalCoursesScreen = ({ navigation, route }: any) => {
         <View style={[COMMON_STYLES.screenContainer, { paddingTop: insets.top }]}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack(navigation, 'ProfessionalSearch')}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>

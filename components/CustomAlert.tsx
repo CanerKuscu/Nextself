@@ -115,7 +115,6 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
                         end={{ x: 1, y: 1 }}
                         style={styles.iconHeader}
                     >
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         <Ionicons name={(icon || config.icon) as any} size={36} color={config.iconColor} />
                     </LinearGradient>
 

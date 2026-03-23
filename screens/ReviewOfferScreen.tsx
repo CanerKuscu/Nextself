@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Switch } from 'react-native';
+import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useLanguage } from '../contexts/LanguageContext';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { safeGoBack } from '../utils/navigation';
 
 export default function ReviewOfferScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const route = useRoute();
     const { inviteData } = route.params as { inviteData: any };
     const { showAlert, AlertComponent } = useAlert();
@@ -19,20 +21,72 @@ export default function ReviewOfferScreen() {
         healthData: false,
     });
 
+    const getServiceTypeLabel = (type: string) => {
+        switch(type) {
+            case 'online': return 'Uzaktan (Online)';
+            case 'face_to_face': return 'Yüz Yüze';
+            case 'hybrid': return 'Hibrit';
+            default: return 'Yüz Yüze'; // Default legacy
+        }
+    };
+
     const handleAccept = async () => {
         setLoading(true);
         try {
             const { data: { user } } = await SupabaseService.getInstance().getClient().auth.getUser();
             if (!user) throw new Error("Oturum bulunamadı");
 
+            // Ensure public user record exists to prevent FK errors
+            const { data: publicUser } = await SupabaseService.getInstance().getClient()
+                .from('users')
+                .select('id')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (!publicUser) {
+                console.log("Public user record missing, attempting to create...");
+                const metadata = user.user_metadata || {};
+                const fullName = metadata.full_name || metadata.name || '';
+                // Fallback logic for required fields
+                const firstName = metadata.first_name || (fullName ? fullName.split(' ')[0] : 'Member');
+                const lastName = metadata.last_name || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
+                
+                const { error: createError } = await SupabaseService.getInstance().getClient()
+                    .from('users')
+                    .insert({
+                        id: user.id,
+                        email: user.email,
+                        username: metadata.username || user.email?.split('@')[0] || `user_${user.id.substring(0, 6)}`,
+                        first_name: firstName,
+                        last_name: lastName,
+                        user_type: 'user'
+                    });
+
+                if (createError) {
+                    console.error("Failed to create missing public user record:", createError);
+                }
+            }
+
+            // Professional Profile ID'sini bul (inviteData.ptId User ID'dir)
+            const { data: profProfile, error: profError } = await SupabaseService.getInstance().getClient()
+                .from('professional_profiles')
+                .select('id')
+                .eq('user_id', inviteData.ptId)
+                .single();
+
+            if (profError || !profProfile) {
+                throw new Error("Eğitmen profili bulunamadı.");
+            }
+
             // Client relationship oluştur (Pending Statüsünde)
             const { error: relError } = await SupabaseService.getInstance().getClient()
                 .from('client_relationships')
                 .insert({
-                    professional_id: inviteData.ptId,
+                    professional_id: profProfile.id,
                     client_id: user.id,
                     agreed_price: inviteData.price,
                     duration_months: inviteData.duration,
+                    service_type: inviteData.serviceType || 'face_to_face',
                     platform_fee_percent: 10,
                     billing_status: 'pending' // Eğitmen aktive edene kadar bekleyecek
                 });
@@ -82,6 +136,11 @@ export default function ReviewOfferScreen() {
 
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Hizmet Detayları</Text>
+
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Hizmet Tipi:</Text>
+                    <Text style={styles.detailValue}>{getServiceTypeLabel(inviteData.serviceType)}</Text>
+                </View>
 
                 <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Anlaşılan Ücret:</Text>
@@ -152,7 +211,7 @@ export default function ReviewOfferScreen() {
 
             <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => navigation.goBack()}
+                onPress={() => safeGoBack(navigation, 'Home')}
                 disabled={loading}
             >
                 <Text style={styles.cancelButtonText}>Reddet</Text>

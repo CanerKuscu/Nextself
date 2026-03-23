@@ -1,4 +1,4 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { Linking, Platform } from 'react-native';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
@@ -53,7 +53,7 @@ export class SpotifyService {
           scopes: 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private',
           redirectTo: Platform.OS === 'web'
             ? window.location.origin
-            : 'biosync://spotify-callback',
+            : 'NextSelf://spotify-callback',
         },
       });
 

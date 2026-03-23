@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 
 // Agreement types matching the database schema
 export type AgreementType = 'kvkk' | 'consent' | 'privacy' | 'subscription' | 'terms';
@@ -110,12 +110,12 @@ export class AgreementService {
             );
 
             if (error) {
-                console.error('Agreement accept error');
+                console.error('Agreement accept error:', error);
                 return { success: false, error: error.message };
             }
             return { success: true };
         } catch (err: any) {
-            console.error('Agreement accept exception');
+            console.error('Agreement accept exception:', err);
             return { success: false, error: err.message };
         }
     }
@@ -130,23 +130,27 @@ export class AgreementService {
     ): Promise<{ success: boolean; error?: string }> {
         try {
             const client = this.supabase.getClient();
-            const records = agreementTypes.map((type) => ({
-                user_id: userId,
-                agreement_type: type,
-                version,
-                accepted_at: new Date().toISOString(),
-                device_platform: Platform.OS,
-                is_active: true,
-            }));
 
-            const { error } = await client
-                .from('user_agreements')
-                .upsert(records, { onConflict: 'user_id,agreement_type,version' });
+            // Process each agreement individually to avoid bulk upsert issues
+            for (const type of agreementTypes) {
+                const { error } = await client.from('user_agreements').upsert(
+                    {
+                        user_id: userId,
+                        agreement_type: type,
+                        version,
+                        accepted_at: new Date().toISOString(),
+                        device_platform: Platform.OS,
+                        is_active: true,
+                    },
+                    { onConflict: 'user_id,agreement_type,version' }
+                );
 
-            if (error) {
-                console.error('Bulk agreement accept error:', error);
-                return { success: false, error: error.message };
+                if (error) {
+                    console.error(`Agreement accept error for ${type}:`, error);
+                    return { success: false, error: error.message };
+                }
             }
+
             return { success: true };
         } catch (err: any) {
             console.error('Bulk agreement accept exception:', err);
@@ -352,9 +356,9 @@ Sözleşme No: ${contractNumber}
 Tarih: ${date}
 
 SATICI BİLGİLERİ:
-Unvan: BioSync
-E-posta: app.biosync@gmail.com
-Hizmet Türü: Dijital Fitness ve Sağlık Uygulaması (SaaS)
+Unvan: NextSelf
+E-posta: app.nextself@gmail.com
+Hizmet Türü: Dijital Fitness (SaaS) ve Uzaktan Eğitim/Danışmanlık
 
 ALICI BİLGİLERİ:
 Ad Soyad: ${buyerName}
@@ -370,11 +374,11 @@ Tutar: ${price} ${currency} (KDV dahil)
 CAYMA HAKKI:
 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği uyarınca, ${withdrawalDate} tarihine kadar (14 gün) herhangi bir gerekçe göstermeksizin cayma hakkınızı kullanabilirsiniz.
 
-İSTİSNA: Dijital içeriğin ifasına başlanmış olması halinde (AI programlarının oluşturulması, kişiselleştirilmiş içeriklerin sunulması), cayma hakkının kaybedileceği konusunda bilgilendirildiğinizi ve onay verdiğinizi kabul etmektesiniz.
+İSTİSNA: Dijital içeriğin ifasına başlanmış olması halinde (AI programlarının oluşturulması, kişiselleştirilmiş içeriklerin sunulması) veya canlı/uzaktan hizmetin ifa edilmiş olması durumunda, cayma hakkının kaybedileceği konusunda bilgilendirildiğinizi ve onay verdiğinizi kabul etmektesiniz.
 
 ÖN BİLGİLENDİRME:
-• Hizmet dijital ortamda sunulmakta olup, ödeme onayı ile anında aktif olmaktadır.
-• Hizmetin temel nitelikleri: AI destekli kişiselleştirilmiş fitness ve beslenme programları
+• Hizmet dijital ortamda veya uzaktan iletişim araçlarıyla sunulmakta olup, ödeme onayı ile anında aktif olmaktadır.
+• Hizmetin temel nitelikleri: AI destekli kişiselleştirilmiş fitness, beslenme programları ve/veya uzmanlarca sunulan uzaktan/yüz yüze danışmanlık.
 • Tüm fiyatlar KDV dahildir.
 • İade, cayma hakkı kullanıldığı takdirde 14 iş günü içinde aynı ödeme yöntemiyle yapılır.
 
@@ -386,9 +390,9 @@ Contract No: ${contractNumber}
 Date: ${date}
 
 SELLER INFORMATION:
-Name: BioSync
-Email: app.biosync@gmail.com
-Service Type: Digital Fitness and Health Application (SaaS)
+Name: NextSelf
+Email: app.nextself@gmail.com
+Service Type: Digital Fitness (SaaS) and Remote Education/Consultancy
 
 BUYER INFORMATION:
 Full Name: ${buyerName}
@@ -404,11 +408,11 @@ Payment Method: App Store / Google Play / Credit Card
 RIGHT OF WITHDRAWAL:
 Under the Consumer Protection Law and Distance Contracts Regulation, you may exercise your right of withdrawal until ${withdrawalDate} (14 days) without providing any reason.
 
-EXCEPTION: If the performance of digital content has begun (generation of AI programs, delivery of personalized content), and you have been informed that this would result in loss of withdrawal rights and have given consent, the right of withdrawal does not apply.
+EXCEPTION: If the performance of digital content has begun (generation of AI programs, delivery of personalized content) or if the live/remote service has been performed, and you have been informed that this would result in loss of withdrawal rights and have given consent, the right of withdrawal does not apply.
 
 PRE-INFORMATION:
-• The service is provided digitally and activates immediately upon payment confirmation.
-• Core features: AI-powered personalized fitness and nutrition programs.
+• The service is provided digitally or via remote communication tools and activates immediately upon payment confirmation.
+• Core features: AI-powered personalized fitness, nutrition programs, and/or remote/face-to-face consultancy provided by experts.
 • All prices include applicable taxes.
 • Refunds are processed within 14 business days via the same payment method upon withdrawal.
 
@@ -621,16 +625,13 @@ I have read, understood, and accept this contract.`;
     ): Promise<boolean> {
         try {
             const client = this.supabase.getClient();
-            // Check if consent was given in the last 24 hours
-            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
+            
             const { data, error } = await client
                 .from('biometric_consents')
                 .select('id')
                 .eq('user_id', userId)
                 .eq('consent_type', consentType)
                 .eq('granted', true)
-                .gte('granted_at', twentyFourHoursAgo)
                 .is('revoked_at', null)
                 .limit(1);
 

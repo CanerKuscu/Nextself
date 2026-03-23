@@ -11,10 +11,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import FloatingInput from '../components/FloatingInput';
 import AnimatedButton from '../components/AnimatedButton';
 import { getLocalDateString } from '../utils/dateUtils';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { useDebounce } from '../hooks/useDebounce';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
@@ -23,6 +24,7 @@ import { SecurityUtils } from '../utils/security';
 import { AgreementService } from '../services/agreementService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const { width } = Dimensions.get('window');
 const STEP_WIDTH = width;
@@ -32,6 +34,7 @@ type RoleType = 'user' | 'pt' | 'dietitian';
 const RegisterScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
   const [role, setRole] = useState<RoleType>('user');
@@ -231,13 +234,13 @@ const RegisterScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={COMMON_STYLES.screenContainer}>
+    <SafeAreaView style={COMMON_STYLES.screenContainer}>
       <AlertComponent />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardArea}>
 
         {/* Header Block */}
-        <View style={styles.headerArea}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <View style={[styles.headerArea, { paddingTop: SPACING.md }]}>
+          <TouchableOpacity onPress={() => safeGoBack(navigation, 'Auth')} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
@@ -456,7 +459,7 @@ const RegisterScreen = ({ navigation }: any) => {
           </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
-    </View >
+    </SafeAreaView>
   );
 };
 
@@ -468,7 +471,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    paddingTop: 60,
     paddingBottom: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
@@ -533,7 +535,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   roleCard: {
     backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: colors.border,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     flexDirection: 'row',
@@ -542,7 +544,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   roleCardActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    // Keep card surface subtle; highlight via icon color instead of full card fill
+    backgroundColor: colors.surface,
   },
   roleIconWrap: {
     width: 48,
@@ -554,6 +557,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   roleIconWrapActive: {
     backgroundColor: colors.primary,
+    // make icon container circular when active for a cleaner look
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   roleTextWrap: {
     marginLeft: SPACING.lg,

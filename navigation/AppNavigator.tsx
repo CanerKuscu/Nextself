@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { View, Platform, ActivityIndicator } from 'react-native';
+import { View, Platform, ActivityIndicator, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Screens
@@ -44,7 +44,7 @@ import DataPrivacyScreen from '../screens/DataPrivacyScreen';
 import LeagueScreen from '../screens/LeagueScreen';
 import StoreScreen from '../screens/StoreScreen';
 import ExerciseDetailScreen from '../screens/ExerciseDetailScreen';
-import ProgramCreatorScreen from '../screens/ProgramCreatorScreen';
+import ProfessionalProgramCreatorScreen from '../screens/ProfessionalProgramCreatorScreen';
 import MissionsScreen from '../screens/MissionsScreen';
 import ProfessionalCoursesScreen from '../screens/ProfessionalCoursesScreen';
 import CourseDetailScreen from '../screens/CourseDetailScreen';
@@ -52,14 +52,54 @@ import SmartScaleScreen from '../screens/SmartScaleScreen';
 import ProgressReportScreen from '../screens/ProgressReportScreen';
 import ProfessionalHomeScreen from '../screens/ProfessionalHomeScreen';
 import ClientsListScreen from '../screens/ClientsListScreen';
+import MoreMenuScreen from '../screens/MoreMenuScreen';
 
-import { SupabaseService } from '../services/supabase';
+// ──── DIAGNOSTIC: log any undefined screen imports ────
+const _screenImports: Record<string, any> = {
+  AuthScreen, RegisterScreen, EmailVerificationScreen, ForgotPasswordScreen,
+  HomeScreen, WorkoutScreen, NutritionScreen, ProfileScreen,
+  AICoachScreen, AIDietitianScreen, AIChefScreen, HealthScreen,
+  SupplementScreen, SpotifyScreen, ProfessionalSearchScreen, RatingScreen,
+  TermsScreen, SplashScreen, SettingsScreen, EditProfileScreen,
+  ChatListScreen, ChatScreen, PrivacySettingsScreen, FoodScannerScreen,
+  AIToolsScreen, AssignmentsScreen, CommunityScreen, BarcodeScannerScreen,
+  PostureAnalysisScreen, ActiveWorkoutScreen, MuscleExercisesScreen,
+  WaterTrackingScreen, DataPrivacyScreen, LeagueScreen, StoreScreen,
+  ExerciseDetailScreen, ProfessionalProgramCreatorScreen, MissionsScreen,
+  ProfessionalCoursesScreen, CourseDetailScreen, SmartScaleScreen,
+  ProgressReportScreen, ProfessionalHomeScreen, ClientsListScreen,
+  MoreMenuScreen,
+};
+Object.entries(_screenImports).forEach(([name, comp]) => {
+  if (!comp) console.warn(`🚨 [AppNavigator] UNDEFINED IMPORT: ${name}`);
+});
+// ──── END DIAGNOSTIC ────
+
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuthStore } from '../store/authStore';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+// Utility to catch undefined components and prevent crashes
+const withCheck = (Component: any, name: string) => {
+  if (!Component) {
+    console.error(`[AppNavigator] ERROR: Screen component '${name}' is undefined!`);
+    return function FallbackScreen() {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'red' }}>
+          <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
+            Error: {name} is undefined!
+          </Text>
+        </View>
+      );
+    };
+  }
+  return Component;
+};
 
 import type { ParamListBase, RouteProp } from '@react-navigation/native';
 
@@ -74,32 +114,14 @@ const MainTabNavigator = () => {
         tabBarIcon: ({ focused, color, size }: { focused: boolean; color: string; size: number }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'ellipse-outline';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'AITools') iconName = focused ? 'sparkles' : 'sparkles-outline';
-          else if (route.name === 'Missions') iconName = focused ? 'flag' : 'flag-outline';
-          else if (route.name === 'ChatList') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
-          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
+          else if (route.name === 'Nutrition') iconName = focused ? 'restaurant' : 'restaurant-outline';
+          else if (route.name === 'Sports') iconName = focused ? 'barbell' : 'barbell-outline';
+          else if (route.name === 'League') iconName = focused ? 'trophy' : 'trophy-outline';
+          else if (route.name === 'More') iconName = focused ? 'ellipsis-horizontal' : 'ellipsis-horizontal-outline';
 
-          const translateY = focused ? -10 : 0;
           const iconColor = focused ? COLORS.primary : colors.textTertiary;
-          const bgOpacity = focused ? 1 : 0;
 
-          return (
-            <View style={{ alignItems: 'center', justifyContent: 'center', width: 50 }}>
-              {focused && (
-                <View style={{
-                  position: 'absolute',
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: COLORS.primarySoft,
-                  transform: [{ translateY: -12 }]
-                }} />
-              )}
-              <View style={{ transform: [{ translateY }] }}>
-                <Ionicons name={iconName} size={24} color={iconColor} />
-              </View>
-            </View>
-          );
+          return <Ionicons name={iconName} size={28} color={iconColor} />;
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: colors.textTertiary,
@@ -116,37 +138,44 @@ const MainTabNavigator = () => {
           left: 16,
           right: 16,
           borderRadius: 30,
-          height: 65,
+          height: 75,
           paddingHorizontal: 8,
+          paddingBottom: 10,
+          paddingTop: 8,
         },
-        tabBarShowLabel: false,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: 4,
+        },
+        tabBarShowLabel: true,
         headerShown: false,
       })}
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={withCheck(HomeScreen, 'HomeScreen')}
         options={{ title: t('home') }}
       />
       <Tab.Screen
-        name="AITools"
-        component={AIToolsScreen}
-        options={{ title: t('ai_features') }}
+        name="Nutrition"
+        component={withCheck(NutritionScreen, 'NutritionScreen')}
+        options={{ title: t('nutrition') }}
       />
       <Tab.Screen
-        name="Missions"
-        component={MissionsScreen}
-        options={{ title: isTurkish ? 'Görevler' : 'Missions' }}
+        name="Sports"
+        component={withCheck(WorkoutScreen, 'WorkoutScreen')}
+        options={{ title: isTurkish ? 'Spor' : 'Sports' }}
       />
       <Tab.Screen
-        name="ChatList"
-        component={ChatListScreen}
-        options={{ title: isTurkish ? 'Mesajlar' : 'Messages' }}
+        name="League"
+        component={withCheck(LeagueScreen, 'LeagueScreen')}
+        options={{ title: t('league') }}
       />
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ title: t('profile') }}
+        name="More"
+        component={withCheck(MoreMenuScreen, 'MoreMenuScreen')}
+        options={{ title: isTurkish ? 'Daha Fazla' : 'More' }}
       />
     </Tab.Navigator>
   );
@@ -168,26 +197,9 @@ const ProfessionalTabNavigator = () => {
           else if (route.name === 'ProfChat') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
           else if (route.name === 'ProfProfile') iconName = focused ? 'person' : 'person-outline';
 
-          const translateY = focused ? -10 : 0;
           const iconColor = focused ? COLORS.primary : colors.textTertiary;
 
-          return (
-            <View style={{ alignItems: 'center', justifyContent: 'center', width: 50 }}>
-              {focused && (
-                <View style={{
-                  position: 'absolute',
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: COLORS.primarySoft,
-                  transform: [{ translateY: -12 }]
-                }} />
-              )}
-              <View style={{ transform: [{ translateY }] }}>
-                <Ionicons name={iconName} size={24} color={iconColor} />
-              </View>
-            </View>
-          );
+          return <Ionicons name={iconName} size={28} color={iconColor} />;
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: colors.textTertiary,
@@ -204,31 +216,38 @@ const ProfessionalTabNavigator = () => {
           left: 16,
           right: 16,
           borderRadius: 30,
-          height: 65,
+          height: 75,
           paddingHorizontal: 8,
+          paddingBottom: 10,
+          paddingTop: 8,
         },
-        tabBarShowLabel: false,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: 4,
+        },
+        tabBarShowLabel: true,
         headerShown: false,
       })}
     >
       <Tab.Screen
         name="ProfHome"
-        component={ProfessionalHomeScreen}
+        component={withCheck(ProfessionalHomeScreen, 'ProfessionalHomeScreen')}
         options={{ title: isTurkish ? 'Panel' : 'Dashboard' }}
       />
       <Tab.Screen
         name="Clients"
-        component={ClientsListScreen}
+        component={withCheck(ClientsListScreen, 'ClientsListScreen')}
         options={{ title: isTurkish ? 'Danışanlar' : 'Clients' }}
       />
       <Tab.Screen
         name="ProfChat"
-        component={ChatListScreen}
+        component={withCheck(ChatListScreen, 'ChatListScreen')}
         options={{ title: isTurkish ? 'Mesajlar' : 'Messages' }}
       />
       <Tab.Screen
         name="ProfProfile"
-        component={ProfileScreen}
+        component={withCheck(ProfileScreen, 'ProfileScreen')}
         options={{ title: isTurkish ? 'Profil' : 'Profile' }}
       />
     </Tab.Navigator>
@@ -240,6 +259,10 @@ const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const { colors, isDark } = useTheme();
+  
+  // Guard role
+  const { profile } = useAuthStore();
+  const isProfessional = profile?.role === 'pt' || profile?.role === 'dietitian';
 
   useEffect(() => {
     checkSession();
@@ -277,56 +300,71 @@ const AppNavigator = () => {
         screenOptions={{
           headerStyle: {
             backgroundColor: colors.surface,
-            shadowColor: 'transparent',
-            elevation: 0,
           },
+          headerShadowVisible: false,
           headerTintColor: colors.text,
           headerTitleStyle: {
             fontSize: 18,
           },
         }}
       >
-        <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Main" component={MainTabNavigator} options={{ headerShown: false }} />
-        <Stack.Screen name="ProfessionalMain" component={ProfessionalTabNavigator} options={{ headerShown: false }} />
-        <Stack.Screen name="ProfessionalHome" component={ProfessionalHomeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ClientsList" component={ClientsListScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AI" component={AICoachScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AIDietitian" component={AIDietitianScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AIChef" component={AIChefScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Supplements" component={SupplementScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Spotify" component={SpotifyScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ProfessionalSearch" component={ProfessionalSearchScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Rating" component={RatingScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Terms" component={TermsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ChatList" component={ChatListScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="FoodScanner" component={FoodScannerScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="AIToolsStack" component={AIToolsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Assignments" component={AssignmentsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Community" component={CommunityScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="PostureAnalysis" component={PostureAnalysisScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ActiveWorkout" component={ActiveWorkoutScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="MuscleExercises" component={MuscleExercisesScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="WaterTracking" component={WaterTrackingScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="DataPrivacy" component={DataPrivacyScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Health" component={HealthScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="League" component={LeagueScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Store" component={StoreScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ProgramCreator" component={ProgramCreatorScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Missions" component={MissionsScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ProfessionalCourses" component={ProfessionalCoursesScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="CourseDetail" component={CourseDetailScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="SmartScale" component={SmartScaleScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="ProgressReport" component={ProgressReportScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Auth" component={withCheck(AuthScreen, 'AuthScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Register" component={withCheck(RegisterScreen, 'RegisterScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="EmailVerification" component={withCheck(EmailVerificationScreen, 'EmailVerificationScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ForgotPassword" component={withCheck(ForgotPasswordScreen, 'ForgotPasswordScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Main" component={withCheck(MainTabNavigator, 'MainTabNavigator')} options={{ headerShown: false }} />
+        
+        {/* Professional Routes - RBAC Guarded */}
+        <Stack.Screen 
+          name="ProfessionalMain" 
+          component={isProfessional ? withCheck(ProfessionalTabNavigator, 'ProfessionalTabNavigator') : withCheck(HomeScreen, 'UnauthorizedFallback')} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="ProfessionalHome" 
+          component={isProfessional ? withCheck(ProfessionalHomeScreen, 'ProfessionalHomeScreen') : withCheck(HomeScreen, 'UnauthorizedFallback')} 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
+          name="ClientsList" 
+          component={isProfessional ? withCheck(ClientsListScreen, 'ClientsListScreen') : withCheck(HomeScreen, 'UnauthorizedFallback')} 
+          options={{ headerShown: false }} 
+        />
+
+        <Stack.Screen name="Profile" component={withCheck(ProfileScreen, 'ProfileScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="AI" component={withCheck(AICoachScreen, 'AICoachScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="AIDietitian" component={withCheck(AIDietitianScreen, 'AIDietitianScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="AIChef" component={withCheck(AIChefScreen, 'AIChefScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Supplements" component={withCheck(SupplementScreen, 'SupplementScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Spotify" component={withCheck(SpotifyScreen, 'SpotifyScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ProfessionalSearch" component={withCheck(ProfessionalSearchScreen, 'ProfessionalSearchScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Rating" component={withCheck(RatingScreen, 'RatingScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Terms" component={withCheck(TermsScreen, 'TermsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ChatList" component={withCheck(ChatListScreen, 'ChatListScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Chat" component={withCheck(ChatScreen, 'ChatScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Settings" component={withCheck(SettingsScreen, 'SettingsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="PrivacySettings" component={withCheck(PrivacySettingsScreen, 'PrivacySettingsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="EditProfile" component={withCheck(EditProfileScreen, 'EditProfileScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="FoodScanner" component={withCheck(FoodScannerScreen, 'FoodScannerScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="AIToolsStack" component={withCheck(AIToolsScreen, 'AIToolsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Assignments" component={withCheck(AssignmentsScreen, 'AssignmentsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Community" component={withCheck(CommunityScreen, 'CommunityScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="BarcodeScanner" component={withCheck(BarcodeScannerScreen, 'BarcodeScannerScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="PostureAnalysis" component={withCheck(PostureAnalysisScreen, 'PostureAnalysisScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ActiveWorkout" component={withCheck(ActiveWorkoutScreen, 'ActiveWorkoutScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="MuscleExercises" component={withCheck(MuscleExercisesScreen, 'MuscleExercisesScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ExerciseDetail" component={withCheck(ExerciseDetailScreen, 'ExerciseDetailScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="WaterTracking" component={withCheck(WaterTrackingScreen, 'WaterTrackingScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="DataPrivacy" component={withCheck(DataPrivacyScreen, 'DataPrivacyScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Health" component={withCheck(HealthScreen, 'HealthScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="League" component={withCheck(LeagueScreen, 'LeagueScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Store" component={withCheck(StoreScreen, 'StoreScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ProfessionalProgramCreator" component={withCheck(ProfessionalProgramCreatorScreen, 'ProfessionalProgramCreatorScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="Missions" component={withCheck(MissionsScreen, 'MissionsScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ProfessionalCourses" component={withCheck(ProfessionalCoursesScreen, 'ProfessionalCoursesScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="CourseDetail" component={withCheck(CourseDetailScreen, 'CourseDetailScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="SmartScale" component={withCheck(SmartScaleScreen, 'SmartScaleScreen')} options={{ headerShown: false }} />
+        <Stack.Screen name="ProgressReport" component={withCheck(ProgressReportScreen, 'ProgressReportScreen')} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

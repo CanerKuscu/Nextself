@@ -59,9 +59,9 @@ const GradientButton: React.FC<GradientButtonProps> = ({
 
     // Memoize size styles to prevent recalculation on every render
     const sizeStyles = useMemo(() => ({
-        sm: { paddingVertical: 10, paddingHorizontal: SPACING.lg },
-        md: { paddingVertical: 14, paddingHorizontal: SPACING.xxl },
-        lg: { paddingVertical: 18, paddingHorizontal: SPACING.xxxl },
+        sm: { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.md },
+        md: { paddingVertical: SPACING.sm, paddingHorizontal: SPACING.lg },
+        lg: { paddingVertical: SPACING.md, paddingHorizontal: SPACING.xl },
     }), []);
 
     // Memoize text sizes to prevent recalculation on every render
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
-        gap: SPACING.sm,
+        gap: SPACING.xs,
         ...SHADOWS.lg,
     },
     text: {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
-        gap: SPACING.sm,
+        gap: SPACING.xs,
         borderWidth: 2,
         borderColor: COLORS.primary,
         backgroundColor: 'transparent',

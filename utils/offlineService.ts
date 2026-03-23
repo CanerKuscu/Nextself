@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
-import { CONFIG } from '../config/config';
+import { CONFIG } from '@nextself/shared';
 import { SecurityUtils } from './security';
 
 type OfflineOperation = {
@@ -24,7 +24,7 @@ export class OfflineService {
     private isPaused: boolean = false;
     private processingPromise: Promise<void> | null = null;
     private resolveProcessingPromise: (() => void) | null = null;
-    private readonly STORAGE_KEY = '@biosync_offline_queue';
+    private readonly STORAGE_KEY = '@NextSelf_offline_queue';
     private readonly MAX_RETRIES = 3;
     private readonly SYNC_INTERVAL = 30000; // 30 seconds
 

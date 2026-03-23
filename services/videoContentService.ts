@@ -1,4 +1,4 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 

@@ -1,6 +1,11 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { DeepSeekService, PrivacyUtils } from './deepseek';
-import { ValidationUtils } from '../utils/validation';
+import { AIValidationUtils } from '@nextself/shared';
+import { HealthValidator } from '../utils/HealthValidator';
+import { Platform } from 'react-native';
+import { MemoryManager } from '../utils/MemoryManager';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
+import { LogManager } from '../utils/LogManager';
 
 export interface AIScanResult {
     name: string;
@@ -32,6 +37,7 @@ export class AIService {
     private static instance: AIService;
     private supabase = SupabaseService.getInstance();
     private deepseek = DeepSeekService.getInstance();
+    private memoryManager = new MemoryManager(10);
 
     static getInstance(): AIService {
         if (!AIService.instance) {
@@ -44,68 +50,47 @@ export class AIService {
      * Besin Tarama AI - Analyzes food from an image URL or Base64
      * Uses Edge Function for real AI analysis
      */
-    async scanFood(imageUrl: string): Promise<AIScanResult> {
+    async scanFood(imageUri: string, language: 'tr' | 'en' = 'en'): Promise<AIScanResult> {
         try {
-            console.log('Scanning food image via Edge Function...');
+            const imageBase64 = await readAsStringAsync(imageUri, { encoding: EncodingType.Base64 });
+            const description = language === 'tr'
+                ? 'Görüntüdeki yiyeceği tespit et ve sadece geçerli JSON döndür: {"name":"","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"fiber_g":0,"sugar_g":0,"sodium_mg":0,"ingredients":[],"vitamins":[],"health_score":0}.'
+                : 'Identify the food in the image and return only valid JSON: {"name":"","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"fiber_g":0,"sugar_g":0,"sodium_mg":0,"ingredients":[],"vitamins":[],"health_score":0}.';
+            const rawResponse = await this.deepseek.generateContent('food_scan', { description, language }, imageBase64);
 
-            // Try Edge Function first
-            const client = this.supabase.getClient();
-            const { data, error } = await client.functions.invoke('ai-food-scan', {
-                body: { image: imageUrl },
-            });
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+            const payload = JSON.parse(jsonMatch ? jsonMatch[0] : rawResponse);
+            const toNumber = (value: any) => {
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? numeric : 0;
+            };
 
-            if (!error && data) {
-                return {
-                    name: data.name || 'Unknown Food',
-                    calories: data.calories || 0,
-                    protein: data.protein || data.protein_g || 0,
-                    carbs: data.carbs || data.carbs_g || 0,
-                    fats: data.fats || data.fat_g || 0,
-                    confidence: data.confidence || 80,
-                    healthScore: data.healthScore || data.health_score || 7,
-                    ingredients: data.ingredients || [],
-                    fiber: data.fiber || data.fiber_g || 0,
-                    sugar: data.sugar || data.sugar_g || 0,
-                    sodium: data.sodium || data.sodium_mg || 0,
-                    vitamins: data.vitamins || [],
-                };
-            }
-
-            // Fallback: use DeepSeek text-based analysis
-            console.warn('Edge function failed for food scan, using DeepSeek fallback');
-            const fallbackResult = await this.deepseek.analyzeFoodScan(
-                'Analyze the food in this image and provide nutritional information.'
-            );
-
-            // Try to parse JSON response
-            try {
-                const parsed = JSON.parse(fallbackResult);
-                return {
-                    name: parsed.name || 'Analyzed Food',
-                    calories: parsed.calories || 0,
-                    protein: parsed.protein_g || parsed.protein || 0,
-                    carbs: parsed.carbs_g || parsed.carbs || 0,
-                    fats: parsed.fat_g || parsed.fats || parsed.fat || 0,
-                    confidence: 70,
-                    healthScore: 7,
-                    ingredients: [],
-                };
-            } catch {
-                // If DeepSeek doesn't return parseable JSON, return a basic result
-                return {
-                    name: 'Food Item',
-                    calories: 0,
-                    protein: 0,
-                    carbs: 0,
-                    fats: 0,
-                    confidence: 50,
-                    healthScore: 5,
-                    ingredients: [],
-                };
-            }
+            return {
+                name: payload.name || (language === 'tr' ? 'Bilinmeyen Yemek' : 'Unknown Food'),
+                calories: toNumber(payload.calories),
+                protein: toNumber(payload.protein_g ?? payload.protein),
+                carbs: toNumber(payload.carbs_g ?? payload.carbs),
+                fats: toNumber(payload.fat_g ?? payload.fats ?? payload.fat),
+                confidence: Math.max(50, Math.min(95, toNumber(payload.confidence) || 78)),
+                healthScore: Math.max(1, Math.min(10, toNumber(payload.health_score ?? payload.healthScore) || 6)),
+                ingredients: Array.isArray(payload.ingredients) ? payload.ingredients : [],
+                fiber: toNumber(payload.fiber_g ?? payload.fiber),
+                sugar: toNumber(payload.sugar_g ?? payload.sugar),
+                sodium: toNumber(payload.sodium_mg ?? payload.sodium),
+                vitamins: Array.isArray(payload.vitamins) ? payload.vitamins : [],
+            };
         } catch (error) {
             console.error('AI Scan Error:', error);
-            throw error;
+            return {
+                name: language === 'tr' ? 'Yemek Öğesi' : 'Food Item',
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fats: 0,
+                confidence: 45,
+                healthScore: 5,
+                ingredients: [],
+            };
         }
     }
 
@@ -113,59 +98,68 @@ export class AIService {
      * Şef AI - Generates a recipe based on ingredients or dietary preferences
      * Uses DeepSeek Edge Function
      */
-    async generateRecipe(ingredients: string[], dietPreference?: string): Promise<AIRecipe> {
+    async generateRecipe(ingredients: string[], dietPreference?: string, userProfile?: any): Promise<AIRecipe> {
+        const logManager = LogManager.getInstance();
+        const startTime = Date.now();
+
         try {
-            // Validate inputs for SQL injection
-            ingredients.forEach(ingredient => {
-                const validation = ValidationUtils.validateSQLInjection(ingredient);
-                if (!validation.isValid) {
-                    throw new Error(`Invalid ingredient: ${validation.errors.join(', ')}`);
-                }
-            });
-            if (dietPreference) {
-                const validation = ValidationUtils.validateSQLInjection(dietPreference);
-                if (!validation.isValid) {
-                    throw new Error(`Invalid diet preference: ${validation.errors.join(', ')}`);
-                }
-            }
+            // Validate and sanitize inputs
+            const sanitizedIngredients = AIValidationUtils.validateAndSanitizeArray(ingredients, 50);
+            const sanitizedDietPreference = dietPreference
+                ? AIValidationUtils.sanitizeInput(dietPreference)
+                : undefined;
 
-            const prompt = `Generate a healthy recipe using these ingredients: ${ingredients.join(', ')}. ${dietPreference ? `Dietary preference: ${dietPreference}.` : ''} Return ONLY valid JSON with this exact structure: {"title":"...","prepTime":10,"cookTime":15,"calories":450,"macros":{"p":45,"c":20,"f":15},"ingredients":["..."],"instructions":["..."],"difficulty":"easy|medium|hard"}`;
+            // Add interaction to memory
+            this.memoryManager.addInteraction(`Ingredients: ${ingredients.join(', ')}, Diet: ${dietPreference || 'None'}`);
 
-            const response = await this.deepseek.generateContent(prompt, 'chef');
+            // Context from user profile
+            const profileContext = userProfile ? `User Profile: ${JSON.stringify(PrivacyUtils.anonymizeProfile(userProfile))}` : '';
+
+            // Structured Request to Edge Function
+            const requestData = {
+                ingredients: sanitizedIngredients,
+                dietPreference: sanitizedDietPreference,
+                context: profileContext
+            };
+
+            const response = await this.retryWithBackoff(() => this.deepseek.generateContent('chef', requestData));
 
             try {
                 // Try to extract JSON from response
                 const jsonMatch = response.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
-                    return {
-                        title: parsed.title || 'AI Generated Recipe',
-                        prepTime: parsed.prepTime || 10,
-                        cookTime: parsed.cookTime || 15,
-                        calories: parsed.calories || 400,
-                        macros: parsed.macros || { p: 30, c: 30, f: 15 },
-                        ingredients: parsed.ingredients || ingredients,
-                        instructions: parsed.instructions || ['Follow the recipe'],
-                        difficulty: parsed.difficulty || 'medium',
-                    };
-                }
-            } catch {
-                // Parse failed, return structured fallback from text
-            }
 
-            return {
-                title: 'AI Generated Recipe',
-                prepTime: 10,
-                cookTime: 15,
-                calories: 400,
-                macros: { p: 30, c: 30, f: 15 },
-                ingredients: ingredients,
-                instructions: [response],
-                difficulty: 'medium',
-            };
+                    // Validate nutritional data
+                    if (!HealthValidator.validateNutritionalData(parsed)) {
+                        throw new Error('Generated recipe contains unrealistic nutritional values.');
+                    }
+
+                    logManager.logSuccess();
+                    return parsed;
+                } else {
+                    throw new Error('Invalid JSON response from AI.');
+                }
+            } catch (parseError) {
+                console.error('JSON Parsing Error:', parseError);
+                throw new Error('Failed to parse AI response.');
+            }
         } catch (error) {
             console.error('Chef AI Error:', error);
-            throw error;
+            logManager.logFailure();
+            return {
+                title: 'Fallback Recipe',
+                prepTime: 10,
+                cookTime: 15,
+                calories: 200,
+                macros: { p: 10, c: 20, f: 5 },
+                ingredients: ['Fallback Ingredient'],
+                instructions: ['Fallback Instruction'],
+                difficulty: 'easy',
+            };
+        } finally {
+            const endTime = Date.now();
+            logManager.logResponseTime(endTime - startTime);
         }
     }
 
@@ -173,23 +167,46 @@ export class AIService {
      * Diyetisyen AI - Ask general nutrition questions
      * Uses DeepSeek Edge Function
      */
-    async askDietitian(query: string, userStats?: any): Promise<string> {
+    async askDietitian(query: string, userStats?: any, healthData?: any, supplements?: any[]): Promise<string> {
+        const logManager = LogManager.getInstance();
+        const startTime = Date.now();
+
         try {
-            // Validate input for SQL injection
-            const validation = ValidationUtils.validateSQLInjection(query);
-            if (!validation.isValid) {
-                throw new Error(`Invalid query: ${validation.errors.join(', ')}`);
+            // Sanitize and validate input
+            const sanitizedQuery = AIValidationUtils.sanitizeInput(query);
+            if (!AIValidationUtils.validateLength(sanitizedQuery, 200)) {
+                throw new Error('Query exceeds maximum allowed length of 200 characters.');
             }
 
-            const anonymizedStats = userStats ? PrivacyUtils.anonymizeProfile(userStats) : null;
-            const prompt = anonymizedStats
-                ? `As a professional dietitian, answer this nutrition question. User stats: ${JSON.stringify(anonymizedStats)}. Question: ${query}`
-                : `As a professional dietitian, answer this nutrition question: ${query}`;
+            // Add interaction to memory
+            this.memoryManager.addInteraction(`Query: ${query}`);
 
-            return await this.deepseek.generateContent(prompt, 'dietitian');
+            const anonymizedStats = userStats ? PrivacyUtils.anonymizeProfile(userStats) : {};
+            
+            const context = {
+                profile: anonymizedStats,
+                health: healthData || {},
+                supplements: supplements || []
+            };
+
+            const response = await this.retryWithBackoff(() => this.deepseek.generateContent('dietitian', {
+                query: sanitizedQuery,
+                context: context
+            }));
+
+            // Estimate token usage (approximation)
+            const tokenUsage = sanitizedQuery.length / 4 + response.length / 4; 
+            logManager.logTokenUsage(tokenUsage);
+            
+            logManager.logSuccess();
+            return response;
         } catch (error) {
             console.error('Dietitian AI Error:', error);
-            throw error;
+            logManager.logFailure();
+            return 'I\'m having trouble calculating this right now, but generally, staying hydrated is key.';
+        } finally {
+            const endTime = Date.now();
+            logManager.logResponseTime(endTime - startTime);
         }
     }
 
@@ -197,23 +214,96 @@ export class AIService {
      * PT AI - Ask training/workout questions
      * Uses DeepSeek Edge Function
      */
-    async askPT(query: string, userStats?: any): Promise<string> {
+    async askPT(query: string, userStats?: any, healthData?: any, workoutHistory?: any[]): Promise<string> {
         try {
-            // Validate input for SQL injection
-            const validation = ValidationUtils.validateSQLInjection(query);
-            if (!validation.isValid) {
-                throw new Error(`Invalid query: ${validation.errors.join(', ')}`);
+            // Sanitize and validate input
+            const sanitizedQuery = AIValidationUtils.sanitizeInput(query);
+            if (!AIValidationUtils.validateLength(sanitizedQuery, 200)) {
+                throw new Error('Query exceeds maximum allowed length of 200 characters.');
             }
 
-            const anonymizedStats = userStats ? PrivacyUtils.anonymizeProfile(userStats) : null;
-            const prompt = anonymizedStats
-                ? `As an expert personal trainer, answer this training question. User stats: ${JSON.stringify(anonymizedStats)}. Question: ${query}`
-                : `As an expert personal trainer, answer this training question: ${query}`;
+            const anonymizedStats = userStats ? PrivacyUtils.anonymizeProfile(userStats) : {};
+            
+            const context = {
+                profile: anonymizedStats,
+                health: healthData || {},
+                history: workoutHistory || []
+            };
 
-            return await this.deepseek.generateContent(prompt, 'coach');
+            const response = await this.retryWithBackoff(() => this.deepseek.generateContent('coach', {
+                query: sanitizedQuery,
+                context: context
+            }));
+
+            return response;
         } catch (error) {
             console.error('PT AI Error:', error);
-            throw error;
+            return 'The AI generated an unrealistic value, please try again.';
+        }
+    }
+
+    // Retry logic with exponential backoff
+    private async retryWithBackoff<T>(fn: () => Promise<T>, retries: number = 3, delay: number = 1000): Promise<T> {
+        let attempt = 0;
+        while (attempt < retries) {
+            try {
+                return await fn();
+            } catch (error) {
+                attempt++;
+                if (attempt === retries) throw error;
+                await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt)));
+            }
+        }
+        throw new Error('Max retries reached');
+    }
+
+    /**
+     * Professional Program Generator AI
+     * Uses DeepSeek Edge Function. Can analyze an image if provided.
+     */
+    async generateProfessionalProgram(
+        type: 'workout' | 'nutrition',
+        clientProfile: any,
+        language: string,
+        imageBase64?: string
+    ): Promise<any> {
+        const logManager = LogManager.getInstance();
+        const startTime = Date.now();
+
+        try {
+            const anonymizedProfile = PrivacyUtils.anonymizeProfile(clientProfile);
+            
+            const requestData = {
+                type,
+                clientProfile: anonymizedProfile,
+                language,
+                hasImage: !!imageBase64
+            };
+
+            const response = await this.retryWithBackoff(() => 
+                this.deepseek.generateContent('professional_program_generator', requestData, imageBase64)
+            );
+
+            try {
+                const jsonMatch = response.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    logManager.logSuccess();
+                    return parsed;
+                } else {
+                    throw new Error('Invalid JSON response from AI.');
+                }
+            } catch (parseError) {
+                console.error('JSON Parsing Error:', parseError);
+                throw new Error('Failed to parse AI response.');
+            }
+        } catch (error) {
+            console.error('Professional Program Generator AI Error:', error);
+            logManager.logFailure();
+            return null;
+        } finally {
+            const endTime = Date.now();
+            logManager.logResponseTime(endTime - startTime);
         }
     }
 }

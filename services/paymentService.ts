@@ -1,41 +1,9 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { AgreementService } from './agreementService';
+import { CONFIG } from '@nextself/shared';
+import { SubscriptionPlan, UserSubscription } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
-
-export interface SubscriptionPlan {
-    id: string;
-    name: string;
-    description: string;
-    price_monthly: number;
-    price_yearly: number;
-    currency: string;
-    features: string[];
-    is_popular: boolean;
-    is_active: boolean;
-    trial_days: number;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface UserSubscription {
-    id: string;
-    user_id: string;
-    plan_id: string;
-    status: 'active' | 'canceled' | 'expired' | 'pending';
-    billing_cycle: 'monthly' | 'yearly';
-    current_period_start: string;
-    current_period_end: string;
-    cancel_at_period_end: boolean;
-    canceled_at?: string;
-    trial_start?: string;
-    trial_end?: string;
-    payment_method_id?: string;
-    iyzico_subscription_ref?: string;
-    iyzico_customer_ref?: string;
-    created_at: string;
-    updated_at: string;
-}
 
 export interface PaymentMethod {
     id: string;
@@ -110,8 +78,9 @@ export class PaymentService {
      */
     public async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
         try {
+            const plansTable = CONFIG.SUBSCRIPTION_PLANS_TABLE || 'subscription_plans';
             const { data, error } = await supabase
-                .from('subscription_plans')
+                .from(plansTable)
                 .select('*')
                 .eq('is_active', true)
                 .order('price_monthly', { ascending: true });
@@ -129,8 +98,9 @@ export class PaymentService {
      */
     public async getSubscriptionPlan(planId: string): Promise<SubscriptionPlan | null> {
         try {
+            const plansTable = CONFIG.SUBSCRIPTION_PLANS_TABLE || 'subscription_plans';
             const { data, error } = await supabase
-                .from('subscription_plans')
+                .from(plansTable)
                 .select('*')
                 .eq('id', planId)
                 .eq('is_active', true)
@@ -149,17 +119,45 @@ export class PaymentService {
      */
     public async getUserSubscription(userId: string): Promise<UserSubscription | null> {
         try {
+            // Primary table name used by the app
+            const primaryTable = CONFIG.SUBSCRIPTIONS_TABLE || 'user_subscriptions';
             const { data, error } = await supabase
-                .from('user_subscriptions')
+                .from(primaryTable)
                 .select('*')
                 .eq('user_id', userId)
                 .eq('status', 'active')
                 .single();
 
+            // If table doesn't exist (PGRST205), try common alternative table names
+            if (error && error.code === 'PGRST205') {
+                const alternatives = [
+                    CONFIG.SUBSCRIPTIONS_TABLE,
+                    'subscriptions',
+                    'user_subscription',
+                    'customer_subscriptions'
+                ].filter(Boolean).map(String).filter((v, i, a) => a.indexOf(v) === i && v !== primaryTable);
+                for (const tbl of alternatives) {
+                    try {
+                        const res = await supabase
+                            .from(tbl)
+                            .select('*')
+                            .eq('user_id', userId)
+                            .eq('status', 'active')
+                            .single();
+                        if (!res.error && res.data) return res.data;
+                    } catch (e) {
+                        // ignore and try next
+                    }
+                }
+                // Table not found among alternatives — log and return null
+                console.warn(`Subscription table '${primaryTable}' not found; attempted alternatives and none exist.`);
+                return null;
+            }
+
             if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
             return data;
         } catch (error) {
-            console.error('Error getting user subscription');
+            console.error('Error getting user subscription:', error);
             return null;
         }
     }

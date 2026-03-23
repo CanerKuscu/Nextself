@@ -10,10 +10,11 @@ import AnimatedButton from '../components/AnimatedButton';
 import AnimatedCard from '../components/AnimatedCard';
 import GlassCard from '../components/GlassCard';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { HealthService } from '../services/healthService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 let LineChart: any;
 try { const ck = require('react-native-chart-kit'); LineChart = ck.LineChart; } catch { }
@@ -61,6 +62,16 @@ export default function SmartScaleScreen({ navigation }: any) {
             const latest = await healthService.fetchLatestWeight();
             if (latest && latest.weight) {
                 setWeight(latest.weight.toFixed(1));
+                if (typeof latest.bodyFat === 'number' && Number.isFinite(latest.bodyFat)) {
+                    const percent = latest.bodyFat <= 1 ? latest.bodyFat * 100 : latest.bodyFat;
+                    setBodyFat(percent.toFixed(1));
+                }
+                if (typeof latest.muscleMass === 'number' && Number.isFinite(latest.muscleMass) && latest.weight > 0) {
+                    const musclePercent = (latest.muscleMass / latest.weight) * 100;
+                    if (Number.isFinite(musclePercent) && musclePercent > 0) {
+                        setMuscleMass(musclePercent.toFixed(1));
+                    }
+                }
                 setHealthSource(latest.source);
                 showAlert({
                     title: isTurkish ? 'Senkronize Edildi' : 'Synced',
@@ -507,7 +518,7 @@ export default function SmartScaleScreen({ navigation }: any) {
             <AlertComponent />
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16, borderBottomColor: colors.text + '15' }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.text + '10' }]} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={[styles.backBtn, { backgroundColor: colors.text + '10' }]} activeOpacity={0.7}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>{isTurkish ? 'Akıllı Tartı' : 'Smart Scale'}</Text>

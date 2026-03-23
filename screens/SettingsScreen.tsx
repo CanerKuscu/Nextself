@@ -11,20 +11,23 @@ import {
     Modal,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 import AnimatedCard from '../components/AnimatedCard';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { NotificationService } from '../services/notificationService';
+import { CalendarService } from '../services/calendarService';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCurrency, CurrencyCode, CURRENCIES } from '../contexts/CurrencyContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
+import { safeGoBack } from '../utils/navigation';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 
-const NOTIF_PREFS_KEY = 'biosync_notification_prefs';
+const NOTIF_PREFS_KEY = 'nextself_notification_prefs';
 
 type NotificationPrefs = {
     water: boolean;
@@ -33,6 +36,7 @@ type NotificationPrefs = {
     tips: boolean;
     supplement: boolean;
     meal: boolean;
+    calendar_sync: boolean;
 };
 
 const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
@@ -42,11 +46,12 @@ const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
     tips: false,
     supplement: false,
     meal: false,
+    calendar_sync: false,
 };
 
 const SettingsScreen = ({ navigation }: any) => {
-    const { colors, isDark, toggleTheme } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark, setThemeMode } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { t, isTurkish, language, setLanguage } = useTranslation();
     const { currency, setCurrency, currencyInfo } = useCurrency();
@@ -104,20 +109,50 @@ const SettingsScreen = ({ navigation }: any) => {
         } catch { }
 
         // Schedule or cancel notifications based on toggle
+        if (key === 'calendar_sync') {
+            if (updated.calendar_sync) {
+                const calendarService = CalendarService.getInstance();
+                const granted = await calendarService.requestPermissions();
+                if (!granted) {
+                    setNotifPrefs(prev => ({ ...prev, calendar_sync: false }));
+                    showAlert({
+                        type: 'error',
+                        title: 'Permission Denied',
+                        message: 'Calendar permission is required to sync events.',
+                        buttons: [{ text: 'OK' }]
+                    });
+                    return;
+                }
+            }
+        }
+
         const notifService = NotificationService.getInstance();
         try {
             await notifService.requestPermissions();
-            const schedules: Record<string, { title: string; body: string; hour: number; minute: number }> = {
-                workout: { title: isTurkish ? 'Antrenman Zamanı! 💪' : 'Workout Time! 💪', body: isTurkish ? 'Bugünkü antrenmanını tamamla' : 'Complete your workout today', hour: 10, minute: 0 },
-                supplement: { title: isTurkish ? 'Supplement Zamanı 💊' : 'Supplement Time 💊', body: isTurkish ? 'Günlük supplementlerini almayı unutma' : "Don't forget your daily supplements", hour: 9, minute: 0 },
-                meal: { title: isTurkish ? 'Öğün Zamanı 🍽️' : 'Meal Time 🍽️', body: isTurkish ? 'Öğünlerini kaydetmeyi unutma' : "Don't forget to log your meals", hour: 12, minute: 30 },
+            const schedules: Record<string, { hour: number; minute: number; screen: string; params?: any }> = {
+                workout: { hour: 10, minute: 0, screen: 'Main', params: { screen: 'Sports' } },
+                supplement: { hour: 9, minute: 0, screen: 'Supplements' },
+                meal: { hour: 12, minute: 30, screen: 'Main', params: { screen: 'Nutrition' } },
             };
             if (schedules[key]) {
                 if (updated[key]) {
                     const s = schedules[key];
-                    await notifService.scheduleDailyReminder(s.title, s.body, s.hour, s.minute, `biosync_${key}_reminder`);
+                    const typeMap: Record<string, 'workout' | 'nutrition' | 'supplement'> = {
+                        workout: 'workout',
+                        meal: 'nutrition',
+                        supplement: 'supplement',
+                    };
+                    await notifService.scheduleSmartReminder(
+                        typeMap[key],
+                        s.hour,
+                        s.minute,
+                        `nextself_${key}_reminder`,
+                        s.screen,
+                        s.params,
+                        language
+                    );
                 } else {
-                    await notifService.cancelNotification(`biosync_${key}_reminder`);
+                    await notifService.cancelNotification(`nextself_${key}_reminder`);
                 }
             }
         } catch { }
@@ -140,14 +175,12 @@ const SettingsScreen = ({ navigation }: any) => {
     const handleDeleteAccount = () => {
         showAlert({
             type: 'destructive',
-            title: isTurkish ? 'Hesabı Sil' : 'Delete Account',
-            message: isTurkish
-                ? 'Hesabınız ve tüm verileriniz kalıcı olarak silinecek. Bu işlem geri alınamaz.'
-                : 'Your account and all data will be permanently deleted. This cannot be undone.',
+            title: t('delete_account_confirm_title'),
+            message: t('delete_account_confirm_msg'),
             buttons: [
-                { text: isTurkish ? 'İptal' : 'Cancel', style: 'cancel' },
+                { text: t('cancel'), style: 'cancel' },
                 {
-                    text: isTurkish ? 'Devam Et' : 'Continue',
+                    text: t('continue'),
                     style: 'destructive',
                     onPress: () => {
                         setReAuthPassword('');
@@ -161,7 +194,7 @@ const SettingsScreen = ({ navigation }: any) => {
 
     const handleConfirmDelete = async () => {
         if (!reAuthPassword.trim()) {
-            setReAuthError(isTurkish ? 'Lütfen şifrenizi girin.' : 'Please enter your password.');
+            setReAuthError(t('enter_password'));
             return;
         }
         setReAuthLoading(true);
@@ -174,7 +207,7 @@ const SettingsScreen = ({ navigation }: any) => {
             // Re-authenticate to prove identity
             const { error: authError } = await supabase.signInWithEmail(user.email, reAuthPassword);
             if (authError) {
-                setReAuthError(isTurkish ? 'Şifre hatalı.' : 'Incorrect password.');
+                setReAuthError(t('incorrect_password'));
                 setReAuthLoading(false);
                 return;
             }
@@ -185,29 +218,29 @@ const SettingsScreen = ({ navigation }: any) => {
             setShowReAuthModal(false);
             navigation.replace('Auth');
         } catch (err: any) {
-            setReAuthError(isTurkish ? 'Bir hata oluştu. Tekrar deneyin.' : 'An error occurred. Try again.');
+            setReAuthError(t('error_occurred'));
         } finally {
             setReAuthLoading(false);
         }
     };
 
     return (
-        <View style={COMMON_STYLES.screenContainer}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <AlertComponent />
 
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={styles.backBtn} activeOpacity={0.7}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{isTurkish ? 'Ayarlar' : 'Settings'}</Text>
+                <Text style={styles.headerTitle}>{t('settings')}</Text>
                 <View style={{ width: 40 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
                 {/* Language */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Dil' : 'Language'}</Text>
+                <Text style={styles.sectionTitle}>{t('language')}</Text>
                 <AnimatedCard style={styles.card}>
                     <View style={styles.langCardContent}>
                         <View style={styles.langToggle}>
@@ -256,32 +289,33 @@ const SettingsScreen = ({ navigation }: any) => {
                 </AnimatedCard>
 
                 {/* Dark Theme */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Görünüm' : (language === 'ru' ? 'Внешний вид' : 'Appearance')}</Text>
+                <Text style={styles.sectionTitle}>{t('appearance')}</Text>
                 <AnimatedCard style={styles.card}>
                     <View style={[styles.switchRow]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                             <Ionicons name={isDark ? 'moon' : 'sunny'} size={20} color={isDark ? '#CE82FF' : '#FFC800'} />
-                            <Text style={styles.switchLabel}>{isTurkish ? 'Karanlık Tema' : (language === 'ru' ? 'Темная тема' : 'Dark Theme')}</Text>
+                            <Text style={styles.switchLabel}>{t('dark_theme')}</Text>
                         </View>
                         <Switch
                             value={isDark}
-                            onValueChange={toggleTheme}
-                            trackColor={{ false: colors.borderLight, true: colors.primarySoft }}
-                            thumbColor={isDark ? colors.primary : colors.textTertiary}
+                            onValueChange={(value) => setThemeMode(value ? 'dark' : 'light')}
+                            trackColor={{ false: isDark ? colors.surfaceElevated : '#E9E9EA', true: colors.primary }}
+                            thumbColor={'#FFFFFF'}
                         />
                     </View>
                 </AnimatedCard>
 
                 {/* Notifications */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Bildirim Tercihleri' : (language === 'ru' ? 'Настройки уведомлений' : 'Notification Preferences')}</Text>
+                <Text style={styles.sectionTitle}>{t('notification_preferences')}</Text>
                 <AnimatedCard style={styles.card}>
                     {[
-                        { label: isTurkish ? 'Su Hatırlatıcı' : 'Water Reminder', key: 'water' as keyof NotificationPrefs },
-                        { label: isTurkish ? 'Antrenman Hatırlatıcı' : 'Workout Reminder', key: 'workout' as keyof NotificationPrefs },
-                        { label: isTurkish ? 'Sağlık Uyarıları' : 'Health Alerts', key: 'health' as keyof NotificationPrefs },
-                        { label: isTurkish ? 'Supplement Hatırlatıcı' : 'Supplement Reminder', key: 'supplement' as keyof NotificationPrefs },
-                        { label: isTurkish ? 'Öğün Hatırlatıcı' : 'Meal Reminder', key: 'meal' as keyof NotificationPrefs },
-                        { label: isTurkish ? 'Sağlık İpuçları' : 'Health Tips', key: 'tips' as keyof NotificationPrefs },
+                        { label: t('water_reminder'), key: 'water' as keyof NotificationPrefs },
+                        { label: t('workout_reminder'), key: 'workout' as keyof NotificationPrefs },
+                        { label: t('health_alerts'), key: 'health' as keyof NotificationPrefs },
+                        { label: t('supplement_reminder'), key: 'supplement' as keyof NotificationPrefs },
+                        { label: t('meal_reminder'), key: 'meal' as keyof NotificationPrefs },
+                        { label: t('health_tips'), key: 'tips' as keyof NotificationPrefs },
+                        { label: isTurkish ? 'Takvim Senkronizasyonu' : 'Calendar Sync', key: 'calendar_sync' as keyof NotificationPrefs },
                     ].map((item, i, arr) => (
                         <View key={i} style={[styles.switchRow, i < arr.length - 1 && styles.itemBorder]}>
                             <Text style={styles.switchLabel}>{item.label}</Text>
@@ -296,7 +330,7 @@ const SettingsScreen = ({ navigation }: any) => {
                 </AnimatedCard>
 
                 {/* PT/Dietitian Data Sharing */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'PT/Diyetisyen Veri Paylaşımı' : 'PT/Dietitian Data Sharing'}</Text>
+                <Text style={styles.sectionTitle}>{t('pt_data_sharing')}</Text>
                 <AnimatedCard style={styles.card}>
                     <TouchableOpacity
                         style={[styles.menuItem, { paddingHorizontal: 16 }]}
@@ -306,22 +340,22 @@ const SettingsScreen = ({ navigation }: any) => {
                         <View style={styles.menuIcon}>
                             <Ionicons name="lock-closed-outline" size={20} color={colors.primary} />
                         </View>
-                        <Text style={styles.menuLabel}>{isTurkish ? 'Gizlilik Tercihlerini Yönet' : 'Manage Privacy Settings'}</Text>
+                        <Text style={styles.menuLabel}>{t('manage_privacy_settings')}</Text>
                         <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
                     </TouchableOpacity>
                 </AnimatedCard>
 
                 {/* Privacy & Legal */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Gizlilik & Yasal' : 'Privacy & Legal'}</Text>
+                <Text style={styles.sectionTitle}>{t('privacy_legal')}</Text>
                 <AnimatedCard style={styles.card}>
                     {[
-                        { icon: 'shield-checkmark-outline', label: isTurkish ? 'Gizlilik Politikası' : 'Privacy Policy', screen: 'Terms', param: 'privacy' },
-                        { icon: 'document-text-outline', label: isTurkish ? 'Kullanım Koşulları' : 'Terms of Service', screen: 'Terms', param: 'terms' },
-                        { icon: 'flag-outline', label: 'KVKK Aydınlatma Metni', screen: 'Terms', param: 'kvkk' },
-                        { icon: 'hand-left-outline', label: isTurkish ? 'Açık Rıza Metni' : 'Explicit Consent', screen: 'Terms', param: 'consent' },
-                        { icon: 'card-outline', label: isTurkish ? 'Abonelik & İade Politikası' : 'Subscription & Refund', screen: 'Terms', param: 'subscription' },
-                        { icon: 'globe-outline', label: isTurkish ? 'Yasal Sözleşmeler (Web)' : 'Legal Agreements (Web)', screen: '__web__', param: 'https://YOUR_DOMAIN.com/legal.html' },
-                        { icon: 'help-circle-outline', label: isTurkish ? 'Yardım & Destek' : 'Help & Support', screen: '__web__', param: 'mailto:app.biosync@gmail.com' },
+                        { icon: 'shield-checkmark-outline', label: t('privacyPolicy'), screen: 'Terms', param: 'privacy' },
+                        { icon: 'document-text-outline', label: t('termsOfService'), screen: 'Terms', param: 'terms' },
+                        { icon: 'flag-outline', label: t('kvkk_text'), screen: 'Terms', param: 'kvkk' },
+                        { icon: 'hand-left-outline', label: t('explicit_consent'), screen: 'Terms', param: 'consent' },
+                        { icon: 'card-outline', label: t('subscription_refund'), screen: 'Terms', param: 'subscription' },
+                        { icon: 'globe-outline', label: t('legal_agreements_web'), screen: '__web__', param: 'https://YOUR_DOMAIN.com/legal.html' },
+                        { icon: 'help-circle-outline', label: t('helpSupport'), screen: '__web__', param: 'mailto:app.nextself@gmail.com' },
                     ].map((item, i, arr) => (
                         <TouchableOpacity
                             key={i}
@@ -339,40 +373,42 @@ const SettingsScreen = ({ navigation }: any) => {
                 </AnimatedCard>
 
                 {/* Danger Zone */}
-                <Text style={[styles.sectionTitle, { color: colors.error }]}>{isTurkish ? 'Tehlike Bölgesi' : 'Danger Zone'}</Text>
+                <Text style={[styles.sectionTitle, { color: colors.error }]}>{t('danger_zone')}</Text>
                 <AnimatedCard style={styles.dangerCard}>
-                    <TouchableOpacity style={styles.deleteRow} onPress={handleDeleteAccount} activeOpacity={0.7}>
-                        <View style={styles.deleteIcon}>
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.deleteRow,
+                            { backgroundColor: pressed ? colors.error + '10' : 'transparent' }
+                        ]}
+                        onPress={handleDeleteAccount}
+                    >
+                        <View style={[styles.deleteIcon, { backgroundColor: colors.errorSoft }]}>
                             <Ionicons name="trash-outline" size={20} color={colors.error} />
                         </View>
                         <Text style={styles.deleteLabel}>
-                            {isTurkish ? 'Hesabı Sil' : 'Delete Account'}
+                            {t('deleteAccount')}
                         </Text>
                         <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                    </TouchableOpacity>
+                    </Pressable>
                     <Text style={styles.deleteHint}>
-                        {isTurkish
-                            ? 'Tüm verileriniz kalıcı olarak silinir. App Store kuralları gereği bu seçenek sunulmaktadır.'
-                            : 'All your data will be permanently deleted. Required by App Store guidelines.'}
+                        {t('delete_account_hint')}
                     </Text>
                 </AnimatedCard>
             </ScrollView>
 
             {/* Re-Authentication Modal for Account Deletion */}
-            <Modal visible={showReAuthModal} transparent animationType="fade">
+            <Modal visible={showReAuthModal} transparent animationType="none">
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
                     <View style={styles.modalCard}>
                         <Text style={styles.modalTitle}>
-                            {isTurkish ? 'Kimlik Doğrulama' : 'Verify Identity'}
+                            {t('verify_identity')}
                         </Text>
                         <Text style={styles.modalDesc}>
-                            {isTurkish
-                                ? 'Hesabınızı silmek için lütfen şifrenizi girin.'
-                                : 'Please enter your password to delete your account.'}
+                            {t('enter_password_delete')}
                         </Text>
                         <TextInput
                             style={styles.modalInput}
-                            placeholder={isTurkish ? 'Şifreniz' : 'Your password'}
+                            placeholder={t('password')}
                             placeholderTextColor={colors.textTertiary}
                             secureTextEntry
                             value={reAuthPassword}
@@ -385,7 +421,7 @@ const SettingsScreen = ({ navigation }: any) => {
                                 style={[styles.modalBtn, styles.modalBtnCancel]}
                                 onPress={() => setShowReAuthModal(false)}
                             >
-                                <Text style={styles.modalBtnCancelText}>{isTurkish ? 'İptal' : 'Cancel'}</Text>
+                                <Text style={styles.modalBtnCancelText}>{t('cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.modalBtn, styles.modalBtnDelete]}
@@ -394,8 +430,8 @@ const SettingsScreen = ({ navigation }: any) => {
                             >
                                 <Text style={styles.modalBtnDeleteText}>
                                     {reAuthLoading
-                                        ? (isTurkish ? 'Siliniyor...' : 'Deleting...')
-                                        : (isTurkish ? 'Hesabı Sil' : 'Delete Account')}
+                                        ? t('loading')
+                                        : t('deleteAccount')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -406,13 +442,14 @@ const SettingsScreen = ({ navigation }: any) => {
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+    container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.md, paddingHorizontal: SPACING.lg, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
     backBtn: { width: 40, height: 40, justifyContent: 'center' },
     headerTitle: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1, textAlign: 'center' },
     content: { paddingHorizontal: SPACING.lg, paddingBottom: 100 },
     sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginTop: SPACING.xxl, marginBottom: SPACING.md },
-    card: { paddingVertical: SPACING.xs },
+    card: { paddingVertical: SPACING.xs, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight },
     langCardContent: { padding: SPACING.md, alignItems: 'center' },
     langToggle: { flexDirection: 'row', backgroundColor: colors.surfaceSecondary, borderRadius: 12, padding: 3, gap: 4, width: '100%' },
     langOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
@@ -425,7 +462,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     menuIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surfaceSecondary, justifyContent: 'center', alignItems: 'center' },
     menuLabel: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
     itemBorder: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-    dangerCard: { paddingVertical: SPACING.xs, borderWidth: 1, borderColor: colors.errorSoft, backgroundColor: colors.error + '05' },
+    dangerCard: { paddingVertical: SPACING.xs, borderWidth: 1, borderColor: colors.errorSoft, backgroundColor: isDark ? colors.error + '12' : colors.error + '05' },
     deleteRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, gap: SPACING.md, paddingHorizontal: SPACING.md },
     deleteIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.errorSoft, justifyContent: 'center', alignItems: 'center' },
     deleteLabel: { ...TYPOGRAPHY.body, color: colors.error, flex: 1 },

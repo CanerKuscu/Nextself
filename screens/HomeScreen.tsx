@@ -1,242 +1,390 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Animated, useWindowDimensions, InteractionManager } from 'react-native';
-import { Image } from 'expo-image'; // Use expo-image for better caching and performance
-import PlatformStorage from '../utils/platformStorage';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Animated, useWindowDimensions, InteractionManager, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
-import { SupabaseService } from '../services/supabase';
-import { StreakService, StreakData } from '../services/streakService';
-import { HealthService, HealthInsight } from '../services/healthService';
-import { getLocalDateString } from '../utils/dateUtils';
-import { LeagueService, LEAGUE_TIERS, UserLeagueData } from '../services/leagueService';
-import { StoreService, UserCurrency } from '../services/storeService';
-import { MissionService, DailyMission } from '../services/missionService';
+import Svg from 'react-native-svg';
+import { SupabaseService } from '@nextself/shared';
+import { LeagueService, LEAGUE_TIERS } from '../services/leagueService';
+import { PaymentService } from '../services/paymentService';
+import PlatformStorage from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, COMMON_STYLES } from '../config/theme';
 import PremiumFeaturesModal from '../components/PremiumFeaturesModal';
 import { useTheme } from '../contexts/ThemeContext';
+import ScreenContainer from '../components/ScreenContainer';
+import { useHomeData } from '../hooks/useHomeData';
+import CustomAlert, { useAlert } from '../components/CustomAlert';
+import { HealthService } from '../services/healthService';
 
 // Import new components
 import HealthInsightCard from '../components/HomeScreen/HealthInsightCard';
-import StreakCard from '../components/HomeScreen/StreakCard';
 import TodayWorkoutsCard from '../components/HomeScreen/TodayWorkoutsCard';
 import DailyMissionsCard from '../components/HomeScreen/DailyMissionsCard';
+import DailyProgramChecklist, { DailyItem } from '../components/HomeScreen/DailyProgramChecklist';
 
-const PREMIUM_POPUP_SHOWN_KEY = 'biosync_premium_popup_shown';
-
-const ActivityRing = memo(({ size, strokeWidth, progress, color, iconName, value, label }: any) => {
-  const { colors, isDark } = useTheme();
-  const s = React.useMemo(() => getStyles(colors), [colors]);
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(progress, 1));
-  return (
-    <View style={{ alignItems: 'center', width: size + 8 }}>
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Svg width={size} height={size} style={{ position: 'absolute' }}>
-          <Circle cx={size / 2} cy={size / 2} r={radius} stroke={color + '20'} strokeWidth={strokeWidth} fill="none" />
-          <Circle cx={size / 2} cy={size / 2} r={radius} stroke={color} strokeWidth={strokeWidth} fill="none"
-            strokeDasharray={`${circumference} ${circumference}`} strokeDashoffset={offset}
-            strokeLinecap="round" transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        </Svg>
-        <Ionicons name={iconName} size={20} color={color} />
-      </View>
-      <Text style={s.ringVal}>{value}</Text>
-      <Text style={s.ringLbl}>{label}</Text>
-    </View>
-  );
-});
+let hasShownPremiumPopupSession = false;
+const HEALTH_CONNECT_STARTUP_PROMPT_KEY = 'NextSelf_health_connect_startup_prompt_v1';
 
 const HomeScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
   const s = React.useMemo(() => getStyles(colors), [colors]);
+  const { t, isTurkish, language } = useTranslation();
+  
+  // Use custom hook for data fetching
+  const { 
+    profile, 
+    streakData, 
+    healthInsights, 
+    todaysWorkouts, 
+    leagueData, 
+    currency, 
+    dailyMissions, 
+    dailyProgram, 
+    loading, 
+    refreshing, 
+    loadData,
+    isOfflineData
+  } = useHomeData(language);
 
   const { width } = useWindowDimensions();
   const CARD_W = (width - 40 - 14) / 2;
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [streakData, setStreakData] = useState<StreakData | null>(null);
-  const [healthInsights, setHealthInsights] = useState<HealthInsight[]>([]);
-  const [todaysWorkouts, setTodaysWorkouts] = useState<any[]>([]);
-  const [leagueData, setLeagueData] = useState<UserLeagueData | null>(null);
-  const [currency, setCurrency] = useState<UserCurrency | null>(null);
-  const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const { t, isTurkish } = useTranslation();
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const { showAlert, AlertComponent } = useAlert();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const supa = SupabaseService.getInstance();
-      const { user } = await supa.getCurrentUser();
-      if (user) {
-        let profileData: any = null;
-        try {
-          const { data } = await supa.getUserProfile(user.id);
-          profileData = data;
-          setProfile(data);
-        } catch (error) {
-          console.error('Failed to load user profile:', error);
-          // Set default profile data to prevent UI crashes
-          setProfile({
-            id: user.id,
-            email: user.email,
-            full_name: 'User',
-            username: `user_${user.id.slice(0, 8)}`
-          });
-        }
-
-        const today = getLocalDateString();
-
-        // Run all independent data fetches concurrently to massively boost loading speed
-        await Promise.allSettled([
-          (async () => {
-            try {
-              const streak = await StreakService.getInstance().getStreak();
-              setStreakData(streak);
-            } catch (error) {
-              console.error('Failed to load streak data:', error);
-              setStreakData({
-                currentStreak: 0,
-                longestStreak: 0,
-                lastWorkoutDate: null,
-                lastRestDate: null,
-                isRestDay: false
-              });
-            }
-          })(),
-          (async () => {
-            try {
-              const hs = HealthService.getInstance();
-              await hs.initialize();
-              const hData = await hs.getTodayHealthData();
-              setHealthInsights(hs.generateHealthInsights(hData, profileData?.gender || null));
-            } catch (error) {
-              console.error('Failed to load health insights:', error);
-              setHealthInsights([]);
-            }
-          })(),
-          (async () => {
-            try {
-              const { data: wk } = await supa.getClient().from('workouts').select('*').eq('user_id', user.id).gte('created_at', today + 'T00:00:00').order('created_at', { ascending: false }).limit(5);
-              if (wk) setTodaysWorkouts(wk);
-            } catch (error) {
-              console.error('Failed to load today\'s workouts:', error);
-              setTodaysWorkouts([]);
-            }
-          })(),
-          (async () => {
-            try {
-              const ld = await LeagueService.getInstance().getUserLeague();
-              setLeagueData(ld);
-            } catch (error) {
-              console.error('Failed to load league data:', error);
-              setLeagueData(null);
-            }
-          })(),
-          (async () => {
-            try {
-              const cur = await StoreService.getInstance().getUserCurrency();
-              setCurrency(cur);
-            } catch (error) {
-              console.error('Failed to load user currency:', error);
-              setCurrency(null);
-            }
-          })(),
-          (async () => {
-            try {
-              const dm = await MissionService.getInstance().getDailyMissions();
-              setDailyMissions(dm);
-            } catch (error) {
-              console.error('Failed to load daily missions:', error);
-              setDailyMissions([]);
-            }
-          })()
-        ]);
-      }
-    } catch (error) {
-      console.error('Failed to load home screen data:', error);
-      // Set default values to prevent UI crashes
-      setProfile(null);
-      setStreakData({ currentStreak: 0, longestStreak: 0, lastWorkoutDate: null, lastRestDate: null, isRestDay: false });
-      setHealthInsights([]);
-      setTodaysWorkouts([]);
-      setLeagueData(null);
-      setCurrency(null);
-      setDailyMissions([]);
-    } finally {
-      setLoading(false);
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ]).start();
-    }
-  }, []);
-
+  // Initial load
   useEffect(() => {
-    // Defer loading slightly so navigation animation feels snappy
-    const interactionPromise = InteractionManager.runAfterInteractions(() => {
-      loadData();
-    });
-    return () => interactionPromise.cancel();
+    loadData();
+    checkForPendingSessions();
   }, [loadData]);
 
-  // Show premium popup on first launch
-  useEffect(() => {
-    const checkPremiumPopup = async (): Promise<NodeJS.Timeout | null | undefined> => {
-      try {
-        const shown = await PlatformStorage.getItem(PREMIUM_POPUP_SHOWN_KEY);
-        if (!shown) {
-          const timeoutId = setTimeout(() => setShowPremiumModal(true), 1500);
-          await PlatformStorage.setItem(PREMIUM_POPUP_SHOWN_KEY, 'true');
-          return timeoutId;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    };
-    let timeoutId: NodeJS.Timeout | null = null;
-    checkPremiumPopup().then(id => { if (id) timeoutId = id; });
+  const checkForPendingSessions = async () => {
+    try {
+      const supabase = SupabaseService.getInstance().getClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      // 1. Get active relationships
+      const { data: relationships } = await supabase
+        .from('client_relationships')
+        .select(`
+          id, 
+          professional_profiles:professional_id(first_name, last_name),
+          trainer_profiles:trainer_id(first_name, last_name),
+          dietitian_profiles:dietitian_id(first_name, last_name)
+        `)
+        .eq('client_id', user.id)
+        .eq('status', 'active');
+
+      if (!relationships || relationships.length === 0) return;
+
+      const relIds = relationships.map((r: any) => r.id);
+
+      // 2. Check for pending session requests
+      const { data: sessions } = await supabase
+        .from('session_checkins')
+        .select('*')
+        .in('client_relationship_id', relIds)
+        .eq('is_verified', false)
+        .ilike('qr_token', 'REQ-%') // Case insensitive like
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (sessions && sessions.length > 0) {
+        const session = sessions[0];
+        const rel = relationships.find((r: any) => r.id === session.client_relationship_id);
+        
+        // Extract name from any possible relation
+        // @ts-ignore
+        const profArray = rel?.professional_profiles || rel?.trainer_profiles || rel?.dietitian_profiles;
+        const prof = Array.isArray(profArray) ? profArray[0] : profArray;
+        const profName = prof ? `${prof.first_name} ${prof.last_name || ''}` : (isTurkish ? 'Eğitmeniniz' : 'Your Trainer');
+
+        showAlert({
+          title: isTurkish ? 'Oturum İsteği' : 'Session Request',
+          message: isTurkish
+            ? `${profName} bir oturum başlatmak istiyor. Onaylıyor musunuz?`
+            : `${profName} wants to start a session. Do you approve?`,
+          type: 'confirm',
+          icon: 'timer-outline',
+          buttons: [
+            {
+              text: isTurkish ? 'Reddet' : 'Deny',
+              style: 'destructive',
+              onPress: () => handleDenySession(session.id)
+            },
+            {
+              text: isTurkish ? 'Onayla' : 'Approve',
+              onPress: () => handleApproveSession(session.id)
+            }
+          ]
+        });
+      }
+    } catch (err) {
+      console.error('Check pending sessions error:', err);
+    }
+  };
+
+  const handleApproveSession = async (sessionId: string) => {
+    try {
+      const { error } = await SupabaseService.getInstance().getClient()
+        .from('session_checkins')
+        .update({
+          is_verified: true,
+          checkin_time: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      showAlert({
+        title: isTurkish ? 'Başarılı' : 'Success',
+        message: isTurkish ? 'Oturum başarıyla onaylandı!' : 'Session approved successfully!',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error(err);
+      showAlert({ title: isTurkish ? 'Hata' : 'Error', message: 'Failed to approve session', type: 'error' });
+    }
+  };
+
+  const handleDenySession = async (sessionId: string) => {
+    try {
+      const { error } = await SupabaseService.getInstance().getClient()
+        .from('session_checkins')
+        .delete()
+        .eq('id', sessionId);
+
+      if (error) throw error;
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const showHealthConnectPrompt = useCallback(async () => {
+    try {
+      const healthService = HealthService.getInstance();
+      await healthService.initialize();
+      const status = await healthService.getConnectionStatus();
+      if (status.apple || status.google) return;
+
+      const promptShown = await PlatformStorage.getItem(HEALTH_CONNECT_STARTUP_PROMPT_KEY);
+      if (promptShown === '1') return;
+
+      if (Platform.OS === 'ios') {
+        const autoAppleResult = await healthService.connectAppleHealth();
+        if (autoAppleResult.success) {
+          await PlatformStorage.setItem(HEALTH_CONNECT_STARTUP_PROMPT_KEY, '1');
+          showAlert({
+            type: 'success',
+            title: isTurkish ? 'Apple Health Bağlandı' : 'Apple Health Connected',
+            message: isTurkish ? 'Apple Health bağlantısı otomatik olarak kuruldu.' : 'Apple Health was connected automatically.',
+            buttons: [{ text: 'OK' }]
+          });
+          loadData(true);
+          return;
+        }
+      } else if (Platform.OS === 'android') {
+        const autoGoogleResult = await healthService.connectGoogleHealth();
+        if (autoGoogleResult.success) {
+          await PlatformStorage.setItem(HEALTH_CONNECT_STARTUP_PROMPT_KEY, '1');
+          showAlert({
+            type: 'success',
+            title: isTurkish ? 'Health Connect Bağlandı' : 'Health Connect Connected',
+            message: isTurkish ? 'Google Health Connect bağlantısı otomatik olarak kuruldu.' : 'Google Health Connect was connected automatically.',
+            buttons: [{ text: 'OK' }]
+          });
+          loadData(true);
+          return;
+        }
+      }
+
+      await PlatformStorage.setItem(HEALTH_CONNECT_STARTUP_PROMPT_KEY, '1');
+      const isIOS = Platform.OS === 'ios';
+
+      const connectIOS = async () => {
+        const appleResult = await healthService.connectAppleHealth();
+        if (appleResult.success) {
+          showAlert({
+            type: 'success',
+            title: isTurkish ? 'Apple Health Bağlandı' : 'Apple Health Connected',
+            message: isTurkish ? 'Sağlık bağlantısı kuruldu.' : 'Health connection established.',
+            buttons: [{ text: 'OK' }]
+          });
+          loadData(true);
+        } else {
+          showAlert({
+            type: 'error',
+            title: isTurkish ? 'Bağlantı Hatası' : 'Connection Error',
+            message: appleResult.error || (isTurkish ? 'Bağlantı kurulamadı.' : 'Connection failed.'),
+            buttons: [{ text: 'OK' }]
+          });
+        }
+      };
+
+      const connectAndroid = async () => {
+        const googleResult = await healthService.connectGoogleHealth();
+        if (googleResult.success) {
+          showAlert({
+            type: 'success',
+            title: isTurkish ? 'Health Connect Bağlandı' : 'Health Connect Connected',
+            message: isTurkish ? 'Sağlık bağlantısı kuruldu.' : 'Health connection established.',
+            buttons: [{ text: 'OK' }]
+          });
+          loadData(true);
+          return;
+        }
+
+        if (googleResult.needsInstall) {
+          showAlert({
+            type: 'warning',
+            title: isTurkish ? 'Health Connect Gerekli' : 'Health Connect Required',
+            message: isTurkish
+              ? 'Google Health Connect uygulaması yüklü değil. Play Store üzerinden yükleyebilirsiniz.'
+              : 'Google Health Connect is not installed. You can install it from the Play Store.',
+            buttons: [
+              { text: isTurkish ? 'Yükle' : 'Install', onPress: () => healthService.openHealthConnectInstall() },
+              { text: isTurkish ? 'Vazgeç' : 'Cancel', style: 'cancel' },
+            ],
+          });
+          return;
+        }
+
+        if (googleResult.needsPermission) {
+          showAlert({
+            type: 'confirm',
+            title: isTurkish ? 'İzin Gerekli' : 'Permission Required',
+            message: isTurkish
+              ? 'Health Connect izinlerini açmanız gerekiyor.'
+              : 'You need to enable Health Connect permissions.',
+            buttons: [
+              { text: isTurkish ? 'Ayarları Aç' : 'Open Settings', onPress: () => healthService.openHealthConnectSettings() },
+              { text: isTurkish ? 'Vazgeç' : 'Cancel', style: 'cancel' },
+            ],
+          });
+          return;
+        }
+
+        showAlert({
+          type: 'error',
+          title: isTurkish ? 'Bağlantı Hatası' : 'Connection Error',
+          message: googleResult.error || (isTurkish ? 'Bağlantı kurulamadı.' : 'Connection failed.'),
+          buttons: [{ text: 'OK' }]
+        });
+      };
+
+      showAlert({
+        title: isIOS
+          ? (isTurkish ? 'Apple Health Bağlantısı' : 'Apple Health Connection')
+          : (isTurkish ? 'Health Connect Bağlantısı' : 'Health Connect Connection'),
+        message: isTurkish
+          ? (isIOS
+            ? 'Apple Health verilerini otomatik senkronize etmek için şimdi bağlanmak ister misin?'
+            : 'Google Health Connect verilerini otomatik senkronize etmek için şimdi bağlanmak ister misin?')
+          : (isIOS
+            ? 'Would you like to connect Apple Health now to sync your data automatically?'
+            : 'Would you like to connect Google Health Connect now to sync your data automatically?'),
+        type: 'confirm',
+        buttons: [
+          { text: isTurkish ? 'Sonra' : 'Later', style: 'cancel' },
+          {
+            text: isIOS
+              ? (isTurkish ? 'Apple Health’e Bağlan' : 'Connect Apple Health')
+              : (isTurkish ? 'Health Connect’e Bağlan' : 'Connect Health Connect'),
+            onPress: async () => {
+              if (isIOS) {
+                await connectIOS();
+              } else {
+                await connectAndroid();
+              }
+            },
+          },
+        ],
+      });
+    } catch (err) {
+      console.warn('Health startup prompt error:', err);
+    }
+  }, [isTurkish, showAlert, loadData]);
+
+  // Check premium status and show popup on first app launch only (per session)
+  useEffect(() => {
+    const checkFirstLaunchPremium = async () => {
+      try {
+        const { user } = await SupabaseService.getInstance().getCurrentUser();
+        if (user) {
+          // Use session variable instead of persistent storage
+          if (!hasShownPremiumPopupSession) {
+            const isPremium = await PaymentService.getInstance().hasPremiumFeatures(user.id);
+            if (!isPremium) {
+              setShowPremiumModal(true);
+              hasShownPremiumPopupSession = true;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('First launch premium check error:', err);
       }
     };
-  }, []);
+
+    if (!loading && profile) {
+      checkFirstLaunchPremium();
+      showHealthConnectPrompt();
+    }
+  }, [loading, profile, showHealthConnectPrompt]);
+
+  const onRefresh = useCallback(() => {
+    loadData(true);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!loading) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading, fadeAnim]);
 
   const handleClosePremiumModal = () => setShowPremiumModal(false);
 
-  const onRefresh = useCallback(async () => { setRefreshing(true); await loadData(); setRefreshing(false); }, [loadData]);
+  const handleToggleItem = (id: string, type: 'workout' | 'meal' | 'supplement', currentStatus: boolean) => {
+    if (currentStatus) return;
 
-  if (loading) {
+    if (type === 'workout') {
+      navigation.navigate('ActiveWorkout', { workoutId: id, assignmentId: id });
+    } else if (type === 'meal') {
+      navigation.navigate('Nutrition', { planId: id });
+    } else if (type === 'supplement') {
+      navigation.navigate('Supplement', { supplementId: id });
+    }
+  };
+
+  if (loading && !isOfflineData) {
     return (<View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}><ActivityIndicator size="large" color={colors.primary} /></View>);
   }
 
-  const name = profile?.full_name || profile?.first_name || profile?.username || (isTurkish ? 'Sporcu' : 'Athlete');
+  const name = profile?.full_name || profile?.first_name || profile?.username || t('athlete');
   const streak = streakData?.currentStreak || 0;
-  const tierInfo = leagueData ? LEAGUE_TIERS.find(l => l.tier === leagueData.current_tier) || LEAGUE_TIERS[0] : LEAGUE_TIERS[0];
+  const tierInfo = leagueData ? LEAGUE_TIERS.find(l => l.tier === leagueData.currentTier) || LEAGUE_TIERS[0] : LEAGUE_TIERS[0];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScreenContainer edges={['top', 'left', 'right']}>
+      <AlertComponent />
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12 }]}
+        contentContainerStyle={[s.scroll, { paddingBottom: 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View style={{ opacity: fadeAnim }}>
 
           {/* ─── HEADER ─── */}
-          <View style={s.header}>
+          <View style={[s.header, { marginTop: 12 }]}>
             <View>
-              <Text style={s.greeting}>{isTurkish ? 'Merhaba,' : 'Hello,'}</Text>
+              <Text style={s.greeting}>{t('hello')}</Text>
               <Text style={s.name}>{name}</Text>
             </View>
             <View style={s.headerRight}>
@@ -259,26 +407,29 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
           </View>
 
-          {/* ─── STREAK CARD ─── */}
-          <StreakCard streakData={streakData} />
-
           {/* ─── GAMIFICATION BAR (League + XP) ─── */}
           <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('League')} style={s.gamifBar}>
             <View style={s.gamifLeft}>
               <Text style={{ fontSize: 22 }}>{tierInfo.icon}</Text>
               <View style={{ marginLeft: 10 }}>
-                <Text style={s.gamifLeague}>{isTurkish ? tierInfo.nameTr : tierInfo.name}</Text>
-                <Text style={s.gamifRank}>{isTurkish ? 'Lig' : 'League'}</Text>
+                <Text style={s.gamifLeague}>{t(`tier_${tierInfo.name.toLowerCase()}` as any)}</Text>
+                <Text style={s.gamifRank}>{t('league')}</Text>
               </View>
             </View>
             <View style={s.gamifRight}>
               <View style={s.xpBarOuter}>
-                <View style={[s.xpBarInner, { width: `${Math.min((leagueData?.weekly_xp || 0) / 500 * 100, 100)}%` }]} />
+                <View style={[s.xpBarInner, { width: `${Math.min((leagueData?.weeklyXp || 0) / 500 * 100, 100)}%` }]} />
               </View>
-              <Text style={s.xpText}>{leagueData?.weekly_xp || 0} XP</Text>
+              <Text style={s.xpText}>{leagueData?.weeklyXp || 0} XP</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
           </TouchableOpacity>
+
+          {/* ─── DAILY PROGRAM CHECKLIST ─── */}
+          <DailyProgramChecklist
+            items={dailyProgram}
+            onToggle={(id, type, status) => handleToggleItem(id, type, status)}
+          />
 
           {/* ─── DAILY MISSIONS ─── */}
           <DailyMissionsCard
@@ -287,21 +438,23 @@ const HomeScreen = ({ navigation }: any) => {
           />
 
           {/* ─── TODAY'S WORKOUT ─── */}
-          <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('Workout')}>
-            <LinearGradient colors={['#667eea', '#764ba2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
-              <View style={s.heroTag}>
-                <Text style={s.heroTagText}>{isTurkish ? 'ANTRENMANA BAŞLA' : 'START WORKOUT'}</Text>
-              </View>
-              <Text style={s.heroTitle}>{isTurkish ? 'Antrenman' : 'Workout'}</Text>
-              <Text style={s.heroMeta}>{isTurkish ? 'Kas gruplarını seç ve başla' : 'Select muscle groups and begin'}</Text>
-              <View style={s.heroBottom}>
-                <View style={s.heroBtn}>
-                  <Ionicons name="play" size={16} color={colors.background} />
-                  <Text style={s.heroBtnText}>{isTurkish ? 'Başla' : 'Start'}</Text>
+          {todaysWorkouts && todaysWorkouts.length > 0 ? (
+            <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('ActiveWorkout', { workoutId: todaysWorkouts[0].id })}>
+              <LinearGradient colors={['#667eea', '#764ba2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
+                <View style={s.heroTag}>
+                  <Text style={s.heroTagText}>{t('todays_workout_caps')}</Text>
                 </View>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+                <Text style={s.heroTitle}>{todaysWorkouts[0].name || t('workout')}</Text>
+                <Text style={s.heroMeta}>{t('todays_workout_subtitle')}</Text>
+                <View style={s.heroBottom}>
+                  <View style={s.heroBtn}>
+                    <Ionicons name="play" size={16} color={colors.background} />
+                    <Text style={s.heroBtnText}>{t('start')}</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : null}
 
           {/* ─── HEALTH INSIGHTS ─── */}
           <HealthInsightCard
@@ -311,77 +464,79 @@ const HomeScreen = ({ navigation }: any) => {
           />
 
           {/* ─── TODAY'S WORKOUT PROGRAMS ─── */}
+          {/* Duplicate section removed as per user request
           <TodayWorkoutsCard
             workouts={todaysWorkouts}
             onWorkoutPress={(workout) => navigation.navigate('ActiveWorkout', { workoutId: workout.id })}
           />
+          */}
 
           {/* ─── QUICK ACTIONS ─── */}
-          <Text style={s.sectionTitle}>{isTurkish ? 'Hızlı Erişim' : 'Quick Actions'}</Text>
+          <Text style={s.sectionTitle}>{t('quick_actions')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.quickScroll}>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('ProgramCreator')} activeOpacity={0.7}>
+            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Sports')} activeOpacity={0.7}>
               <LinearGradient colors={['#58CC02', '#38a800']} style={s.quickIconWrap}><Ionicons name="sparkles" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Program' : 'Program'}</Text>
+              <Text style={s.quickLabel}>{t('workout')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('FoodScanner')} activeOpacity={0.7}>
               <LinearGradient colors={['#FF9600', '#FF6B6B']} style={s.quickIconWrap}><Ionicons name="scan" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Yemek Tara' : 'Scan Food'}</Text>
+              <Text style={s.quickLabel}>{t('scan_food')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Nutrition')} activeOpacity={0.7}>
               <LinearGradient colors={['#89f7fe', '#66a6ff']} style={s.quickIconWrap}><Ionicons name="restaurant" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Beslenme' : 'Nutrition'}</Text>
+              <Text style={s.quickLabel}>{t('nutrition')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('ProfessionalSearch')} activeOpacity={0.7}>
               <LinearGradient colors={['#38ef7d', '#11998e']} style={s.quickIconWrap}><Ionicons name="people" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'PT Bul' : 'Find PT'}</Text>
+              <Text style={s.quickLabel}>{t('find_pt')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Health')} activeOpacity={0.7}>
               <LinearGradient colors={['#f093fb', '#f5576c']} style={s.quickIconWrap}><Ionicons name="heart" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Sağlık' : 'Health'}</Text>
+              <Text style={s.quickLabel}>{t('health')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Supplements')} activeOpacity={0.7}>
               <LinearGradient colors={['#CE82FF', '#764ba2']} style={s.quickIconWrap}><Ionicons name="medkit" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Supplement' : 'Supplements'}</Text>
+              <Text style={s.quickLabel}>{t('supplements')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('WaterTracking')} activeOpacity={0.7}>
               <LinearGradient colors={['#1CB0F6', '#0077CC']} style={s.quickIconWrap}><Ionicons name="water" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Su Takibi' : 'Water'}</Text>
+              <Text style={s.quickLabel}>{t('water_tracking')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Assignments')} activeOpacity={0.7}>
               <LinearGradient colors={['#FFC800', '#FF9600']} style={s.quickIconWrap}><Ionicons name="clipboard" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{isTurkish ? 'Ödevler' : 'Tasks'}</Text>
+              <Text style={s.quickLabel}>{t('tasks')}</Text>
             </TouchableOpacity>
           </ScrollView>
 
           {/* ─── EXPLORE CARDS ─── */}
-          <Text style={s.sectionTitle}>{isTurkish ? 'Keşfet' : 'Explore'}</Text>
+          <Text style={s.sectionTitle}>{t('explore')}</Text>
           <View style={s.catGrid}>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Workout')}>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Sports')}>
               <LinearGradient colors={['#a18cd1', '#fbc2eb']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
                 <View style={s.catIconBg}><Ionicons name="barbell" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{isTurkish ? 'Antrenman' : 'Workout'}</Text>
-                <Text style={s.catSub}>{isTurkish ? 'Egzersiz programları' : 'Exercise programs'}</Text>
+                <Text style={s.catTitle}>{t('workout')}</Text>
+                <Text style={s.catSub}>{t('exercise_programs')}</Text>
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Nutrition')}>
               <LinearGradient colors={['#89f7fe', '#66a6ff']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
                 <View style={s.catIconBg}><Ionicons name="restaurant" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{isTurkish ? 'Beslenme' : 'Nutrition'}</Text>
-                <Text style={s.catSub}>{isTurkish ? 'Besin takibi' : 'Track food'}</Text>
+                <Text style={s.catTitle}>{t('nutrition')}</Text>
+                <Text style={s.catSub}>{t('track_food')}</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('AITools')}>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('AIToolsStack')}>
               <LinearGradient colors={['#f093fb', '#f5576c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
                 <View style={s.catIconBg}><Ionicons name="sparkles" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{isTurkish ? 'AI Araçları' : 'AI Tools'}</Text>
-                <Text style={s.catSub}>{isTurkish ? 'Koç, diyet, şef' : 'Coach, diet, chef'}</Text>
+                <Text style={s.catTitle}>{t('ai_tools')}</Text>
+                <Text style={s.catSub}>{t('coach_diet_chef')}</Text>
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('ProfessionalSearch')}>
               <LinearGradient colors={['#38ef7d', '#11998e']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
                 <View style={s.catIconBg}><Ionicons name="people" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{isTurkish ? 'PT / Diyet' : 'PT / Diet'}</Text>
-                <Text style={s.catSub}>{isTurkish ? 'Uzman bul' : 'Find pros'}</Text>
+                <Text style={s.catTitle}>{t('pt_diet')}</Text>
+                <Text style={s.catSub}>{t('find_pros')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -392,9 +547,13 @@ const HomeScreen = ({ navigation }: any) => {
 
       <PremiumFeaturesModal
         visible={showPremiumModal}
-        onClose={handleClosePremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        onUpgrade={() => {
+          setShowPremiumModal(false);
+          navigation.navigate('Store');
+        }}
       />
-    </View>
+    </ScreenContainer>
   );
 };
 
@@ -420,14 +579,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   xpBarInner: { height: 8, backgroundColor: '#FFC800', borderRadius: 4 },
   xpText: { fontSize: 11, fontWeight: '700', color: '#FFC800' },
   // Daily missions
-  missionCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F0F0F0' },
-  missionLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  missionIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#FFF5F0', justifyContent: 'center', alignItems: 'center' },
-  missionTitle: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  missionProgressOuter: { height: 5, backgroundColor: '#E5E5E5', borderRadius: 3, width: '90%' },
-  missionProgressInner: { height: 5, backgroundColor: '#58CC02', borderRadius: 3 },
-  missionReward: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FFFBEB', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  missionXp: { fontSize: 12, fontWeight: '700', color: '#FFC800' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 14 },
   ringVal: { fontSize: 13, fontWeight: '700', color: colors.text, marginTop: 6 },
   ringLbl: { fontSize: 10, fontWeight: '500', color: colors.textTertiary, marginTop: 1 },

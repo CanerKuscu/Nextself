@@ -1,4 +1,4 @@
-// BioSync — Clean White Light Theme (Duolingo-Inspired)
+// NextSelf — Clean White Light Theme (Duolingo-Inspired)
 
 export const COLORS = {
   // Primary — Fresh Green
@@ -63,33 +63,66 @@ export const COLORS = {
 };
 
 export const DARK_COLORS = {
-  ...COLORS,
-  // Backgrounds
+  // Primary — Fresh Green (keep same)
+  primary: '#58CC02',
+  primaryLight: '#89E219',
+  primaryDark: '#46A302',
+  primaryGlow: 'rgba(88, 204, 2, 0.25)',
+  primarySoft: 'rgba(88, 204, 2, 0.12)',
+
+  // Secondary — Vivid Purple (keep same)
+  secondary: '#CE82FF',
+  secondaryLight: '#DDA0FF',
+  secondaryDark: '#A855F7',
+  secondarySoft: 'rgba(206, 130, 255, 0.12)',
+
+  // Accent — Sky Blue (keep same)
+  accent: '#1CB0F6',
+  accentLight: '#4FC3F7',
+  accentDark: '#0D8ECF',
+  accentSoft: 'rgba(28, 176, 246, 0.12)',
+
+  // Backgrounds — Dark
   background: '#0F0F1A',
   surface: '#1A1A2E',
   surfaceElevated: '#252540',
   surfaceSecondary: '#16162B',
   cardGlass: '#1E1E35',
-  // Text
+
+  // Text — Light
   text: '#F0F0F5',
   textSecondary: '#A0A0B8',
   textTertiary: '#6B6B80',
   textInverse: '#0F0F1A',
+  textAccent: '#58CC02',
+
   // Borders
   border: '#2D2D45',
   borderLight: '#252540',
-  // Status soft
+  borderFocus: '#58CC02',
+
+  // Status
+  success: '#58CC02',
+  warning: '#FFC800',
+  error: '#FF4B4B',
+  info: '#1CB0F6',
   successSoft: 'rgba(88, 204, 2, 0.15)',
   warningSoft: 'rgba(255, 200, 0, 0.15)',
   errorSoft: 'rgba(255, 75, 75, 0.15)',
   infoSoft: 'rgba(28, 176, 246, 0.15)',
-  primarySoft: 'rgba(88, 204, 2, 0.12)',
-  secondarySoft: 'rgba(206, 130, 255, 0.12)',
-  accentSoft: 'rgba(28, 176, 246, 0.12)',
-  primaryGlow: 'rgba(88, 204, 2, 0.25)',
+
+  // Premium & Accents
+  customPurple: '#CE82FF',
+  orange: '#FF9600',
+  pink: '#FF86D0',
+  teal: '#00CD9C',
+  gold: '#FFC800',
+
+  // Dashboard specifics
+  streak: '#FF9600',
   overlay: 'rgba(0, 0, 0, 0.6)',
   overlayLight: 'rgba(0, 0, 0, 0.3)',
-};
+} as const;
 
 export const GRADIENTS: { [key: string]: string[] } = {
   primary: ['#58CC02', '#46A302'],
@@ -165,6 +198,12 @@ export const TYPOGRAPHY = {
     letterSpacing: 0.2,
     lineHeight: 14,
   },
+  smallBold: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    letterSpacing: 0.2,
+    lineHeight: 14,
+  },
   button: {
     fontSize: 16,
     fontWeight: '700' as const,
@@ -173,15 +212,27 @@ export const TYPOGRAPHY = {
   },
 };
 
+// NextSelf — Clean White Light Theme (Duolingo-Inspired)
+// STRICT 8PX GRID SYSTEM — All spacing values must be multiples of 8
+
+export const GRID = {
+  unit: 8,
+  get: (multiplier: number) => multiplier * 8,
+};
+
 export const SPACING = {
-  xs: 6,
-  sm: 10,
-  md: 16,
-  lg: 20,
-  xl: 28,
-  xxl: 40,
-  xxxl: 56,
-  section: 80,
+  // Strict 8px grid system
+  xs: 8,      // 8px — minimal spacing
+  sm: 16,     // 16px — tight spacing
+  md: 24,     // 24px — standard spacing
+  lg: 32,     // 32px — comfortable spacing
+  xl: 40,     // 40px — large spacing
+  xxl: 48,    // 48px — extra large
+  xxxl: 64,   // 64px — section breaks
+  section: 80, // 80px — major section divisions
+  // Half-unit for fine-tuning (use sparingly)
+  half: 4,
+  quarter: 2,
 };
 
 export const BORDER_RADIUS = {
@@ -297,9 +348,10 @@ export const COMMON_STYLES = {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  // 8px Grid aligned chip
   chip: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.pill,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -316,14 +368,16 @@ export const COMMON_STYLES = {
   chipActiveText: {
     color: COLORS.primary,
   },
+  // 8px Grid aligned divider
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
     marginVertical: SPACING.md,
   },
+  // 8px Grid aligned badge
   badge: {
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingVertical: SPACING.half,
     borderRadius: BORDER_RADIUS.pill,
     backgroundColor: COLORS.primary,
   },
@@ -332,4 +386,16 @@ export const COMMON_STYLES = {
     color: COLORS.textInverse,
     fontWeight: '700',
   },
+  // Visual hierarchy helpers
+  stackXs: { gap: SPACING.xs },
+  stackSm: { gap: SPACING.sm },
+  stackMd: { gap: SPACING.md },
+  stackLg: { gap: SPACING.lg },
+  stackXl: { gap: SPACING.xl },
+  // Inset helpers for consistent padding
+  insetXs: { padding: SPACING.xs },
+  insetSm: { padding: SPACING.sm },
+  insetMd: { padding: SPACING.md },
+  insetLg: { padding: SPACING.lg },
+  insetXl: { padding: SPACING.xl },
 };

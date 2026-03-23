@@ -1,9 +1,12 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
+import { SupabaseService } from '@nextself/shared';
+import { getLocalDateString } from '../utils/dateUtils';
 
-const WATER_KEY = 'biosync_water_tracking';
-const WATER_NOTIF_KEY = 'biosync_water_notif_ids';
+const WATER_KEY = 'nextself_water_tracking';
+const WATER_NOTIF_KEY = 'nextself_water_notif_ids';
+const LANGUAGE_KEY = 'nextself_language';
 
 export interface WaterConfig {
     dailyGoalLiters: number;
@@ -12,6 +15,7 @@ export interface WaterConfig {
     endHour: number;
     currentIntakeMl: number;
     date: string;
+    drinkCount: number;
 }
 
 export interface WaterStats {
@@ -21,6 +25,7 @@ export interface WaterStats {
     remainingMl: number;
     notificationCount: number;
     nextNotifTime: string | null;
+    drinkCount: number;
 }
 
 const DEFAULT_CONFIG: WaterConfig = {
@@ -30,10 +35,27 @@ const DEFAULT_CONFIG: WaterConfig = {
     endHour: 22,
     currentIntakeMl: 0,
     date: new Date().toDateString(),
+    drinkCount: 0,
 };
 
 export class WaterTrackingService {
     private static instance: WaterTrackingService;
+    private responseSubscription: Notifications.Subscription | null = null;
+
+    private constructor() {
+        this.initializeInteractiveNotifications();
+        this.setupActionListener();
+    }
+
+    private async initializeInteractiveNotifications() {
+        try {
+            const config = await this.getConfig();
+            const language = await PlatformStorage.getItem(LANGUAGE_KEY);
+            await this.setupInteractiveNotifications(config.mlPerSip, language === 'tr');
+        } catch {
+            await this.setupInteractiveNotifications();
+        }
+    }
 
     static getInstance(): WaterTrackingService {
         if (!WaterTrackingService.instance) {
@@ -42,15 +64,43 @@ export class WaterTrackingService {
         return WaterTrackingService.instance;
     }
 
+    private setupActionListener() {
+        if (this.responseSubscription) {
+            this.responseSubscription.remove();
+            this.responseSubscription = null;
+        }
+
+        this.responseSubscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+            const action = response.actionIdentifier;
+            const contentData = response.notification.request.content.data as { type?: string; mlAmount?: number } | undefined;
+            if (contentData?.type !== 'water') return;
+
+            if (action === 'drank_water') {
+                const amount = Number(contentData?.mlAmount || 0);
+                await this.drinkWater(amount > 0 ? amount : undefined);
+            }
+        });
+    }
+
     async getConfig(): Promise<WaterConfig> {
         try {
             const stored = await PlatformStorage.getItem(WATER_KEY);
             if (stored) {
-                const config = JSON.parse(stored) as WaterConfig;
+                const parsed = JSON.parse(stored);
+                // Merge with default config to ensure all fields exist
+                const config: WaterConfig = {
+                    ...DEFAULT_CONFIG,
+                    ...parsed,
+                };
+
                 const today = new Date().toDateString();
+                
+                // Also check if stored date format is old (Date().toDateString()) vs new (YYYY-MM-DD) if we change it.
+                // But let's stick to toDateString() for now to avoid breaking existing logic unless we migrate fully.
+                
                 if (config.date !== today) {
                     // New day — reset intake
-                    const newConfig = { ...config, currentIntakeMl: 0, date: today };
+                    const newConfig = { ...config, currentIntakeMl: 0, drinkCount: 0, date: today };
                     await this.saveConfig(newConfig);
                     return newConfig;
                 }
@@ -72,8 +122,10 @@ export class WaterTrackingService {
         const updated = {
             ...config,
             currentIntakeMl: config.currentIntakeMl + ml,
+            drinkCount: (config.drinkCount || 0) + 1,
         };
         await this.saveConfig(updated);
+        this.syncToSupabase(updated);
         return updated;
     }
 
@@ -83,9 +135,33 @@ export class WaterTrackingService {
         const updated = {
             ...config,
             currentIntakeMl: Math.max(0, config.currentIntakeMl - ml),
+            drinkCount: Math.max(0, (config.drinkCount || 0) - 1),
         };
         await this.saveConfig(updated);
+        this.syncToSupabase(updated);
         return updated;
+    }
+
+    private async syncToSupabase(config: WaterConfig) {
+        try {
+            const supabase = SupabaseService.getInstance().getClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            
+            // Convert to YYYY-MM-DD for DB
+            // config.date is "Mon Mar 15 2026" usually.
+            // But we should use getLocalDateString() to be safe and consistent with DB format.
+            const dateStr = getLocalDateString(new Date()); 
+            
+            await supabase.from('water_logs').upsert({
+                user_id: user.id,
+                date: dateStr,
+                amount_ml: config.currentIntakeMl,
+                goal_ml: config.dailyGoalLiters * 1000,
+                drink_count: config.drinkCount,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,date' });
+        } catch (err) { console.warn('Water sync error:', err); }
     }
 
     getStats(config: WaterConfig): WaterStats {
@@ -112,11 +188,13 @@ export class WaterTrackingService {
             remainingMl: Math.max(0, dailyGoalMl - config.currentIntakeMl),
             notificationCount: totalIntervals,
             nextNotifTime,
+            drinkCount: config.drinkCount || 0,
         };
     }
 
     async scheduleWaterNotifications(config: WaterConfig, gender: 'male' | 'female' | null, isTurkish: boolean): Promise<void> {
         try {
+            await this.setupInteractiveNotifications(config.mlPerSip, isTurkish);
             // Cancel existing water notifications
             const storedIds = await PlatformStorage.getItem(WATER_NOTIF_KEY);
             if (storedIds) {
@@ -160,6 +238,7 @@ export class WaterTrackingService {
                         body: messages[i % messages.length],
                         data: { type: 'water', mlAmount: config.mlPerSip },
                         categoryIdentifier: 'water_reminder',
+                        ...(Platform.OS === 'android' ? { channelId: 'water' } : {}),
                     },
                     trigger: {
                         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -176,16 +255,28 @@ export class WaterTrackingService {
         }
     }
 
-    async setupInteractiveNotifications(): Promise<void> {
+    async setupInteractiveNotifications(mlAmount: number = 250, isTurkish: boolean = true): Promise<void> {
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('water', {
+                name: isTurkish ? 'Su Takibi' : 'Water Tracking',
+                importance: Notifications.AndroidImportance.HIGH,
+                sound: 'default',
+                vibrationPattern: [0, 250, 250, 250],
+            });
+        }
+
+        const drinkLabel = isTurkish ? `Su İçtim (+${mlAmount}ml)` : `I Drank Water (+${mlAmount}ml)`;
+        const skipLabel = isTurkish ? 'Atla' : 'Skip';
+
         await Notifications.setNotificationCategoryAsync('water_reminder', [
             {
                 identifier: 'drank_water',
-                buttonTitle: 'İçtim',
+                buttonTitle: drinkLabel,
                 options: { opensAppToForeground: false },
             },
             {
                 identifier: 'skip_water',
-                buttonTitle: 'Atla',
+                buttonTitle: skipLabel,
                 options: { opensAppToForeground: false },
             },
         ]);

@@ -8,18 +8,17 @@ import {
   FlatList,
   ActivityIndicator,
   TextInput,
-  Dimensions,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedCard from '../components/AnimatedCard';
 import AnimatedButton from '../components/AnimatedButton';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useAlert } from '../components/CustomAlert';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 // window width not required currently
 
@@ -30,12 +29,13 @@ const isTrainerType = (type?: string) => {
 };
 
 const ProfessionalSearchScreen = ({ navigation }: any) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
   const [professionals, setProfessionals] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'trainer' | 'dietitian'>('all');
   const [loading, setLoading] = useState(true);
+  const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [sortBy, setSortBy] = useState<'rating' | 'name' | 'city'>('rating');
@@ -64,7 +64,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
       loadProfessionals();
     }, 500);
     return () => clearTimeout(timer);
-  }, [filter, city, district]);
+  }, [filter, country, city, district]);
 
   // Re-sort existing data when sortBy changes (no re-fetch needed)
   useEffect(() => {
@@ -93,7 +93,8 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
       const { data } = await supabase.getProfessionalsByCity(
         city.trim() || undefined,
         district.trim() || undefined,
-        type
+        type,
+        country.trim() || undefined
       );
       if (data) {
         const sorted = [...data].sort((a, b) => {
@@ -121,20 +122,31 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
   };
 
   const getRankBadge = (index: number, rating: number, reviewCount: number) => {
+    // Theme-aware colors
+    const gold = '#F59E0B';
+    const goldBg = isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7';
+    const silver = isDark ? '#9CA3AF' : '#6B7280';
+    const silverBg = isDark ? 'rgba(107, 114, 128, 0.2)' : '#F3F4F6';
+    const bronze = '#B45309'; // Keep bronze dark, maybe lighter in dark mode?
+    const bronzeText = isDark ? '#D97706' : '#B45309';
+    const bronzeBg = isDark ? 'rgba(180, 83, 9, 0.2)' : '#FFF7ED';
+    const red = '#EF4444';
+    const redBg = isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2';
+
     if (index === 0 && rating >= 4.5 && reviewCount >= 10) {
-      return { icon: 'trophy' as const, label: isTurkish ? '1. Sıra' : '#1 Rated', color: '#F59E0B', bg: '#FEF3C7' };
+      return { icon: 'trophy' as const, label: isTurkish ? '1. Sıra' : '#1 Rated', color: gold, bg: goldBg };
     }
     if (index === 1 && rating >= 4.5 && reviewCount >= 5) {
-      return { icon: 'medal-outline' as const, label: isTurkish ? '2. Sıra' : '#2 Rated', color: '#6B7280', bg: '#F3F4F6' };
+      return { icon: 'medal-outline' as const, label: isTurkish ? '2. Sıra' : '#2 Rated', color: silver, bg: silverBg };
     }
     if (index === 2 && rating >= 4.0 && reviewCount >= 5) {
-      return { icon: 'medal-outline' as const, label: isTurkish ? '3. Sıra' : '#3 Rated', color: '#B45309', bg: '#FEF3C7' };
+      return { icon: 'medal-outline' as const, label: isTurkish ? '3. Sıra' : '#3 Rated', color: bronzeText, bg: bronzeBg };
     }
     if (rating >= 4.8 && reviewCount >= 20) {
-      return { icon: 'star' as const, label: isTurkish ? 'Top Rated' : 'Top Rated', color: '#F59E0B', bg: '#FEF3C7' };
+      return { icon: 'star' as const, label: isTurkish ? 'Top Rated' : 'Top Rated', color: gold, bg: goldBg };
     }
     if (reviewCount >= 30) {
-      return { icon: 'flame' as const, label: isTurkish ? 'Popüler' : 'Popular', color: '#EF4444', bg: '#FEE2E2' };
+      return { icon: 'flame' as const, label: isTurkish ? 'Popüler' : 'Popular', color: red, bg: redBg };
     }
     return null;
   };
@@ -150,7 +162,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
     ));
   };
 
-  const handleConnect = async (professionalId: string) => {
+  const handleConnect = async (professionalUserId: string, professionalProfileId: string) => {
     try {
       const supabase = SupabaseService.getInstance();
       const { user } = await supabase.getCurrentUser();
@@ -161,7 +173,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
       }
 
       setLoading(true);
-      const { data, error } = await supabase.connectWithProfessional(user.id, professionalId);
+      const { data, error } = await supabase.connectWithProfessional(user.id, professionalUserId, professionalProfileId);
       if (error) throw error;
 
       if (data?.chatId) {
@@ -299,7 +311,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
             </TouchableOpacity>
             <AnimatedButton
               title={isTurkish ? 'Bağlan' : 'Connect'}
-              onPress={() => handleConnect(item.user_id || item.id)}
+              onPress={() => handleConnect(item.user_id, item.id)}
               size="medium"
               style={styles.connectBtn}
             />
@@ -315,7 +327,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack(navigation, 'Home')}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -347,6 +359,24 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
 
       {/* Search Section */}
       <View style={styles.searchSection}>
+        <View style={[styles.searchRow, { marginBottom: 10 }]}>
+           <View style={styles.searchInputWrapper}>
+            <Ionicons name="globe-outline" size={18} color={colors.primary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={isTurkish ? 'Ülke' : 'Country'}
+              placeholderTextColor={colors.textTertiary}
+              value={country}
+              onChangeText={setCountry}
+            />
+            {country.length > 0 && (
+              <TouchableOpacity onPress={() => setCountry('')}>
+                <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
         <View style={styles.searchRow}>
           <View style={styles.searchInputWrapper}>
             <Ionicons name="location" size={18} color={colors.primary} />

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 
@@ -61,8 +61,7 @@ export class WearableService {
 
             // Check for Google Fit (Android)
             if (Platform.OS === 'android') {
-                // Google Fit availability check would go here
-                this.googleFitAvailable = true; // Placeholder
+                this.googleFitAvailable = false;
             }
 
             // Check for Fitbit
@@ -100,16 +99,6 @@ export class WearableService {
             });
         }
 
-        // Always available (manual entry)
-        devices.push({
-            id: 'manual',
-            name: 'Manual Entry',
-            type: 'apple_health', // Placeholder
-            connected: true,
-            lastSync: new Date().toISOString(),
-            permissions: ['steps', 'calories', 'distance', 'heartRate', 'sleep', 'water', 'weight']
-        });
-
         return devices;
     }
 
@@ -126,7 +115,7 @@ export class WearableService {
                 case 'fitbit':
                     return await this.connectFitbit();
                 default:
-                    return true; // Manual entry is always connected
+                    return false;
             }
         } catch (error) {
             console.error(`Error connecting to device ${deviceId}:`, error);
@@ -188,9 +177,7 @@ export class WearableService {
         }
 
         try {
-            // Google Fit connection logic would go here
-            // This is a placeholder implementation
-            return true;
+            return false;
         } catch (error) {
             console.error('Error connecting to Google Fit:', error);
             return false;
@@ -320,18 +307,7 @@ export class WearableService {
         }
 
         try {
-            // Google Fit data retrieval would go here
-            // This is a placeholder implementation
-            return [{
-                steps: 0,
-                calories: 0,
-                distance: 0,
-                heartRate: 0,
-                sleepHours: 0,
-                waterIntake: 0,
-                weight: 0,
-                timestamp: new Date().toISOString()
-            }];
+            return [];
         } catch (error) {
             console.error('Error syncing Google Fit data:', error);
             return [];

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import * as Localization from 'expo-localization';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 
 export type CurrencyCode = 'USD' | 'TRY' | 'EUR' | 'GBP' | 'RUB' | 'AED';
 
@@ -38,7 +38,7 @@ export const useCurrency = () => {
     return context;
 };
 
-const STORAGE_KEY = 'biosync_currency';
+const STORAGE_KEY = 'NextSelf_currency';
 
 const LANGUAGE_TO_CURRENCY: Record<string, CurrencyCode> = {
     tr: 'TRY',

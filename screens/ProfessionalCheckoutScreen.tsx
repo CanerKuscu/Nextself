@@ -1,12 +1,21 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useAlert } from '../components/CustomAlert';
+import { safeGoBack } from '../utils/navigation';
+
+export const calculateDepositAmount = (months: number) => {
+    if (months === 3) return 750;
+    if (months === 6) return 1250;
+    if (months === 12) return 2000;
+    return 300 * months;
+};
 
 export default function ProfessionalCheckoutScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const route = useRoute();
     const { clientId, clientName } = route.params as { clientId: string, clientName: string };
 
@@ -16,13 +25,6 @@ export default function ProfessionalCheckoutScreen() {
     const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
     const { showAlert, AlertComponent } = useAlert();
 
-    const getDepositAmount = (months: number) => {
-        if (months === 3) return 750;
-        if (months === 6) return 1250;
-        if (months === 12) return 2000;
-        return 300 * months;
-    };
-
     const handleActivate = async () => {
         if (!agreedPrice || isNaN(Number(agreedPrice)) || Number(agreedPrice) <= 0) {
             showAlert({ title: "Hata", message: "Lütfen geçerli bir aylık tutar giriniz.", type: "error" });
@@ -31,25 +33,17 @@ export default function ProfessionalCheckoutScreen() {
 
         setLoading(true);
         try {
-            const { data: { session } } = await SupabaseService.getInstance().getClient().auth.getSession();
-
-            const response = await fetch('https://[YOUR_PROJECT_REF].supabase.co/functions/v1/process-client-activation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
-                },
-                body: JSON.stringify({
+            const supabaseClient = SupabaseService.getInstance().getClient();
+            const { data, error } = await supabaseClient.functions.invoke('process-client-activation', {
+                body: {
                     clientId: clientId,
                     agreedPrice: Number(agreedPrice),
                     durationMonths: durationMonths
-                })
+                }
             });
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.message || data.error || "Ödeme başlatılamadı");
+            if (error || !data?.success) {
+                throw new Error(data?.message || data?.error || error?.message || "Ödeme başlatılamadı");
             }
 
             // Iyzico Payment URL
@@ -60,12 +54,13 @@ export default function ProfessionalCheckoutScreen() {
                     title: "Başarılı",
                     message: "Müşteri başarıyla aktifleştirildi!",
                     type: "success",
-                    buttons: [{ text: "OK", onPress: () => navigation.goBack() }]
+                    buttons: [{ text: "OK", onPress: () => safeGoBack(navigation, 'ProfessionalHome') }]
                 });
             }
 
-        } catch (error: any) {
-            showAlert({ title: "Aktivasyon Hatası", message: error.message, type: "error" });
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Ödeme başlatılamadı";
+            showAlert({ title: "Aktivasyon Hatası", message, type: "error" });
         } finally {
             setLoading(false);
         }
@@ -81,12 +76,12 @@ export default function ProfessionalCheckoutScreen() {
                     if (navState.url.includes('/payment/callback')) {
                         showAlert({
                             title: "Ödeme Tamamlandı",
-                            message: `${getDepositAmount(durationMonths)} TL Depozito başarıyla tahsil edildi. Müşteriniz aktif!`,
+                            message: `${calculateDepositAmount(durationMonths)} TL Depozito başarıyla tahsil edildi. Müşteriniz aktif!`,
                             type: "success",
                             buttons: [{
                                 text: "OK", onPress: () => {
                                     setPaymentUrl(null);
-                                    navigation.goBack();
+                                    safeGoBack(navigation, 'ProfessionalHome');
                                 }
                             }]
                         });
@@ -134,7 +129,7 @@ export default function ProfessionalCheckoutScreen() {
             </View>
 
             <View style={styles.summaryContainer}>
-                <Text style={styles.summaryText}>Aktivasyon Depozitosu (Peşinat): {getDepositAmount(durationMonths)} TL</Text>
+                <Text style={styles.summaryText}>Aktivasyon Depozitosu (Peşinat): {calculateDepositAmount(durationMonths)} TL</Text>
                 <Text style={styles.summarySubText}>
                     Anlaşılan Toplam Tutarın %10 komisyonu sistem tarafından hesaplanır. Eğer komisyon tutarı bu depozito tutarından fazlaysa, aradaki fark ay sonunda faturanıza yansıtılır.
                 </Text>
@@ -161,7 +156,7 @@ const styles = StyleSheet.create({
     description: { fontSize: 14, color: '#666', marginBottom: 30, textAlign: 'center', lineHeight: 20 },
     inputContainer: { marginBottom: 20 },
     label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-    input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', padding: 15, borderRadius: 8, fontSize: 16 },
+    input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', padding: 15, borderRadius: 8, fontSize: 16, textAlignVertical: 'center' },
     summaryContainer: { backgroundColor: '#eef2ff', padding: 15, borderRadius: 8, marginBottom: 30 },
     summaryText: { fontSize: 16, color: '#4f46e5', fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
     summarySubText: { fontSize: 12, color: '#666', textAlign: 'center', fontStyle: 'italic' },

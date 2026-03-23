@@ -9,13 +9,14 @@ import { getLocalDateString } from '../utils/dateUtils';
 import GlassCard from '../components/GlassCard';
 import GradientButton from '../components/GradientButton';
 import { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { SecurityUtils } from '../utils/security';
 import { ContentModerationService } from '../services/contentModerationService';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -33,7 +34,7 @@ const EditProfileScreen = ({ navigation, route }: any) => {
     const [firstName, setFirstName] = useState(existingProfile.first_name || nameParts[0] || '');
     const [lastName, setLastName] = useState(existingProfile.last_name || nameParts.slice(1).join(' ') || '');
     const [username, setUsername] = useState(existingProfile.username || '');
-    const [dob, setDob] = useState(existingProfile.dob || '');
+    const [dob, setDob] = useState(existingProfile.dob || existingProfile.date_of_birth || '');
     const [height, setHeight] = useState(existingProfile.height?.toString() || '');
     const [weight, setWeight] = useState(existingProfile.weight?.toString() || '');
     const [gender, setGender] = useState(existingProfile.gender || '');
@@ -129,9 +130,13 @@ const EditProfileScreen = ({ navigation, route }: any) => {
             const supabase = SupabaseService.getInstance();
             const { user } = await supabase.getCurrentUser();
             if (user) {
-                const fullName = `${SecurityUtils.sanitizeInput(firstName.trim())} ${SecurityUtils.sanitizeInput(lastName.trim())}`;
+                const safeFirstName = SecurityUtils.sanitizeInput(firstName.trim());
+                const safeLastName = SecurityUtils.sanitizeInput(lastName.trim());
+                const fullName = `${safeFirstName} ${safeLastName}`;
                 const updateData: any = {
                     full_name: fullName,
+                    first_name: safeFirstName,
+                    last_name: safeLastName,
                     username: username.toLowerCase().trim() || null,
                     dob: dob ? dob.replace(/[^0-9\-\/\.]/g, '') : null,
                     height: height ? parseInt(height) : null,
@@ -173,14 +178,18 @@ const EditProfileScreen = ({ navigation, route }: any) => {
             <AlertComponent />
 
             <LinearGradient colors={GRADIENTS.primary as any} style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Profil Düzenle' : 'Edit Profile'}</Text>
                 <View style={{ width: 40 }} />
             </LinearGradient>
 
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 100 }]} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                contentContainerStyle={[styles.content, { paddingBottom: 100 }]} 
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
 
                 {/* Profile Photo */}
                 <Text style={styles.sectionTitle}>{isTurkish ? 'Profil Fotoğrafı' : 'Profile Photo'}</Text>
@@ -202,20 +211,41 @@ const EditProfileScreen = ({ navigation, route }: any) => {
                                 // NSFW / +18 moderation check
                                 const moderation = await ContentModerationService.getInstance().moderateProfileImage(uri);
                                 if (!moderation.isApproved) {
-                                    // Record violation
+                                    // Record violation & apply penalty
                                     const violation = await ContentModerationService.getInstance().recordViolation(
                                         currentUserId,
                                         'nsfw_profile_photo',
                                         moderation.reason,
                                     );
-                                    showAlert({
-                                        type: 'error',
-                                        title: isTurkish ? 'Uygunsuz İçerik' : 'Inappropriate Content',
-                                        message: isTurkish
-                                            ? `Bu fotoğraf uygunsuz içerik içerdiği için yüklenemez. ${violation.banned ? 'Hesabınız askıya alındı.' : 'Lütfen uygun bir fotoğraf seçin.'}`
-                                            : `This photo cannot be uploaded because it contains inappropriate content. ${violation.banned ? 'Your account has been suspended.' : 'Please choose an appropriate photo.'}`,
-                                        buttons: [{ text: 'OK' }],
-                                    });
+
+                                    // Reset avatar locally since it was removed server-side
+                                    setAvatarUrl(null);
+
+                                    if (violation.banned) {
+                                        // User is banned — show alert then navigate to Auth
+                                        showAlert({
+                                            type: 'error',
+                                            title: isTurkish ? 'Hesap Askıya Alındı' : 'Account Suspended',
+                                            message: isTurkish
+                                                ? 'Tekrarlanan uygunsuz içerik ihlalleri nedeniyle hesabınız askıya alınmıştır. Topluluk kurallarına uymanız gerekmektedir.'
+                                                : 'Your account has been suspended due to repeated inappropriate content violations. You must comply with community guidelines.',
+                                            buttons: [{
+                                                text: isTurkish ? 'Tamam' : 'OK',
+                                                onPress: () => navigation.replace('Auth'),
+                                            }],
+                                        });
+                                    } else {
+                                        // Warning with violation count
+                                        const remaining = 3 - violation.violationCount;
+                                        showAlert({
+                                            type: 'error',
+                                            title: isTurkish ? 'Uygunsuz İçerik Tespit Edildi' : 'Inappropriate Content Detected',
+                                            message: isTurkish
+                                                ? `Bu fotoğraf +18 / uygunsuz içerik içerdiği için yüklenemez ve profil fotoğrafınız kaldırıldı.\n\n⚠️ İhlal: ${violation.violationCount}/3\n${remaining > 0 ? `${remaining} ihlal hakkınız kaldı. Sonraki ihlalde hesabınız askıya alınacaktır.` : 'Son uyarınız! Bir sonraki ihlalde hesabınız askıya alınacaktır.'}`
+                                                : `This photo contains inappropriate (+18) content and cannot be uploaded. Your profile photo has been removed.\n\n⚠️ Violation: ${violation.violationCount}/3\n${remaining > 0 ? `You have ${remaining} warning(s) remaining. Further violations will result in account suspension.` : 'Final warning! Next violation will result in account suspension.'}`,
+                                            buttons: [{ text: isTurkish ? 'Anladım' : 'I Understand' }],
+                                        });
+                                    }
                                     return;
                                 }
 
@@ -375,12 +405,15 @@ const EditProfileScreen = ({ navigation, route }: any) => {
                     </View>
                 </GlassCard>
 
-                <GradientButton
-                    title={saving ? (isTurkish ? 'Kaydediliyor...' : 'Saving...') : (isTurkish ? 'Değişiklikleri Kaydet' : 'Save Changes')}
-                    onPress={handleSave}
-                    size="lg"
-                    style={{ marginTop: SPACING.xxl }}
-                />
+                {/* Save Button */}
+                <View style={{ marginTop: SPACING.xxl }}>
+                    <GradientButton
+                        title={saving ? (isTurkish ? 'Kaydediliyor...' : 'Saving...') : (isTurkish ? 'Değişiklikleri Kaydet' : 'Save Changes')}
+                        onPress={handleSave}
+                        size="lg"
+                        disabled={saving}
+                    />
+                </View>
             </ScrollView>
         </View>
     );
@@ -392,10 +425,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     backBtn: { width: 40, height: 40, justifyContent: 'center' },
     headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center' },
     content: { paddingHorizontal: SPACING.lg },
-    sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginTop: SPACING.xxl, marginBottom: SPACING.md },
+    sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginTop: SPACING.xl, marginBottom: SPACING.md },
     card: { gap: SPACING.xs },
     label: { ...TYPOGRAPHY.captionBold, color: colors.textSecondary, marginBottom: 6 },
-    input: { backgroundColor: colors.surfaceSecondary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2, ...TYPOGRAPHY.body, color: colors.text, borderWidth: 1.5, borderColor: 'transparent' },
+    input: { backgroundColor: colors.surfaceSecondary, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm + 2, ...TYPOGRAPHY.body, color: colors.text, borderWidth: 1.5, borderColor: 'transparent', textAlignVertical: 'center' },
     inputFilled: { borderColor: colors.primary + '40' },
     inputError: { borderColor: colors.error },
     inputSuccess: { borderColor: colors.success },

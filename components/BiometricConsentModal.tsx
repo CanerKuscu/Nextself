@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from '../hooks/useTranslation';
 import { AgreementService, BiometricConsentType } from '../services/agreementService';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, GRADIENTS } from '../config/theme';
 
 interface BiometricConsentModalProps {
@@ -151,7 +151,6 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
                             activeOpacity={0.8}
                         >
                             <LinearGradient
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 colors={GRADIENTS.primary as any}
                                 style={styles.acceptGradient}
                                 start={{ x: 0, y: 0 }}

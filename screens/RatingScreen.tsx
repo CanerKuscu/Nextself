@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassCard from '../components/GlassCard';
 import GradientButton from '../components/GradientButton';
 import { useTranslation } from '../hooks/useTranslation';
@@ -16,10 +17,12 @@ import { useAlert } from '../components/CustomAlert';
 import { RatingService } from '../services/ratingService';
 import { useSupabaseAuth } from '../contexts/SupabaseContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const RatingScreen = ({ route, navigation }: any) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const { professionalId, professionalName, professionalType } = route?.params || {};
   const [rating, setRating] = useState(0);
@@ -51,7 +54,7 @@ const RatingScreen = ({ route, navigation }: any) => {
         type: 'success',
         title: isTurkish ? 'Teşekkürler' : 'Thank You',
         message: isTurkish ? 'Değerlendirmeniz kaydedildi!' : 'Your review has been saved!',
-        buttons: [{ text: 'OK', onPress: () => navigation.goBack() }],
+        buttons: [{ text: 'OK', onPress: () => safeGoBack(navigation, 'Home') }],
       });
     } catch (err) {
       setLoading(false);
@@ -67,7 +70,7 @@ const RatingScreen = ({ route, navigation }: any) => {
   return (
     <View style={styles.container}>
       <AlertComponent />
-      <LinearGradient colors={GRADIENTS.accent as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={GRADIENTS.accent as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.xl }]}>
         <Text style={styles.headerTitle}>{isTurkish ? 'Değerlendir' : 'Rate'}</Text>
         <Text style={styles.headerSub}>{professionalName || ''}</Text>
       </LinearGradient>
@@ -116,7 +119,7 @@ const RatingScreen = ({ route, navigation }: any) => {
 
 const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 60, paddingBottom: SPACING.xxl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  header: { paddingBottom: SPACING.xxl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerTitle: { ...TYPOGRAPHY.h1, color: colors.textInverse },
   headerSub: { ...TYPOGRAPHY.body, color: 'rgba(255,255,255,0.8)', marginTop: SPACING.xs },
   content: { paddingHorizontal: SPACING.xxl, paddingTop: SPACING.xxl },

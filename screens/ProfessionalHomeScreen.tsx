@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
@@ -32,6 +32,7 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
     const [role, setRole] = useState<'pt' | 'dietitian'>('pt');
     const [clients, setClients] = useState<ClientSummary[]>([]);
     const [stats, setStats] = useState({ totalClients: 0, activeToday: 0, pendingMessages: 0 });
+    const [recentActivities, setRecentActivities] = useState<any[]>([]);
 
     const loadData = useCallback(async () => {
         try {
@@ -39,30 +40,68 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
             const { user } = await supabase.getCurrentUser();
             if (!user) return;
 
-            // Get profile
+            // Get profile and professional ID
             const { data: profile } = await supabase.getUserProfile(user.id);
-            if (profile) {
-                setUserName(profile.first_name || profile.full_name || 'Professional');
-                setRole(profile.professional_type === 'dietitian' ? 'dietitian' : 'pt');
+            let professionalProfileId = '';
+
+            // Get professional profile ID
+            try {
+                const { data: profProfile } = await supabase.getClient()
+                    .from('professional_profiles')
+                    .select('id, professional_type')
+                    .eq('user_id', user.id)
+                    .single();
+                
+                if (profProfile) {
+                    professionalProfileId = profProfile.id;
+                    setRole(profProfile.professional_type === 'dietitian' ? 'dietitian' : 'pt');
+                }
+            } catch (e) {
+                console.error('Error fetching professional profile:', e);
             }
 
-            // Get clients (from assigned_workouts or assigned_nutrition_plans depending on role)
+            if (profile) {
+                setUserName(profile.first_name || profile.full_name || 'Professional');
+            }
+
+            // Get clients from client_relationships
             const client = supabase.getClient();
             let clientIds: string[] = [];
 
-            if (profile?.professional_type === 'dietitian') {
-                const { data: plans } = await client
-                    .from('assigned_nutrition_plans')
-                    .select('client_id')
-                    .eq('dietitian_id', user.id)
-                    .eq('is_active', true);
-                clientIds = [...new Set((plans || []).map((p: any) => p.client_id))];
-            } else {
-                const { data: workouts } = await client
-                    .from('assigned_workouts')
-                    .select('client_id')
-                    .eq('pt_id', user.id);
-                clientIds = [...new Set((workouts || []).map((w: any) => w.client_id))];
+            try {
+                if (professionalProfileId) {
+                    const { data: relationships, error: relError } = await client
+                        .from('client_relationships')
+                        .select('client_id')
+                        .or(`professional_id.eq.${professionalProfileId},trainer_id.eq.${professionalProfileId},dietitian_id.eq.${professionalProfileId}`)
+                        .eq('status', 'active');
+
+                    if (!relError && relationships) {
+                        clientIds = [...new Set(relationships.map((r: any) => r.client_id))];
+                    }
+                }
+
+                // If no clients found with new method, try legacy fallback
+                if (clientIds.length === 0) {
+                    // Fallback to old method if relationship query fails or returns empty (migration transition)
+                    console.log('Fallback to legacy client fetch');
+                    if (profile?.professional_type === 'dietitian') {
+                        const { data: plans } = await client
+                            .from('assigned_nutrition_plans')
+                            .select('client_id')
+                            .eq('dietitian_id', user.id)
+                            .eq('is_active', true);
+                        clientIds = [...new Set((plans || []).map((p: any) => p.client_id))];
+                    } else {
+                        const { data: workouts } = await client
+                            .from('assigned_workouts')
+                            .select('client_id')
+                            .eq('pt_id', user.id);
+                        clientIds = [...new Set((workouts || []).map((w: any) => w.client_id))];
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching clients:', e);
             }
 
             // Fetch client profiles
@@ -86,6 +125,16 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
             // Get pending messages count
             const { data: chats } = await supabase.getChats(user.id);
             const pendingMessages = (chats || []).length;
+
+            // Get recent notifications (Client Activities)
+            const { data: notifications } = await client
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+            setRecentActivities(notifications || []);
 
             setStats({
                 totalClients: clientIds.length,
@@ -202,12 +251,12 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
 
                         <TouchableOpacity
                             style={styles.actionBtn}
-                            onPress={() => navigation.navigate('ProgramCreator')}
+                            onPress={() => navigation.navigate('ProfessionalProgramCreator')}
                         >
                             <View style={[styles.actionIcon, { backgroundColor: `${COLORS.success}20` }]}>
                                 <Ionicons name="clipboard-outline" size={22} color={COLORS.success} />
                             </View>
-                            <Text style={styles.actionText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
+                            <Text style={styles.actionText}>{isTurkish ? 'Programlar' : 'Programs'}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -270,6 +319,41 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
                                 </View>
                                 <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
                             </TouchableOpacity>
+                        ))
+                    )}
+                </AnimatedCard>
+
+                {/* Recent Activities */}
+                <AnimatedCard animationType="slideUp" delay={400} duration={500} style={{ marginTop: SPACING.lg }}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>{isTurkish ? 'Son Aktiviteler' : 'Recent Activities'}</Text>
+                    </View>
+
+                    {recentActivities.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="notifications-outline" size={48} color={colors.textTertiary} />
+                            <Text style={styles.emptyText}>
+                                {isTurkish ? 'Yeni aktivite yok' : 'No recent activities'}
+                            </Text>
+                        </View>
+                    ) : (
+                        recentActivities.map((activity) => (
+                            <View key={activity.id} style={styles.activityRow}>
+                                <View style={styles.activityIcon}>
+                                    <Ionicons 
+                                        name={activity.type === 'workout_completed' ? 'fitness' : 'notifications'} 
+                                        size={20} 
+                                        color={COLORS.success} 
+                                    />
+                                </View>
+                                <View style={styles.activityInfo}>
+                                    <Text style={styles.activityTitle}>{activity.title}</Text>
+                                    <Text style={styles.activityMessage}>{activity.message}</Text>
+                                    <Text style={styles.activityTime}>
+                                        {new Date(activity.created_at).toLocaleString()}
+                                    </Text>
+                                </View>
+                            </View>
                         ))
                     )}
                 </AnimatedCard>
@@ -410,6 +494,41 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     emptyText: {
         ...TYPOGRAPHY.body,
         color: colors.textTertiary,
+    },
+    activityRow: {
+        flexDirection: 'row',
+        paddingVertical: SPACING.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.borderLight,
+        gap: SPACING.md,
+        alignItems: 'flex-start',
+    },
+    activityIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: `${COLORS.success}20`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    activityInfo: {
+        flex: 1,
+    },
+    activityTitle: {
+        ...TYPOGRAPHY.body,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    activityMessage: {
+        ...TYPOGRAPHY.small,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    activityTime: {
+        ...TYPOGRAPHY.caption,
+        color: colors.textTertiary,
+        marginTop: 4,
     },
 });
 

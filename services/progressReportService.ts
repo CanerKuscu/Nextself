@@ -1,4 +1,4 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 
@@ -58,6 +58,11 @@ export interface GoalProgress {
 }
 
 export class ProgressReportService {
+    private static toFiniteNumber(value: any): number {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : 0;
+    }
+
     /**
      * Generate daily progress report
      */
@@ -675,7 +680,7 @@ export class ProgressReportService {
         // Calculate steps
         const totalSteps = healthData
             .filter(d => d.metric === 'steps')
-            .reduce((sum, d) => sum + d.value, 0);
+            .reduce((sum, d) => sum + this.toFiniteNumber(d.value), 0);
         metrics.push({
             name: 'Steps',
             value: totalSteps,
@@ -690,7 +695,8 @@ export class ProgressReportService {
         const workoutMinutes = workoutData.reduce((sum, session) => {
             const start = new Date(session.start_time);
             const end = new Date(session.end_time);
-            return sum + Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+            const duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+            return sum + Math.max(0, this.toFiniteNumber(duration));
         }, 0);
         metrics.push({
             name: 'Workout Time',
@@ -703,7 +709,7 @@ export class ProgressReportService {
         });
 
         // Calculate calories
-        const totalCalories = nutritionData.reduce((sum, log) => sum + log.calories, 0);
+        const totalCalories = nutritionData.reduce((sum, log) => sum + this.toFiniteNumber(log.calories), 0);
         metrics.push({
             name: 'Calories',
             value: totalCalories,
@@ -716,7 +722,7 @@ export class ProgressReportService {
 
         // Calculate sleep hours
         const sleepHours = sleepData.reduce((sum, sleep) => {
-            const duration = sleep.duration_minutes || 0;
+            const duration = this.toFiniteNumber(sleep.duration_minutes);
             return sum + duration / 60;
         }, 0);
         metrics.push({
@@ -745,16 +751,20 @@ export class ProgressReportService {
 
         const weeklyMetrics: ProgressMetric[] = [];
         const metricNames = ['Steps', 'Workout Time', 'Calories', 'Sleep'];
+        const reportMetricMaps = dailyReports.map(report => {
+            const metricByName = new Map<string, number>();
+            report.metrics.forEach(metric => metricByName.set(metric.name, this.toFiniteNumber(metric.value)));
+            return metricByName;
+        });
 
         for (const metricName of metricNames) {
-            const dailyValues = dailyReports.map(report => {
-                const metric = report.metrics.find(m => m.name === metricName);
-                return metric?.value || 0;
-            });
+            const dailyValues = reportMetricMaps.map(metricMap => metricMap.get(metricName) || 0);
 
-            const avgValue = dailyValues.reduce((sum, val) => sum + val, 0) / dailyValues.length;
-            const lastWeekValue = avgValue * 0.9; // Simulated previous week data
-            const changePercentage = lastWeekValue > 0 ? ((avgValue - lastWeekValue) / lastWeekValue) * 100 : 0;
+            const divisor = Math.max(1, dailyValues.length);
+            const avgValue = dailyValues.reduce((sum, val) => sum + val, 0) / divisor;
+            const firstValue = dailyValues[0] || 0;
+            const lastValue = dailyValues[dailyValues.length - 1] || 0;
+            const changePercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
 
             weeklyMetrics.push({
                 name: metricName,
@@ -783,16 +793,19 @@ export class ProgressReportService {
 
         const monthlyMetrics: ProgressMetric[] = [];
         const metricNames = ['Steps', 'Workout Time', 'Calories', 'Sleep'];
+        const reportMetricMaps = weeklyReports.map(report => {
+            const metricByName = new Map<string, number>();
+            report.metrics.forEach(metric => metricByName.set(metric.name, this.toFiniteNumber(metric.value)));
+            return metricByName;
+        });
 
         for (const metricName of metricNames) {
-            const weeklyValues = weeklyReports.map(report => {
-                const metric = report.metrics.find(m => m.name === metricName);
-                return metric?.value || 0;
-            });
+            const weeklyValues = reportMetricMaps.map(metricMap => metricMap.get(metricName) || 0);
 
             const totalValue = weeklyValues.reduce((sum, val) => sum + val, 0);
-            const lastMonthValue = totalValue * 0.85; // Simulated previous month data
-            const changePercentage = lastMonthValue > 0 ? ((totalValue - lastMonthValue) / lastMonthValue) * 100 : 0;
+            const firstValue = weeklyValues[0] || 0;
+            const lastValue = weeklyValues[weeklyValues.length - 1] || 0;
+            const changePercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
 
             monthlyMetrics.push({
                 name: metricName,

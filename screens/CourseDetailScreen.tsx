@@ -19,6 +19,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useAlert } from '../components/CustomAlert';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -136,7 +137,7 @@ const CourseDetailScreen = ({ navigation, route }: any) => {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                <TouchableOpacity style={styles.backBtn} onPress={() => safeGoBack(navigation, 'ProfessionalCourses')}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Eğitim Detayı' : 'Course Detail'}</Text>

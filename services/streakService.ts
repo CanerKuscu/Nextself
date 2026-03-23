@@ -1,5 +1,6 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { getLocalDateString, getYesterdayDateString } from '../utils/dateUtils';
+import { LogManager } from '../utils/LogManager';
 
 export interface StreakData {
     currentStreak: number;
@@ -7,6 +8,14 @@ export interface StreakData {
     lastWorkoutDate: string | null;
     lastRestDate: string | null;
     isRestDay: boolean;
+}
+
+interface UserStreakRow {
+    current_streak?: number;
+    longest_streak?: number;
+    last_workout_date?: string | null;
+    last_rest_date?: string | null;
+    last_activity_date?: string | null;
 }
 
 export class StreakService {
@@ -29,10 +38,10 @@ export class StreakService {
 
             if (!user) throw new Error('Not authenticated');
 
-            // Calculate streak from workouts table (users table doesn't have streak columns)
+            // Calculate streak from workout_sessions table (users table doesn't have streak columns)
             const today = getLocalDateString();
             const { data: workouts, error } = await supabase
-                .from('workouts')
+                .from('workout_sessions')
                 .select('created_at')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
@@ -40,20 +49,19 @@ export class StreakService {
 
             if (error) throw error;
 
-            // Check for rest day
-            const { data: userData } = await supabase
-                .from('users')
-                .select('last_rest_date')
-                .eq('id', user.id)
-                .single();
+            const { data: streakRow } = await supabase
+                .from('user_streaks')
+                .select('current_streak, longest_streak, last_workout_date, last_rest_date, last_activity_date')
+                .eq('user_id', user.id)
+                .maybeSingle();
 
             let currentStreak = 0;
-            let longestStreak = 0;
-            let lastWorkoutDate: string | null = null;
-            const lastRestDate = userData?.last_rest_date || null;
+            let longestStreak = streakRow?.longest_streak || 0;
+            let lastWorkoutDate: string | null = streakRow?.last_workout_date || null;
+            const lastRestDate = streakRow?.last_rest_date || null;
 
             if (workouts && workouts.length > 0) {
-                lastWorkoutDate = workouts[0].created_at;
+                lastWorkoutDate = lastWorkoutDate || workouts[0].created_at;
                 // Count consecutive days from today
                 const workoutDays = new Set(workouts.map(w => getLocalDateString(new Date(w.created_at))));
                 let checkDate = new Date();
@@ -85,6 +93,7 @@ export class StreakService {
                     } catch { }
                 }
 
+                currentStreak = Math.max(currentStreak, streakRow?.current_streak || 0);
                 longestStreak = Math.max(currentStreak, longestStreak);
             }
 
@@ -96,7 +105,7 @@ export class StreakService {
                 isRestDay: lastRestDate === today,
             };
         } catch (err) {
-            console.warn('Streak fetch warning:', err);
+            LogManager.getInstance().warn('Streak fetch warning:', err);
             return { currentStreak: 0, longestStreak: 0, lastWorkoutDate: null, lastRestDate: null, isRestDay: false };
         }
     }
@@ -131,21 +140,22 @@ export class StreakService {
             const newLongest = Math.max(newStreak, currentData.longestStreak);
 
             const updateData = {
+                user_id: user.id,
                 current_streak: newStreak,
                 longest_streak: newLongest,
                 last_workout_date: today,
+                last_activity_date: today,
                 updated_at: new Date().toISOString()
             };
 
             const { error } = await supabase
-                .from('users')
-                .update(updateData)
-                .eq('id', user.id);
+                .from('user_streaks')
+                .upsert(updateData, { onConflict: 'user_id' });
 
             if (error) throw error;
 
             // Update friendship streaks asynchronously in the background
-            this.updateFriendshipStreaks(user.id, today).catch(e => console.error('Friendship streak error:', e));
+            this.updateFriendshipStreaks(user.id, today).catch(e => LogManager.getInstance().error('Friendship streak error:', e));
 
             return {
                 currentStreak: newStreak,
@@ -156,7 +166,7 @@ export class StreakService {
             };
 
         } catch (err) {
-            console.error('Error logging workout:', err);
+            LogManager.getInstance().error('Error logging workout:', err);
             throw err;
         }
     }
@@ -175,17 +185,18 @@ export class StreakService {
             if (currentData.lastRestDate === today) return currentData;
 
             const { error } = await supabase
-                .from('users')
-                .update({
+                .from('user_streaks')
+                .upsert({
+                    user_id: user.id,
                     last_rest_date: today,
+                    last_activity_date: today,
                     updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
+                }, { onConflict: 'user_id' });
 
             if (error) throw error;
 
             // Also check for mutual friendship streak updates on rest days
-            this.updateFriendshipStreaks(user.id, today).catch(e => console.error('Friendship streak error:', e));
+            this.updateFriendshipStreaks(user.id, today).catch(e => LogManager.getInstance().error('Friendship streak error:', e));
 
             return {
                 ...currentData,
@@ -194,7 +205,7 @@ export class StreakService {
             };
 
         } catch (err) {
-            console.error('Error setting rest day:', err);
+            LogManager.getInstance().error('Error setting rest day:', err);
             throw err;
         }
     }
@@ -221,10 +232,10 @@ export class StreakService {
 
                 // 2. Get friend's streak status
                 const { data: friendData } = await supabase
-                    .from('users')
+                    .from('user_streaks')
                     .select('last_workout_date, last_rest_date')
-                    .eq('id', friendId)
-                    .single();
+                    .eq('user_id', friendId)
+                    .maybeSingle();
 
                 if (!friendData) continue;
 
@@ -257,7 +268,7 @@ export class StreakService {
                 }
             }
         } catch (err) {
-            console.error('Error updating friendship streaks:', err);
+            LogManager.getInstance().error('Error updating friendship streaks:', err);
         }
     }
 

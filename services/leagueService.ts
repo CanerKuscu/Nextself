@@ -1,5 +1,6 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { getLocalDateString } from '../utils/dateUtils';
+import { LogManager } from '../utils/LogManager';
 
 // ============================================================
 // LEAGUE TIERS
@@ -18,31 +19,31 @@ export const LEAGUE_TIERS = [
 ];
 
 export interface LeagueUser {
-    user_id: string;
+    userId: string;
     username: string;
-    full_name: string;
-    avatar_url?: string;
-    weekly_xp: number;
+    fullName: string;
+    avatarUrl?: string;
+    weeklyXp: number;
     rank: number;
     zone: 'promotion' | 'safe' | 'demotion';
 }
 
 export interface UserLeagueData {
-    current_tier: number;
-    weekly_xp: number;
-    total_xp: number;
-    rank_in_group: number;
-    group_id: string | null;
-    weeks_in_current_league: number;
-    promotion_count: number;
+    currentTier: number;
+    weeklyXp: number;
+    totalXp: number;
+    rankInGroup: number;
+    groupId: string | null;
+    weeksInCurrentLeague: number;
+    promotionCount: number;
 }
 
 export interface LeagueGroupData {
     members: LeagueUser[];
-    week_start: string;
-    week_end: string;
-    league_name: string;
-    league_tier: number;
+    weekStart: string;
+    weekEnd: string;
+    leagueName: string;
+    leagueTier: number;
 }
 
 export class LeagueService {
@@ -77,24 +78,24 @@ export class LeagueService {
             }
 
             return {
-                current_tier: league.current_tier,
-                weekly_xp: league.weekly_xp,
-                total_xp: league.total_xp,
-                rank_in_group: league.rank_in_group || 0,
-                group_id: league.group_id,
-                weeks_in_current_league: league.weeks_in_current_league,
-                promotion_count: league.promotion_count,
+                currentTier: league.current_tier,
+                weeklyXp: league.weekly_xp,
+                totalXp: league.total_xp,
+                rankInGroup: league.rank_in_group || 0,
+                groupId: league.group_id,
+                weeksInCurrentLeague: league.weeks_in_current_league,
+                promotionCount: league.promotion_count,
             };
         } catch (err) {
-            console.warn('League fetch error:', err);
+            LogManager.getInstance().warn('League fetch error:', err);
             return {
-                current_tier: 1,
-                weekly_xp: 0,
-                total_xp: 0,
-                rank_in_group: 0,
-                group_id: null,
-                weeks_in_current_league: 0,
-                promotion_count: 0,
+                currentTier: 1,
+                weeklyXp: 0,
+                totalXp: 0,
+                rankInGroup: 0,
+                groupId: null,
+                weeksInCurrentLeague: 0,
+                promotionCount: 0,
             };
         }
     }
@@ -125,19 +126,19 @@ export class LeagueService {
                 demotion_count: 0,
             }, { onConflict: 'user_id' });
 
-        if (error) console.warn('League init error:', error);
+        if (error) LogManager.getInstance().warn('League init error:', error);
 
         // Assign to a group
         await this.assignToGroup(userId, 1);
 
         return {
-            current_tier: 1,
-            weekly_xp: 0,
-            total_xp: 0,
-            rank_in_group: 0,
-            group_id: null,
-            weeks_in_current_league: 0,
-            promotion_count: 0,
+            currentTier: 1,
+            weeklyXp: 0,
+            totalXp: 0,
+            rankInGroup: 0,
+            groupId: null,
+            weeksInCurrentLeague: 0,
+            promotionCount: 0,
         };
     }
 
@@ -217,7 +218,7 @@ export class LeagueService {
                     .eq('user_id', userId);
             }
         } catch (err) {
-            console.warn('Group assignment error:', err);
+            LogManager.getInstance().warn('Group assignment error:', err);
         }
     }
 
@@ -238,7 +239,7 @@ export class LeagueService {
             if (!userLeague?.group_id) {
                 // Try to assign to group first
                 const league = await this.getUserLeague();
-                if (!league.group_id) return null;
+                if (!league.groupId) return null;
             }
 
             const groupId = userLeague?.group_id;
@@ -279,11 +280,11 @@ export class LeagueService {
                 else if (leagueTier > 1 && rank > totalMembers - demotionThreshold) zone = 'demotion';
 
                 return {
-                    user_id: m.user_id,
+                    userId: m.user_id,
                     username: m.profiles?.username || 'User',
-                    full_name: m.profiles?.full_name || '',
-                    avatar_url: m.profiles?.avatar_url,
-                    weekly_xp: m.weekly_xp || 0,
+                    fullName: m.profiles?.full_name || '',
+                    avatarUrl: m.profiles?.avatar_url,
+                    weeklyXp: m.weekly_xp || 0,
                     rank,
                     zone,
                 };
@@ -291,13 +292,13 @@ export class LeagueService {
 
             return {
                 members: formattedMembers,
-                week_start: group?.week_start || '',
-                week_end: group?.week_end || '',
-                league_name: tierInfo?.name || 'Bronze',
-                league_tier: leagueTier,
+                weekStart: group?.week_start || '',
+                weekEnd: group?.week_end || '',
+                leagueName: tierInfo?.name || 'Bronze',
+                leagueTier: leagueTier,
             };
         } catch (err) {
-            console.warn('Leaderboard fetch error:', err);
+            LogManager.getInstance().warn('Leaderboard fetch error:', err);
             return null;
         }
     }
@@ -368,7 +369,7 @@ export class LeagueService {
                     .select();
 
                 if (updateError) {
-                    console.warn(`XP update attempt ${attempt + 1} error:`, updateError);
+                    LogManager.getInstance().warn(`XP update attempt ${attempt + 1} error:`, updateError);
                     continue;
                 }
 
@@ -386,12 +387,12 @@ export class LeagueService {
                 } else {
                     // Conflict: another write happened between our read and update.
                     // Retry with fresh data.
-                    console.warn(`XP update conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
+                    LogManager.getInstance().warn(`XP update conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
                 }
             }
 
             if (!updated) {
-                console.warn('XP update failed after max retries due to concurrent modifications');
+                LogManager.getInstance().warn('XP update failed after max retries due to concurrent modifications');
             }
 
             // Also add points to user currency
@@ -399,7 +400,7 @@ export class LeagueService {
 
             return finalAmount;
         } catch (err) {
-            console.warn('XP add error:', err);
+            LogManager.getInstance().warn('XP add error:', err);
             return 0;
         }
     }
@@ -436,7 +437,7 @@ export class LeagueService {
                         return; // Success
                     }
                     // Conflict: retry with fresh data
-                    console.warn(`Points update conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
+                    LogManager.getInstance().warn(`Points update conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
                 } else {
                     // No existing record — insert (upsert to handle concurrent first-time inserts safely)
                     await supabase
@@ -449,9 +450,9 @@ export class LeagueService {
                     return;
                 }
             }
-            console.warn('Points update failed after max retries due to concurrent modifications');
+            LogManager.getInstance().warn('Points update failed after max retries due to concurrent modifications');
         } catch (err) {
-            console.warn('Points add error:', err);
+            LogManager.getInstance().warn('Points add error:', err);
         }
     }
 

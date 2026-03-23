@@ -5,11 +5,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTheme } from '../contexts/ThemeContext';
-const PRIVACY_KEY = 'biosync_data_privacy';
+import { safeGoBack } from '../utils/navigation';
+const PRIVACY_KEY = 'NextSelf_data_privacy';
 
 type PrivacySettings = {
     showWeight: boolean;
@@ -139,7 +140,7 @@ const DataPrivacyScreen = ({ navigation }: any) => {
 
                 {/* Header */}
                 <View style={st.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn}>
+                    <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={st.backBtn}>
                         <Ionicons name="arrow-back" size={22} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={st.headerTitle}>{isTurkish ? 'Veri Gizliliği' : 'Data Privacy'}</Text>

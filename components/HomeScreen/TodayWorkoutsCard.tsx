@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { memo, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ListRenderItem } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -12,6 +12,43 @@ const TodayWorkoutsCard = memo(({ workouts, onWorkoutPress }: TodayWorkoutsCardP
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
+  const renderItem: ListRenderItem<any> = useCallback(({ item: workout }) => (
+    <TouchableOpacity
+      style={styles.workoutItem}
+      onPress={() => onWorkoutPress(workout)}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel={`${workout.type} workout: ${workout.name}. Duration: ${workout.duration || 'N/A'} minutes.`}
+      accessibilityHint="Double tap to view workout details"
+    >
+      <View style={styles.workoutHeader}>
+        <Ionicons
+          name={getWorkoutIcon(workout.type)}
+          size={20}
+          color={colors.primary}
+          importantForAccessibility="no-hide-descendants"
+        />
+        <Text style={styles.workoutType}>{workout.type}</Text>
+      </View>
+
+      <Text style={styles.workoutName} numberOfLines={2}>
+        {workout.name}
+      </Text>
+
+      <View style={styles.workoutFooter}>
+        <Text style={styles.workoutDuration}>{workout.duration || 'N/A'} min</Text>
+        <Text style={styles.workoutCalories}>{workout.calories || 0} cal</Text>
+      </View>
+
+      {workout.completed && (
+        <View style={styles.completedBadge}>
+          <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+          <Text style={styles.completedText}>Done</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  ), [colors, onWorkoutPress, styles]);
+
   if (!workouts || workouts.length === 0) {
     return (
       <View style={styles.card}>
@@ -19,7 +56,7 @@ const TodayWorkoutsCard = memo(({ workouts, onWorkoutPress }: TodayWorkoutsCardP
           <Text style={styles.cardTitle}>Today's Workouts</Text>
         </View>
         <View style={styles.emptyState}>
-          <Ionicons name="fitness" size={48} color={colors.text + '40'} />
+          <Ionicons name="fitness" size={48} color={colors.text + '40'} importantForAccessibility="no-hide-descendants" />
           <Text style={styles.emptyText}>No workouts today</Text>
           <Text style={styles.emptySubtext}>Start your fitness journey!</Text>
         </View>
@@ -34,44 +71,17 @@ const TodayWorkoutsCard = memo(({ workouts, onWorkoutPress }: TodayWorkoutsCardP
         <Text style={styles.workoutCount}>{workouts.length} workouts</Text>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={workouts}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id.toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.workoutScroll}
-      >
-        {workouts.map((workout) => (
-          <TouchableOpacity
-            key={workout.id}
-            style={styles.workoutItem}
-            onPress={() => onWorkoutPress(workout)}
-          >
-            <View style={styles.workoutHeader}>
-              <Ionicons
-                name={getWorkoutIcon(workout.type)}
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.workoutType}>{workout.type}</Text>
-            </View>
-
-            <Text style={styles.workoutName} numberOfLines={2}>
-              {workout.name}
-            </Text>
-
-            <View style={styles.workoutFooter}>
-              <Text style={styles.workoutDuration}>{workout.duration || 'N/A'} min</Text>
-              <Text style={styles.workoutCalories}>{workout.calories || 0} cal</Text>
-            </View>
-
-            {workout.completed && (
-              <View style={styles.completedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                <Text style={styles.completedText}>Done</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        decelerationRate="fast"
+        snapToInterval={172} // width (160) + marginRight (12)
+        snapToAlignment="start"
+      />
     </View>
   );
 });

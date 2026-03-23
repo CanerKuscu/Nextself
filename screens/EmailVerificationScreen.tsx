@@ -12,18 +12,21 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
 import { useAlert } from '../components/CustomAlert';
 
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const EmailVerificationScreen = ({ route, navigation }: any) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const { email, type = 'email' } = route.params || {};
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -132,8 +135,8 @@ const EmailVerificationScreen = ({ route, navigation }: any) => {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
 
           {/* Header */}
-          <View style={styles.headerArea}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <View style={[styles.headerArea, { paddingTop: insets.top }]}>
+            <TouchableOpacity onPress={() => safeGoBack(navigation, 'Auth')} style={styles.backBtn}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -199,7 +202,6 @@ const EmailVerificationScreen = ({ route, navigation }: any) => {
 const getStyles = (colors: any) => StyleSheet.create({
   headerArea: {
     paddingHorizontal: SPACING.md,
-    paddingTop: 60,
     paddingBottom: SPACING.sm,
   },
   backBtn: {
@@ -253,6 +255,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     textAlign: 'center',
+    textAlignVertical: 'center',
     fontSize: 24,
     fontWeight: '700',
     color: colors.text,

@@ -28,10 +28,10 @@ serve(async (req) => {
         const scannedById = userAuth.user.id;
 
         const payload = await req.json();
-        const { qrToken } = payload; // PT'nin ekranında çıkan benzersiz JSON/String token. Veritabanına PT kaydetmiş olmalı.
+        const { qrToken, clientId } = payload; // Code provided by Client.
 
         if (!qrToken) {
-            throw new Error("Missing QR Token");
+            throw new Error("Missing Session Code");
         }
 
         // 1. qr_token ile session_checkins tablosunda bu bekleyen (doğrulanmamış) check-in var mı bul?
@@ -44,6 +44,8 @@ serve(async (req) => {
                 client_relationships (
                     client_id,
                     professional_id,
+                    trainer_id,
+                    dietitian_id,
                     billing_status
                 )
             `)
@@ -52,19 +54,27 @@ serve(async (req) => {
             .single();
 
         if (findError || !checkinData) {
-            throw new Error("Invalid or Expired QR Code");
+            throw new Error("Invalid or Expired Session Code");
         }
 
         const relationship = checkinData.client_relationships;
+        // Determine the professional ID from the relationship (could be professional_id, trainer_id, or dietitian_id)
+        const professionalId = relationship.professional_id || relationship.trainer_id || relationship.dietitian_id;
 
-        // 2. Kontrol 1: Bu QR kod, okutan müşterinin ilişkisine mi ait?
-        if (relationship.client_id !== scannedById) {
-            throw new Error("You are not authorized to check-in for this session. It belongs to a different client.");
+        // 2. Kontrol 1: Bu kodu okutan/giren kişi bu ilişkinin EĞİTMENİ mi?
+        // Note: scannedById is the user calling this function (The Trainer)
+        if (professionalId !== scannedById) {
+            throw new Error("You are not authorized to verify this session. This code belongs to a client of another professional.");
+        }
+
+        // Optional: If clientId was passed, verify it matches
+        if (clientId && relationship.client_id !== clientId) {
+             throw new Error("This code belongs to a different client.");
         }
 
         // 3. Kontrol 2: Fatura Ödenmiş mi? Eğitmenin hesabı askıda mı?
         if (relationship.billing_status === 'suspended_payment') {
-            throw new Error("Your professional's account is currently suspended due to unpaid billing. Cannot check-in.");
+            throw new Error("Your account is currently suspended due to unpaid billing. Cannot check-in clients.");
         }
 
         // 4. Doğrulamayı Başarıyla Kaydet (Update)

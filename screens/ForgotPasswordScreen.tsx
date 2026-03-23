@@ -13,19 +13,22 @@ import {
     ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FloatingInput from '../components/FloatingInput';
 import AnimatedButton from '../components/AnimatedButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 type Phase = 'email' | 'code' | 'newPassword';
 
 const ForgotPasswordScreen = ({ navigation }: any) => {
     const { colors, isDark } = useTheme();
     const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
 
     const [phase, setPhase] = useState<Phase>('email');
     const [email, setEmail] = useState('');
@@ -216,8 +219,8 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
 
                     {/* Header */}
-                    <View style={styles.headerArea}>
-                        <TouchableOpacity onPress={() => phase === 'email' ? navigation.goBack() : animatePhaseChange(phase === 'code' ? 'email' : 'code')} style={styles.backBtn}>
+                    <View style={[styles.headerArea, { paddingTop: insets.top + SPACING.md }]}>
+                        <TouchableOpacity onPress={() => phase === 'email' ? safeGoBack(navigation, 'Auth') : animatePhaseChange(phase === 'code' ? 'email' : 'code')} style={styles.backBtn}>
                             <Ionicons name="arrow-back" size={24} color={colors.text} />
                         </TouchableOpacity>
                         <View style={styles.headerTitleWrap}>
@@ -352,7 +355,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: SPACING.md,
-        paddingTop: 60,
         paddingBottom: SPACING.md,
         borderBottomWidth: 1,
         borderBottomColor: colors.borderLight,
@@ -449,6 +451,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         borderColor: colors.border,
         backgroundColor: colors.surface,
         textAlign: 'center',
+        textAlignVertical: 'center',
         fontSize: 24,
         fontWeight: '700',
         color: colors.text,

@@ -1,19 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions, TouchableOpacity, Keyboard, Alert } from 'react-native';
-import { Image } from 'expo-image'; // Use expo-image for better caching and performance
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions, TouchableOpacity, Keyboard } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import FloatingInput from '../components/FloatingInput';
 import AnimatedButton from '../components/AnimatedButton';
 import AnimatedCard from '../components/AnimatedCard';
 import { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { ContentModerationService } from '../services/contentModerationService';
+import { AgreementService } from '../services/agreementService';
 import { useSupabaseAuth } from '../contexts/SupabaseContext';
 import { useTranslation } from '../hooks/useTranslation';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
-import { ValidationUtils } from '../utils/validation';
+import { ValidationUtils } from '@nextself/shared';
+import PlatformStorage from '@nextself/shared';
 
 // --- Login rate limiting ---
 const MAX_ATTEMPTS = 5;
@@ -46,6 +48,7 @@ const AuthScreen = ({ navigation }: any) => {
   const [error, setError] = useState('');
   const { t, isTurkish } = useTranslation();
   const { showAlert, AlertComponent } = useAlert();
+  const { signIn, signOut } = useSupabaseAuth(); // Move hook to top level
 
   // Rate-limiting state
   const failedAttempts = useRef(0);
@@ -68,11 +71,8 @@ const AuthScreen = ({ navigation }: any) => {
       return;
     }
 
-    const passwordValidation = ValidationUtils.validatePassword(password);
-    if (!passwordValidation.isValid) {
-      setError(isTurkish ? 'Şifre en az 8 karakter uzunluğunda olmalı ve harf, sayı içermelidir.' : 'Password must be at least 8 characters long and contain letters and numbers.');
-      return;
-    }
+    // For login, don't enforce registration-strength password rules.
+    // Only ensure the field is present (checked above). Server will verify credentials.
 
     // Enforce rate-limit lockout
     const now = Date.now();
@@ -89,20 +89,31 @@ const AuthScreen = ({ navigation }: any) => {
     setLoading(true);
     setError('');
     try {
-      const { signIn, signOut } = useSupabaseAuth();
+      // signIn and signOut are now available from top-level hook destructuring
       if (!signIn) throw new Error('Auth provider not ready');
 
       const result: any = await signIn(email, password);
 
       // supabase-js style result: { data, error } or wrapped exchange result
       const authError = result?.error || (result?.data && result.data.error) || null;
+      // Debug: log full result to help diagnose server-side failures
+      if (__DEV__) {
+        try { console.warn('[Auth] signIn result:', result); } catch (_) { }
+      }
       if (authError) {
         failedAttempts.current += 1;
         if (failedAttempts.current >= MAX_ATTEMPTS) {
           const lockMs = BASE_LOCKOUT_MS * Math.pow(2, Math.floor(failedAttempts.current / MAX_ATTEMPTS) - 1);
           lockedUntil.current = Date.now() + lockMs;
         }
-        setError(sanitizeAuthError((authError && authError.message) || String(authError), isTurkish));
+        const friendly = sanitizeAuthError((authError && (authError.message || String(authError))) || String(authError), isTurkish);
+        if (__DEV__) {
+          // In development show the raw message to aid debugging
+          const raw = (authError && (authError.message || JSON.stringify(authError))) || String(authError);
+          setError(`${friendly} (${raw})`);
+        } else {
+          setError(friendly);
+        }
         setLoading(false);
         return;
       }
@@ -124,6 +135,17 @@ const AuthScreen = ({ navigation }: any) => {
         }
       }
 
+      // Check if user has accepted all required agreements
+      if (user) {
+        const agreementService = AgreementService.getInstance();
+        const { allAccepted } = await agreementService.hasAcceptedAll(user.id);
+        if (!allAccepted) {
+          // Redirect to Terms screen to accept agreements
+          navigation.replace('Terms', { fromAuth: true, userId: user.id });
+          return;
+        }
+      }
+
       navigation.replace('Main');
     } catch (err: any) {
       failedAttempts.current += 1;
@@ -134,14 +156,14 @@ const AuthScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={COMMON_STYLES.screenContainer}>
+    <SafeAreaView style={COMMON_STYLES.screenContainer}>
       <AlertComponent />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardArea}
       >
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top + 20, height * 0.08) }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: SPACING.xl }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -149,7 +171,7 @@ const AuthScreen = ({ navigation }: any) => {
           {/* Header Section */}
           <View style={styles.headerSection}>
             <Image source={require('../assets/icon.png')} style={styles.logoImage} contentFit="contain" cachePolicy="memory-disk" transition={500} />
-            <Text style={styles.appName}>BIOSYNC</Text>
+            <Text style={styles.appName}>NEXTSELF</Text>
             <Text style={styles.tagline}>
               {isTurkish ? 'Wellness & Performans' : 'Wellness & Performance'}
             </Text>
@@ -219,7 +241,7 @@ const AuthScreen = ({ navigation }: any) => {
           </AnimatedCard>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -229,31 +251,34 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 60,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xxl,
     paddingBottom: SPACING.xxxl,
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: SPACING.xxxl,
+    marginBottom: SPACING.xl,
   },
+  // Optically centered logo with proper padding
   logoImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
+    width: 88,
+    height: 88,
+    borderRadius: BORDER_RADIUS.xl,
     marginBottom: SPACING.sm,
   },
   appName: {
     ...TYPOGRAPHY.h1,
-    letterSpacing: 1,
+    letterSpacing: 2,
+    textAlign: 'center',
   },
   tagline: {
     ...TYPOGRAPHY.caption,
     color: colors.textSecondary,
-    marginTop: 4,
+    marginTop: SPACING.xs,
+    textAlign: 'center',
   },
   cardWrapper: {
-    padding: SPACING.xl,
+    padding: SPACING.lg,
   },
   welcomeText: {
     ...TYPOGRAPHY.h2,
@@ -263,30 +288,32 @@ const getStyles = (colors: any) => StyleSheet.create({
   subText: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.errorSoft,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.lg,
-    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+    gap: SPACING.xs,
   },
   errorText: {
     ...TYPOGRAPHY.captionBold,
     color: colors.error,
     flex: 1,
   },
+  // 8px grid aligned input group
   inputGroup: {
-    gap: SPACING.lg,
+    gap: SPACING.sm,
   },
   forgotBtn: {
     alignSelf: 'flex-end',
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xl,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
     paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
   },
   forgotText: {
     ...TYPOGRAPHY.small,
@@ -296,10 +323,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   loginBtn: {
     width: '100%',
   },
+  // 8px grid aligned divider
   dividerBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: SPACING.xl,
+    marginVertical: SPACING.lg,
+    gap: SPACING.sm,
   },
   dividerLine: {
     flex: 1,
@@ -309,7 +338,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   dividerText: {
     ...TYPOGRAPHY.small,
     color: colors.textTertiary,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xs,
   },
   registerBtn: {
     width: '100%',

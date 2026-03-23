@@ -9,185 +9,166 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '../config/theme';
 
 const { width, height } = Dimensions.get('window');
 
 const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
-    const logoScale = useRef(new Animated.Value(0.3)).current;
-    const logoOpacity = useRef(new Animated.Value(0)).current;
-    const taglineOpacity = useRef(new Animated.Value(0)).current;
-    const taglineSlide = useRef(new Animated.Value(20)).current;
-    const iconRotate = useRef(new Animated.Value(0)).current;
-    const iconOpacity = useRef(new Animated.Value(0)).current;
-    const barWidth = useRef(new Animated.Value(0)).current;
-    const barOpacity = useRef(new Animated.Value(0)).current;
-    const pulseAnim = useRef(new Animated.Value(1)).current;
-    const glowOpacity = useRef(new Animated.Value(0)).current;
+    // Animation Values
+    const iconScale = useRef(new Animated.Value(0)).current;
+    const textOpacity = useRef(new Animated.Value(0)).current;
+    const textTranslateY = useRef(new Animated.Value(20)).current;
+    const ringScale = useRef(new Animated.Value(0.8)).current;
+    const ringOpacity = useRef(new Animated.Value(0.3)).current;
 
     useEffect(() => {
-        // Phase 1: Icon appears with rotation (0-500ms)
-        Animated.parallel([
-            Animated.timing(iconOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-            Animated.timing(iconRotate, { toValue: 1, duration: 600, useNativeDriver: true, easing: Easing.out(Easing.back(1.5)) }),
-        ]).start();
+        // 1. Icon pop in
+        Animated.spring(iconScale, {
+            toValue: 1,
+            friction: 5,
+            tension: 60,
+            useNativeDriver: true,
+        }).start();
 
-        // Phase 2: Logo scales in (300-900ms)
-        setTimeout(() => {
-            Animated.parallel([
-                Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
-                Animated.timing(logoOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-                Animated.timing(glowOpacity, { toValue: 0.6, duration: 800, useNativeDriver: true }),
-            ]).start();
-        }, 300);
-
-        // Phase 3: Tagline slides in (800-1200ms)
-        setTimeout(() => {
-            Animated.parallel([
-                Animated.timing(taglineOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-                Animated.timing(taglineSlide, { toValue: 0, duration: 400, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
-            ]).start();
-        }, 800);
-
-        // Phase 4: Loading bar (1000-2200ms)
-        setTimeout(() => {
-            Animated.timing(barOpacity, { toValue: 1, duration: 200, useNativeDriver: false }).start();
-            Animated.timing(barWidth, { toValue: width * 0.5, duration: 1200, useNativeDriver: false, easing: Easing.inOut(Easing.ease) }).start();
-        }, 1000);
-
-        // Continuous pulse on glow
+        // 2. Ripple effect behind icon
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, { toValue: 1.08, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-                Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+                Animated.parallel([
+                    Animated.timing(ringScale, { toValue: 1.5, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+                    Animated.timing(ringOpacity, { toValue: 0, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+                ]),
+                Animated.timing(ringScale, { toValue: 0.8, duration: 0, useNativeDriver: true }),
+                Animated.timing(ringOpacity, { toValue: 0.3, duration: 0, useNativeDriver: true }),
             ])
         ).start();
+
+        // 3. Text slide & fade in
+        setTimeout(() => {
+            Animated.parallel([
+                Animated.timing(textOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+                Animated.timing(textTranslateY, { toValue: 0, duration: 600, easing: Easing.out(Easing.back(1.5)), useNativeDriver: true }),
+            ]).start();
+        }, 400);
 
         const timer = setTimeout(() => onFinish(), 2500);
         return () => clearTimeout(timer);
     }, []);
 
-    const spin = iconRotate.interpolate({ inputRange: [0, 1], outputRange: ['-180deg', '0deg'] });
-
     return (
-        <LinearGradient colors={['#0F0C29', '#302B63', '#24243E']} style={styles.container}>
-            {/* Decorative circles */}
-            <Animated.View style={[styles.bgCircle1, { opacity: glowOpacity }]} />
-            <Animated.View style={[styles.bgCircle2, { opacity: glowOpacity }]} />
+        <View style={styles.container}>
+            {/* Background elements */}
+            <View style={styles.bgTopRight} />
+            <View style={styles.bgBottomLeft} />
 
-            {/* Icon */}
-            <Animated.View style={[styles.iconWrap, { opacity: iconOpacity, transform: [{ rotate: spin }] }]}>
-                <LinearGradient colors={['#58CC02', '#38A802']} style={styles.iconGradient}>
-                    <Ionicons name="pulse" size={32} color="#FFFFFF" />
-                </LinearGradient>
-            </Animated.View>
+            {/* Icon with Ripple */}
+            <View style={styles.iconContainer}>
+                <Animated.View style={[styles.ring, { transform: [{ scale: ringScale }], opacity: ringOpacity }]} />
+                <Animated.View style={[styles.iconWrap, { transform: [{ scale: iconScale }] }]}>
+                    <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} style={styles.iconGradient}>
+                        <Ionicons name="sparkles" size={40} color="#FFFFFF" />
+                    </LinearGradient>
+                </Animated.View>
+            </View>
 
-            {/* Logo */}
-            <Animated.View style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: Animated.multiply(logoScale, pulseAnim) }] }]}>
-                <Text style={styles.logoBio}>Bio</Text>
-                <Text style={styles.logoSync}>Sync</Text>
+            {/* Logo Text */}
+            <Animated.View style={[styles.textContainer, { opacity: textOpacity, transform: [{ translateY: textTranslateY }] }]}>
+                <Text style={styles.logoNext}>Next</Text>
+                <Text style={styles.logoSelf}>Self</Text>
                 <Text style={styles.logoDot}>.</Text>
             </Animated.View>
 
             {/* Tagline */}
-            <Animated.View style={{ opacity: taglineOpacity, transform: [{ translateY: taglineSlide }] }}>
-                <Text style={styles.tagline}>INTELLIGENT PERFORMANCE</Text>
+            <Animated.View style={[styles.taglineContainer, { opacity: textOpacity, transform: [{ translateY: textTranslateY }] }]}>
+                <Text style={styles.tagline}>EVOLVE EVERY DAY</Text>
             </Animated.View>
-
-            {/* Loading bar */}
-            <Animated.View style={[styles.barContainer, { opacity: barOpacity }]}>
-                <Animated.View style={[styles.barFill, { width: barWidth }]}>
-                    <LinearGradient colors={['#58CC02', '#38ef7d']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.barGradient} />
-                </Animated.View>
-            </Animated.View>
-        </LinearGradient>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: COLORS.background,
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
     },
-    bgCircle1: {
+    bgTopRight: {
         position: 'absolute',
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        backgroundColor: '#58CC02',
-        opacity: 0.05,
-        top: height * 0.15,
-        left: -80,
+        top: -height * 0.1,
+        right: -width * 0.2,
+        width: width * 0.8,
+        height: width * 0.8,
+        borderRadius: width * 0.4,
+        backgroundColor: COLORS.primarySoft,
     },
-    bgCircle2: {
+    bgBottomLeft: {
         position: 'absolute',
-        width: 200,
-        height: 200,
-        borderRadius: 100,
-        backgroundColor: '#764ba2',
-        opacity: 0.08,
-        bottom: height * 0.2,
-        right: -60,
+        bottom: -height * 0.1,
+        left: -width * 0.2,
+        width: width * 0.6,
+        height: width * 0.6,
+        borderRadius: width * 0.3,
+        backgroundColor: COLORS.secondarySoft,
+    },
+    iconContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    ring: {
+        position: 'absolute',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: COLORS.primary,
     },
     iconWrap: {
-        marginBottom: 24,
+        width: 80,
+        height: 80,
+        borderRadius: 24,
+        shadowColor: COLORS.primary,
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 15,
+        backgroundColor: COLORS.background,
     },
     iconGradient: {
-        width: 72,
-        height: 72,
-        borderRadius: 22,
+        flex: 1,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#58CC02',
-        shadowOpacity: 0.4,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 12,
     },
-    logoWrap: {
+    textContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        marginBottom: 10,
     },
-    logoBio: {
-        fontSize: width * 0.12,
+    logoNext: {
+        fontSize: 48,
         fontWeight: '800',
-        color: '#FFFFFF',
-        letterSpacing: -1,
+        color: COLORS.text,
+        letterSpacing: -1.5,
     },
-    logoSync: {
-        fontSize: width * 0.12,
+    logoSelf: {
+        fontSize: 48,
         fontWeight: '800',
-        color: '#58CC02',
-        letterSpacing: -1,
+        color: COLORS.primary,
+        letterSpacing: -1.5,
     },
     logoDot: {
-        fontSize: width * 0.12,
+        fontSize: 48,
         fontWeight: '800',
-        color: '#58CC02',
+        color: COLORS.secondary,
+    },
+    taglineContainer: {
+        marginTop: 12,
     },
     tagline: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: 'rgba(255,255,255,0.45)',
+        fontSize: 14,
+        fontWeight: '700',
+        color: COLORS.textTertiary,
         letterSpacing: 4,
-    },
-    barContainer: {
-        position: 'absolute',
-        bottom: height * 0.12,
-        width: width * 0.5,
-        height: 3,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    barFill: {
-        height: '100%',
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    barGradient: {
-        flex: 1,
     },
 });
 

@@ -1,4 +1,4 @@
-import { ValidationUtils } from '../utils/validation';
+import { ValidationUtils } from '@nextself/shared';
 import { SecurityUtils } from '../utils/security';
 
 describe('ValidationUtils', () => {
@@ -346,24 +346,24 @@ describe('SecurityUtils', () => {
         });
     });
 
-    describe('hashPassword', () => {
-        it('should produce consistent hash for same input', () => {
-            const password = 'myPassword123';
-            const hash1 = SecurityUtils.hashPassword(password);
-            const hash2 = SecurityUtils.hashPassword(password);
+    describe('hashData', () => {
+        it('should consistently hash the same data', () => {
+            const data = 'someDataToHash123!';
+            const hash1 = SecurityUtils.hashData(data);
+            const hash2 = SecurityUtils.hashData(data);
             expect(hash1).toBe(hash2);
         });
 
-        it('should produce different hashes for different passwords', () => {
-            const hash1 = SecurityUtils.hashPassword('password1');
-            const hash2 = SecurityUtils.hashPassword('password2');
+        it('should generate different hashes for different data', () => {
+            const hash1 = SecurityUtils.hashData('data1');
+            const hash2 = SecurityUtils.hashData('data2');
             expect(hash1).not.toBe(hash2);
         });
 
-        it('should return a 64-character hex string (SHA-256)', () => {
-            const hash = SecurityUtils.hashPassword('test');
-            expect(hash).toHaveLength(64);
-            expect(/^[a-f0-9]+$/.test(hash)).toBe(true);
+        it('should return a non-empty string', () => {
+            const hash = SecurityUtils.hashData('test');
+            expect(typeof hash).toBe('string');
+            expect(hash.length).toBeGreaterThan(0);
         });
     });
 

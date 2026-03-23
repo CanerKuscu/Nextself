@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback, useEffect } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import {
   TouchableOpacity,
   Text,
@@ -41,10 +41,12 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   const { value, springPress, springRelease } = useAnimation();
   const isPressed = useRef(false);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [isTouchActive, setIsTouchActive] = useState(false);
 
   const handlePressIn = useCallback(() => {
     if (!disabled && !loading) {
       isPressed.current = true;
+      setIsTouchActive(true);
       const animation = springPress();
       animationRef.current = animation;
       animation.start();
@@ -52,6 +54,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   }, [disabled, loading, springPress]);
 
   const handlePressOut = useCallback(() => {
+    setIsTouchActive(false);
     if (!disabled && !loading && isPressed.current) {
       isPressed.current = false;
       const animation = springRelease();
@@ -80,22 +83,23 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
 
     const variantStyles = {
       primary: {
-        backgroundColor: COLORS.primary,
+        backgroundColor: isTouchActive ? COLORS.primaryDark : COLORS.primary,
         ...SHADOWS.glow,
       },
       secondary: {
-        backgroundColor: COLORS.surfaceElevated,
+        backgroundColor: isTouchActive ? COLORS.primarySoft : COLORS.surfaceElevated,
         borderWidth: 1,
-        borderColor: COLORS.borderFocus,
+        borderColor: isTouchActive ? COLORS.primary : COLORS.borderFocus,
       },
       danger: {
-        backgroundColor: COLORS.error,
+        backgroundColor: isTouchActive ? '#E53935' : COLORS.error,
       },
       success: {
-        backgroundColor: COLORS.success,
+        backgroundColor: isTouchActive ? COLORS.primaryDark : COLORS.success,
       },
     };
 
+    // 8px grid aligned size styles
     const sizeStyles = {
       small: {
         paddingHorizontal: SPACING.md,
@@ -120,7 +124,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       ...sizeStyles[size],
       ...style,
     };
-  }, [value, disabled, variant, size, style]);
+  }, [value, disabled, variant, size, style, isTouchActive]);
 
   // Memoize text style to prevent recalculation on every render
   const textStyleMemo = useMemo(() => {
@@ -186,8 +190,9 @@ const styles = StyleSheet.create({
   text: {
     textAlign: 'center',
   },
+  // Icon alignment with 8px grid spacing
   icon: {
-    marginRight: 8,
+    marginRight: SPACING.xs,
   },
 });
 

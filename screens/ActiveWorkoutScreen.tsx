@@ -6,11 +6,14 @@ import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, wit
 import { useTranslation } from '../hooks/useTranslation';
 import AnimatedButton from '../components/AnimatedButton';
 import { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
+import { MissionService } from '../services/missionService';
 import { LeagueService } from '../services/leagueService';
 import { StreakService } from '../services/streakService';
+import { HealthService } from '../services/healthService';
 import { COLORS, TYPOGRAPHY, SPACING, COMMON_STYLES, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 export default function ActiveWorkoutScreen({ navigation, route }: any) {
     const { colors, isDark } = useTheme();
@@ -22,13 +25,15 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
 
     // Workout State
     const [elapsedTime, setElapsedTime] = useState(0);
-    const [heartRate, setHeartRate] = useState(85);
+    const [heartRate, setHeartRate] = useState<number | null>(null);
     const [calories, setCalories] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+    const [sensorSource, setSensorSource] = useState<'apple_health' | 'google_health' | 'manual' | null>(null);
 
     const workoutName = route.params?.workoutName || (isTurkish ? 'Serbest İdman' : 'Freestyle Workout');
     const muscleGroups = route.params?.muscleGroups || [];
     const [saving, setSaving] = useState(false);
+    const workoutStartRef = React.useRef(new Date());
 
     // Heartbeat Animation
     const scale = useSharedValue(1);
@@ -56,35 +61,32 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
         return { transform: [{ scale: scale.value }] };
     });
 
-    // Timer & Mock Data Update — use refs to avoid recreating interval on every tick
-    const elapsedTimeRef = React.useRef(elapsedTime);
-    const heartRateRef = React.useRef(heartRate);
-    elapsedTimeRef.current = elapsedTime;
-    heartRateRef.current = heartRate;
-
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (!isPaused) {
             interval = setInterval(() => {
                 setElapsedTime(prev => prev + 1);
-
-                // Simulate Heart Rate fluctuations (100 - 170 BPM based on elapsed time logic)
-                if (elapsedTimeRef.current > 5) {
-                    setHeartRate(prev => {
-                        const target = 130 + Math.random() * 40; // 130-170 Range
-                        return Math.round(prev + (target - prev) * 0.1);
-                    });
-                }
-
-                // Simulate Calorie Burn (approx 10-15 cal per min based on HR)
-                if (elapsedTimeRef.current > 0 && elapsedTimeRef.current % 5 === 0) {
-                    const hrFactor = Math.max(0, (heartRateRef.current - 60) * 0.03);
-                    setCalories(prev => prev + Math.max(1, Math.round(1 + hrFactor)));
-                }
-
             }, 1000);
         }
         return () => clearInterval(interval);
+    }, [isPaused]);
+
+    useEffect(() => {
+        const healthService = HealthService.getInstance();
+        if (isPaused) return;
+        const stopStream = healthService.startWorkoutMetricsStream(
+            workoutStartRef.current,
+            (metrics) => {
+                setSensorSource(metrics.source);
+                setHeartRate(metrics.heartRate);
+                setCalories(metrics.calories);
+            },
+            { intervalMs: 3000 }
+        );
+
+        return () => {
+            stopStream();
+        };
     }, [isPaused]);
 
     const formatTime = (seconds: number) => {
@@ -103,20 +105,23 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
             const { user } = await supabase.getCurrentUser();
             if (user) {
                 // Save workout to Supabase
-                await supabase.getClient().from('workouts').insert({
+                await supabase.getClient().from('workout_sessions').insert({
                     user_id: user.id,
-                    name: workoutName,
-                    duration_minutes: Math.round(elapsedTime / 60),
+                    start_time: workoutStartRef.current.toISOString(),
+                    end_time: new Date().toISOString(),
+                    duration: elapsedTime,
                     calories_burned: calories,
-                    heart_rate_avg: heartRate,
-                    muscle_groups: muscleGroups,
-                    completed: true,
+                    exercises: Array.isArray(muscleGroups) ? muscleGroups : [],
+                    notes: workoutName,
                 });
                 // Log streak
                 try { await StreakService.getInstance().logWorkout(); } catch { }
                 // Award XP (10 base + 1 per minute + 1 per 50 cal)
                 const xpAmount = 10 + Math.round(elapsedTime / 60) + Math.round(calories / 50);
                 try { await LeagueService.getInstance().addXP(xpAmount, 'workout', workoutName); } catch { }
+                
+                // Update Missions
+                try { await MissionService.getInstance().updateProgressByCategory('workout', 1); } catch { }
             }
         } catch (err) {
             console.warn('Workout save error:', err);
@@ -129,9 +134,9 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
                 type: 'success',
                 title: isTurkish ? 'İdman Tamamlandı!' : 'Workout Complete!',
                 message: isTurkish
-                    ? `Süre: ${formatTime(elapsedTime)}\nYakılan: ${calories} kcal\nOrtalama Nabız: ${heartRate} BPM`
-                    : `Duration: ${formatTime(elapsedTime)}\nBurned: ${calories} kcal\nAvg HR: ${heartRate} BPM`,
-                buttons: [{ text: isTurkish ? 'Harika!' : 'Awesome!', onPress: () => navigation.goBack() }],
+                    ? `Süre: ${formatTime(elapsedTime)}\nYakılan: ${calories} kcal\nOrtalama Nabız: ${heartRate ?? '-'} BPM`
+                    : `Duration: ${formatTime(elapsedTime)}\nBurned: ${calories} kcal\nAvg HR: ${heartRate ?? '-'} BPM`,
+                buttons: [{ text: isTurkish ? 'Harika!' : 'Awesome!', onPress: () => safeGoBack(navigation, 'Workout') }],
             });
         } else {
             showAlert({
@@ -156,7 +161,7 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
                         message: isTurkish ? 'İdmanı bitirmek istediğinize emin misiniz? İlerleme kaydedilmeyecek.' : 'Are you sure you want to quit? Progress will not be saved.',
                         buttons: [
                             { text: isTurkish ? 'İptal' : 'Cancel', style: 'cancel' },
-                            { text: isTurkish ? 'Bırak' : 'Quit', style: 'destructive', onPress: () => navigation.goBack() },
+                            { text: isTurkish ? 'Bırak' : 'Quit', style: 'destructive', onPress: () => safeGoBack(navigation, 'Workout') },
                         ],
                     });
                 }} style={styles.iconBtn}>
@@ -167,7 +172,9 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
                     <Text style={[styles.statusText, isPaused && { color: colors.warning }]}>
                         {isPaused
                             ? (isTurkish ? 'Duraklatıldı' : 'Paused')
-                            : (isTurkish ? 'Canlı Saat Sensörü' : 'Live Watch Sensor')}
+                            : sensorSource
+                                ? (isTurkish ? 'Canlı Sensör Verisi' : 'Live Sensor Data')
+                                : (isTurkish ? 'Sensör Bağlantısı Bekleniyor' : 'Waiting for Sensor Connection')}
                     </Text>
                 </View>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Spotify')}>
@@ -185,7 +192,7 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
                         <Animated.View style={[styles.heartContainer, animatedHeartStyle]}>
                             <Ionicons name="heart" size={48} color={colors.error} />
                         </Animated.View>
-                        <Text style={styles.metricValue}>{heartRate} <Text style={styles.metricUnit}>BPM</Text></Text>
+                        <Text style={styles.metricValue}>{heartRate ?? '--'} <Text style={styles.metricUnit}>BPM</Text></Text>
                         <Text style={styles.metricLabel}>{isTurkish ? 'Nabız' : 'Heart Rate'}</Text>
                     </View>
 

@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { CONFIG } from '../config/config';
+import { CONFIG } from '@nextself/shared';
 
 declare const Buffer: {
   from(data: string, encoding?: string): { toString(encoding?: string): string };
@@ -21,7 +21,7 @@ export class SecurityUtils {
       return CryptoJS.AES.encrypt(data, key).toString();
     } catch (error) {
       console.error('Encryption failed');
-      throw new Error('Failed to encrypt data');
+      throw new Error('Failed to encrypt data', { cause: error });
     }
   }
 
@@ -35,25 +35,22 @@ export class SecurityUtils {
       return bytes.toString(CryptoJS.enc.Utf8);
     } catch (error) {
       console.error('Decryption failed');
-      throw new Error('Failed to decrypt data');
+      throw new Error('Failed to decrypt data', { cause: error });
     }
   }
 
-  // Hash data - SECURITY: SHA256 is NOT suitable for password hashing.
-  // Supabase Auth handles password hashing with bcrypt server-side.
-  // This method should only be used for non-security hashing (e.g., checksums).
+  /**
+   * SECURITY: SHA256 is NOT suitable for password hashing.
+   * Supabase Auth handles password hashing with bcrypt server-side.
+   * This method should only be used for non-security hashing (e.g., checksums).
+   */
   static hashData(data: string): string {
     try {
       return CryptoJS.SHA256(data).toString();
     } catch (error) {
       console.error('Hashing failed');
-      throw new Error('Failed to hash data');
+      throw new Error('Failed to hash data', { cause: error });
     }
-  }
-
-  /** @alias hashData - convenience alias expected by tests and consumers */
-  static hashPassword(password: string): string {
-    return this.hashData(password);
   }
 
   // Generate secure token using CryptoJS (cryptographically secure)
@@ -274,7 +271,7 @@ export class SecurityUtils {
       return CryptoJS.AES.encrypt(wordArray, key).toString();
     } catch (error) {
       console.error('File encryption failed');
-      throw new Error('Failed to encrypt file data');
+      throw new Error('Failed to encrypt file data', { cause: error });
     }
   }
 
@@ -290,7 +287,7 @@ export class SecurityUtils {
       return bytes.buffer;
     } catch (error) {
       console.error('File decryption failed');
-      throw new Error('Failed to decrypt file data');
+      throw new Error('Failed to decrypt file data', { cause: error });
     }
   }
 

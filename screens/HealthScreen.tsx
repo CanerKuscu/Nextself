@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   useWindowDimensions, Animated, TextInput, Modal, Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { useAlert } from '../components/CustomAlert';
 import { useTranslation } from '../hooks/useTranslation';
-import { HealthService, HealthData, HealthInsight } from '../services/healthService';
+import { HealthService, HealthData, HealthInsight, HealthStreamPayload } from '../services/healthService';
+import { NotificationService } from '../services/notificationService';
 import * as Sentry from '@sentry/react-native';
 import { WaterTrackingService, WaterConfig } from '../services/waterTrackingService';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -25,7 +27,7 @@ const HealthScreen = ({ navigation }: any) => {
 
   const { width } = useWindowDimensions();
   const METRIC_W = (width - 40 - 12) / 2;
-  const { t, isTurkish } = useTranslation();
+  const { t, isTurkish, language } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, AlertComponent } = useAlert();
 
@@ -34,16 +36,47 @@ const HealthScreen = ({ navigation }: any) => {
   const [insights, setInsights] = useState<HealthInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState({ apple: false, google: false });
+  const [weeklySteps, setWeeklySteps] = useState<number[]>(Array(7).fill(0));
+  const [weeklySleepHours, setWeeklySleepHours] = useState<number[]>(Array(7).fill(0));
+  const [latestWeight, setLatestWeight] = useState<number | null>(null);
   const [showWaterSetup, setShowWaterSetup] = useState(false);
   const [waterGoalInput, setWaterGoalInput] = useState('2.5');
   const [mlPerSipInput, setMlPerSipInput] = useState('250');
+  const [waterStartHourInput, setWaterStartHourInput] = useState('8');
+  const [waterEndHourInput, setWaterEndHourInput] = useState('22');
   const [userGender, setUserGender] = useState<'male' | 'female' | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const healthService = HealthService.getInstance();
   const waterService = WaterTrackingService.getInstance();
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, [language]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const refreshWater = async () => {
+        const wConfig = await waterService.getConfig();
+        setWaterConfig(wConfig);
+      };
+      refreshWater();
+    }, [])
+  );
+
+  useEffect(() => {
+    const stopStream = healthService.startHealthDataStream(
+      async (payload: HealthStreamPayload) => {
+        setHealthData(payload.healthData);
+        setWeeklySteps(Array.isArray(payload.weeklySteps) && payload.weeklySteps.length === 7 ? payload.weeklySteps : Array(7).fill(0));
+        setWeeklySleepHours(Array.isArray(payload.weeklySleepHours) && payload.weeklySleepHours.length === 7 ? payload.weeklySleepHours : Array(7).fill(0));
+        setInsights(healthService.generateHealthInsights(payload.healthData, userGender));
+      },
+      { intervalMs: 15000, includeWeeklySteps: true, includeWeeklySleep: true }
+    );
+
+    return () => {
+      stopStream();
+    };
+  }, [language, userGender]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -52,12 +85,25 @@ const HealthScreen = ({ navigation }: any) => {
       const [hData, wConfig, connStatus] = await Promise.all([
         healthService.getTodayHealthData(), waterService.getConfig(), healthService.getConnectionStatus(),
       ]);
+      const [weeklyStepsData, weeklySleepData] = await Promise.all([
+        healthService.getWeeklyStepsData(),
+        healthService.getWeeklySleepData(),
+      ]);
+      const weightRecord = await healthService.fetchLatestWeight();
       const supabase = SupabaseService.getInstance();
       const { user } = await supabase.getCurrentUser();
       let gender: 'male' | 'female' | null = null;
       if (user) { const { data: profile } = await supabase.getUserProfile(user.id); if (profile?.gender) { gender = profile.gender; setUserGender(gender); } }
       setHealthData(hData); setWaterConfig(wConfig); setConnectionStatus(connStatus);
+      setWaterGoalInput((wConfig?.dailyGoalLiters ?? 2.5).toString());
+      setMlPerSipInput((wConfig?.mlPerSip ?? 250).toString());
+      setWaterStartHourInput((wConfig?.startHour ?? 8).toString());
+      setWaterEndHourInput((wConfig?.endHour ?? 22).toString());
+      setWeeklySteps(Array.isArray(weeklyStepsData) && weeklyStepsData.length === 7 ? weeklyStepsData : Array(7).fill(0));
+      setWeeklySleepHours(Array.isArray(weeklySleepData) && weeklySleepData.length === 7 ? weeklySleepData : Array(7).fill(0));
+      setLatestWeight(weightRecord?.weight ?? null);
       setInsights(healthService.generateHealthInsights(hData, gender));
+      await NotificationService.getInstance().checkSmartReminders(hData, language);
     } catch (err) { Sentry.captureException(err); }
     finally { setLoading(false); Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }
   };
@@ -90,6 +136,21 @@ const HealthScreen = ({ navigation }: any) => {
           { text: isTurkish ? 'Vazgeç' : 'Cancel' },
         ],
       });
+    } else if (result.needsPermission) {
+      showAlert({
+        type: 'confirm',
+        title: isTurkish ? 'İzin Gerekli' : 'Permission Required',
+        message: isTurkish
+          ? 'Google Health verilerini okuyabilmek için Health Connect izinlerini açmanız gerekiyor.'
+          : 'You need to enable Health Connect permissions to read Google Health data.',
+        buttons: [
+          {
+            text: isTurkish ? 'Ayarları Aç' : 'Open Settings',
+            onPress: () => healthService.openHealthConnectSettings(),
+          },
+          { text: isTurkish ? 'Vazgeç' : 'Cancel', style: 'cancel' },
+        ],
+      });
     } else {
       showAlert({ type: 'error', title: isTurkish ? 'Hata' : 'Error', message: result.error || (isTurkish ? 'Bağlantı kurulamadı.' : 'Connection failed.'), buttons: [{ text: 'OK' }] });
     }
@@ -101,8 +162,10 @@ const HealthScreen = ({ navigation }: any) => {
   const saveWaterSetup = async () => {
     const goal = parseFloat(waterGoalInput); const mlSip = parseInt(mlPerSipInput);
     if (isNaN(goal) || goal <= 0 || isNaN(mlSip) || mlSip <= 0) { showAlert({ type: 'warning', title: '!', message: isTurkish ? 'Geçerli değerler girin.' : 'Enter valid values.', buttons: [{ text: 'OK' }] }); return; }
-    const existing = waterConfig || { dailyGoalLiters: 2.5, mlPerSip: 250, startHour: 8, endHour: 22, currentIntakeMl: 0, date: new Date().toDateString() };
-    const updated = { ...existing, dailyGoalLiters: goal, mlPerSip: mlSip };
+    const startHour = Math.max(0, Math.min(23, parseInt(waterStartHourInput) || 8));
+    const endHour = Math.max(startHour + 1, Math.min(23, parseInt(waterEndHourInput) || 22));
+    const existing = waterConfig || { dailyGoalLiters: 2.5, mlPerSip: 250, startHour: 8, endHour: 22, currentIntakeMl: 0, date: new Date().toDateString(), drinkCount: 0 };
+    const updated = { ...existing, dailyGoalLiters: goal, mlPerSip: mlSip, startHour, endHour };
     await waterService.saveConfig(updated);
     await waterService.scheduleWaterNotifications(updated, userGender, isTurkish);
     setWaterConfig(updated); setShowWaterSetup(false);
@@ -111,17 +174,31 @@ const HealthScreen = ({ navigation }: any) => {
 
   const waterStats = waterConfig ? waterService.getStats(waterConfig) : null;
   const insightColor = (s: string) => s === 'good' ? '#58CC02' : s === 'warning' ? '#FF9600' : '#FF4B4B';
+  const walkingDistanceKm = healthData ? Number(((healthData.steps * 0.78) / 1000).toFixed(2)) : 0;
 
   const healthMetrics = healthData ? [
-    { icon: 'bed', label: isTurkish ? 'Uyku' : 'Sleep', value: healthData.sleepHours > 0 ? `${healthData.sleepHours.toFixed(1)}h` : '--', color: '#7C3AED', bg: '#F5F0FF' },
-    { icon: 'footsteps', label: isTurkish ? 'Adım' : 'Steps', value: healthData.steps > 0 ? healthData.steps.toLocaleString() : '--', color: '#58CC02', bg: '#E8FFE0' },
-    { icon: 'pulse', label: isTurkish ? 'Nabız' : 'Heart Rate', value: healthData.heartRate > 0 ? `${healthData.heartRate}` : '--', color: '#FF4B4B', bg: '#FFF0F0' },
-    { icon: 'flame', label: isTurkish ? 'Kalori' : 'Calories', value: healthData.calories > 0 ? healthData.calories.toString() : '--', color: '#FF9600', bg: '#FFF5EB' },
+    { icon: 'bed', label: isTurkish ? 'Uyku' : 'Sleep', value: healthData.sleepHours > 0 ? `${healthData.sleepHours.toFixed(1)}h` : '--', color: '#7C3AED', bg: colors.secondarySoft },
+    { icon: 'footsteps', label: isTurkish ? 'Adım' : 'Steps', value: healthData.steps > 0 ? healthData.steps.toLocaleString() : '--', color: '#58CC02', bg: colors.successSoft },
+    { icon: 'walk', label: isTurkish ? 'Yürüyüş' : 'Walk', value: healthData.steps > 0 ? `${walkingDistanceKm} km` : '--', color: '#0EA5E9', bg: colors.infoSoft },
+    { icon: 'pulse', label: isTurkish ? 'Nabız' : 'Heart Rate', value: healthData.heartRate > 0 ? `${healthData.heartRate}` : '--', color: '#FF4B4B', bg: colors.errorSoft },
+    { icon: 'flame', label: isTurkish ? 'Kalori' : 'Calories', value: healthData.calories > 0 ? healthData.calories.toString() : '--', color: '#FF9600', bg: colors.warningSoft },
+    { icon: 'scale', label: isTurkish ? 'Kilo' : 'Weight', value: latestWeight ? `${latestWeight.toFixed(1)} kg` : '--', color: '#9333EA', bg: colors.secondarySoft },
   ] : [];
 
+  const weeklyLabels = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date();
+    day.setDate(day.getDate() - (6 - index));
+    const locale = isTurkish ? 'tr-TR' : 'en-US';
+    return day.toLocaleDateString(locale, { weekday: 'short' }).replace('.', '');
+  });
+
   const weeklyStepsData = {
-    labels: isTurkish ? ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [{ data: [7200, 9100, 6500, 10200, 8400, 11000, healthData?.steps || 0].map(v => Math.round(v / 100) * 100) }],
+    labels: weeklyLabels,
+    datasets: [{ data: weeklySteps.map(v => Math.max(0, Math.round(v / 100) * 100)) }],
+  };
+  const weeklySleepChartData = {
+    labels: weeklyLabels,
+    datasets: [{ data: weeklySleepHours.map(v => Number((v || 0).toFixed(1))) }],
   };
 
   // Water ring
@@ -144,7 +221,7 @@ const HealthScreen = ({ navigation }: any) => {
               <Text style={styles.headerTitle}>{isTurkish ? 'Sağlık' : 'Health'}</Text>
               <Text style={styles.headerSub}>{isTurkish ? 'Günlük sağlık takibiniz' : 'Your daily health tracking'}</Text>
             </View>
-            <View style={[styles.connBadge, { backgroundColor: connectionStatus.apple || connectionStatus.google ? '#E8FFE0' : '#F5F5F5' }]}>
+            <View style={[styles.connBadge, { backgroundColor: connectionStatus.apple || connectionStatus.google ? colors.successSoft : colors.surfaceSecondary }]}>
               <Ionicons name={connectionStatus.apple || connectionStatus.google ? 'checkmark-circle' : 'sync-outline'} size={14} color={connectionStatus.apple || connectionStatus.google ? '#58CC02' : colors.textTertiary} />
               <Text style={[styles.connBadgeText, { color: connectionStatus.apple || connectionStatus.google ? '#58CC02' : colors.textTertiary }]}>
                 {connectionStatus.apple || connectionStatus.google ? (isTurkish ? 'Bağlı' : 'OK') : (isTurkish ? 'Bağla' : 'Connect')}
@@ -198,6 +275,30 @@ const HealthScreen = ({ navigation }: any) => {
             </>
           )}
 
+          {LineChart && (
+            <>
+              <Text style={styles.sectionTitle}><Ionicons name="moon" size={16} color="#7C3AED" /> {isTurkish ? 'Haftalık Uyku (Saat)' : 'Weekly Sleep (Hours)'}</Text>
+              <View style={styles.chartCard}>
+                <LineChart
+                  data={weeklySleepChartData}
+                  width={width - 40 - 32}
+                  height={150}
+                  chartConfig={{
+                    backgroundColor: colors.surface,
+                    backgroundGradientFrom: colors.surface,
+                    backgroundGradientTo: colors.surface,
+                    decimalPlaces: 1,
+                    color: (o: number) => `rgba(124, 58, 237, ${o})`,
+                    labelColor: () => colors.textTertiary,
+                    propsForDots: { r: '4', strokeWidth: '2', stroke: '#7C3AED' },
+                  }}
+                  bezier
+                  style={{ borderRadius: 12 }}
+                />
+              </View>
+            </>
+          )}
+
           {/* ─── WATER TRACKER ─── */}
           <View style={styles.waterHeader}>
             <Text style={styles.sectionTitle}><Ionicons name="water" size={16} color="#1CB0F6" /> {isTurkish ? 'Su Takibi' : 'Water'}</Text>
@@ -214,12 +315,12 @@ const HealthScreen = ({ navigation }: any) => {
                 <View style={{ alignItems: 'center' }}>
                   <View style={{ width: wRingSize, height: wRingSize, alignItems: 'center', justifyContent: 'center' }}>
                     <Svg width={wRingSize} height={wRingSize} style={{ position: 'absolute' }}>
-                      <Circle cx={wRingSize / 2} cy={wRingSize / 2} r={wR} stroke="#E0F4FF" strokeWidth={wSw} fill="none" />
+                      <Circle cx={wRingSize / 2} cy={wRingSize / 2} r={wR} stroke={colors.infoSoft} strokeWidth={wSw} fill="none" />
                       <Circle cx={wRingSize / 2} cy={wRingSize / 2} r={wR} stroke="#1CB0F6" strokeWidth={wSw} fill="none"
                         strokeDasharray={`${wCirc} ${wCirc}`} strokeDashoffset={wOff} strokeLinecap="round"
                         transform={`rotate(-90 ${wRingSize / 2} ${wRingSize / 2})`} />
                     </Svg>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#1CB0F6' }}>{waterStats.percentage.toFixed(0)}%</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.accent }}>{waterStats.percentage.toFixed(0)}%</Text>
                   </View>
                 </View>
 
@@ -243,7 +344,7 @@ const HealthScreen = ({ navigation }: any) => {
               </View>
             ) : (
               <TouchableOpacity onPress={() => setShowWaterSetup(true)} style={styles.waterEmpty}>
-                <Ionicons name="water" size={32} color="#1CB0F6" />
+                <Ionicons name="water" size={32} color={colors.accent} />
                 <Text style={styles.waterEmptyText}>{isTurkish ? 'Hedef belirle' : 'Set a goal'}</Text>
               </TouchableOpacity>
             )}
@@ -254,7 +355,7 @@ const HealthScreen = ({ navigation }: any) => {
             <View style={styles.glassRow}>
               {Array.from({ length: Math.ceil((waterConfig.dailyGoalLiters * 1000) / waterConfig.mlPerSip) }, (_, i) => {
                 const filled = i < Math.floor(waterStats.currentIntakeMl / waterConfig.mlPerSip);
-                return <Ionicons key={i} name={filled ? 'water' : 'water-outline'} size={20} color={filled ? '#1CB0F6' : '#E0E0E0'} />;
+                return <Ionicons key={i} name={filled ? 'water' : 'water-outline'} size={20} color={filled ? colors.accent : colors.border} />;
               })}
             </View>
           )}
@@ -264,6 +365,22 @@ const HealthScreen = ({ navigation }: any) => {
           {[
             { name: 'Apple Health', icon: 'logo-apple', iconBg: '#000000', connected: connectionStatus.apple, onPress: handleConnectApple },
             { name: 'Google Health', icon: 'logo-google', iconBg: '#4285F4', connected: connectionStatus.google, onPress: handleConnectGoogle },
+            { name: 'Strava', icon: 'bicycle', iconBg: '#FC4C02', connected: false, onPress: () => {
+              showAlert({
+                type: 'info',
+                title: 'Strava',
+                message: isTurkish ? 'Strava entegrasyonu yakında aktif olacak.' : 'Strava integration is coming soon.',
+                buttons: [{ text: 'OK' }]
+              });
+            }},
+            { name: 'MyFitnessPal', icon: 'nutrition', iconBg: '#0066EE', connected: false, onPress: () => {
+              showAlert({
+                type: 'info',
+                title: 'MyFitnessPal',
+                message: isTurkish ? 'MyFitnessPal entegrasyonu yakında aktif olacak.' : 'MyFitnessPal integration is coming soon.',
+                buttons: [{ text: 'OK' }]
+              });
+            }},
           ].map((src, i) => (
             <View key={i} style={styles.connectCard}>
               <View style={[styles.connectIcon, { backgroundColor: src.iconBg }]}>
@@ -276,7 +393,7 @@ const HealthScreen = ({ navigation }: any) => {
                 </Text>
               </View>
               <TouchableOpacity
-                style={[styles.connectBtn, { backgroundColor: src.connected ? '#E8FFE0' : '#58CC02' }]}
+                style={[styles.connectBtn, { backgroundColor: src.connected ? colors.successSoft : '#58CC02' }]}
                 onPress={src.onPress}
               >
                 <Text style={[styles.connectBtnText, { color: src.connected ? '#58CC02' : colors.background }]}>
@@ -350,8 +467,17 @@ const HealthScreen = ({ navigation }: any) => {
               <TextInput style={styles.setupInput} value={mlPerSipInput} onChangeText={setMlPerSipInput}
                 keyboardType="numeric" placeholder="250" placeholderTextColor={colors.textTertiary} />
 
+              <Text style={[styles.setupLabel, { marginTop: 20 }]}>{isTurkish ? 'Başlangıç Saati (0-23)' : 'Start Hour (0-23)'}</Text>
+              <TextInput style={styles.setupInput} value={waterStartHourInput} onChangeText={setWaterStartHourInput}
+                keyboardType="numeric" placeholder="8" placeholderTextColor={colors.textTertiary} />
+
+              <Text style={[styles.setupLabel, { marginTop: 20 }]}>{isTurkish ? 'Bitiş Saati (0-23)' : 'End Hour (0-23)'}</Text>
+              <TextInput style={styles.setupInput} value={waterEndHourInput} onChangeText={setWaterEndHourInput}
+                keyboardType="numeric" placeholder="22" placeholderTextColor={colors.textTertiary} />
+
               <View style={styles.calcCard}>
                 <Text style={styles.calcText}>{waterGoalInput}L ÷ {mlPerSipInput}ml = {Math.ceil((parseFloat(waterGoalInput) * 1000) / parseInt(mlPerSipInput)) || 0} {isTurkish ? 'bildirim' : 'reminders'}</Text>
+                <Text style={[styles.calcText, { marginTop: 6 }]}>{(isTurkish ? 'Saat aralığı' : 'Time range') + `: ${waterStartHourInput || '8'}:00 - ${waterEndHourInput || '22'}:00`}</Text>
               </View>
             </View>
 
@@ -386,25 +512,25 @@ const getStyles = (colors: any) => StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 12, marginTop: 4 },
 
   // Insights
-  insightCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, overflow: 'hidden', marginBottom: 8, borderWidth: 1, borderColor: '#F0F0F0' },
+  insightCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 16, overflow: 'hidden', marginBottom: 8, borderWidth: 1, borderColor: colors.borderLight },
   insightAccent: { width: 4, height: '100%' },
   insightIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginHorizontal: 12 },
   insightTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
   insightMsg: { fontSize: 11, color: colors.textTertiary, marginTop: 2, lineHeight: 16 },
 
   // Chart
-  chartCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#F0F0F0' },
+  chartCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.borderLight },
 
   // Water
   waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  setupBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0F4FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  setupBtnText: { fontSize: 11, fontWeight: '700', color: '#1CB0F6' },
-  waterCard: { backgroundColor: '#F0FAFF', borderRadius: 20, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: '#D0EDFF' },
+  setupBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.infoSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  setupBtnText: { fontSize: 11, fontWeight: '700', color: colors.accent },
+  waterCard: { backgroundColor: colors.infoSoft, borderRadius: 20, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: colors.borderLight },
   waterRow: { flexDirection: 'row', alignItems: 'center' },
-  waterAmountText: { fontSize: 18, fontWeight: '800', color: '#1CB0F6' },
+  waterAmountText: { fontSize: 18, fontWeight: '800', color: colors.accent },
   waterRemaining: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   waterActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  undoBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E5E5E5' },
+  undoBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderLight },
   drinkBtn: { backgroundColor: '#1CB0F6', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14 },
   drinkBtnText: { fontSize: 13, fontWeight: '700', color: colors.background },
   waterEmpty: { alignItems: 'center', paddingVertical: 30 },
@@ -412,7 +538,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   glassRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginBottom: 20, paddingHorizontal: 4 },
 
   // Connect
-  connectCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, gap: 12, borderWidth: 1, borderColor: '#F0F0F0' },
+  connectCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, gap: 12, borderWidth: 1, borderColor: colors.borderLight },
   connectIcon: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   connectName: { fontSize: 14, fontWeight: '700', color: colors.text },
   connectStatus: { fontSize: 11, marginTop: 1 },
@@ -423,21 +549,21 @@ const getStyles = (colors: any) => StyleSheet.create({
   manualRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   manualItem: { flex: 1 },
   manualLabel: { fontSize: 11, fontWeight: '600', color: colors.textTertiary, marginBottom: 6, textAlign: 'center' },
-  manualInput: { backgroundColor: '#F5F5F5', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  manualInput: { backgroundColor: colors.surfaceSecondary, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center', textAlignVertical: 'center' },
   smartScaleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C3AED', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.2)' },
   smartScaleBtnText: { fontSize: 14, fontWeight: '700', color: colors.background },
 
   // Modal
   modal: { flex: 1, backgroundColor: colors.background },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSecondary, justifyContent: 'center', alignItems: 'center' },
   modalTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  setupCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#F0F0F0' },
+  setupCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.borderLight },
   setupLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  setupInput: { backgroundColor: colors.background, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, fontWeight: '700', color: colors.text, borderWidth: 1, borderColor: '#E5E5E5' },
-  calcCard: { backgroundColor: '#E0F4FF', borderRadius: 14, padding: 14, marginTop: 18 },
-  calcText: { fontSize: 12, color: '#1CB0F6', fontWeight: '600' },
-  saveBtn: { backgroundColor: '#1CB0F6', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
+  setupInput: { backgroundColor: colors.background, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, fontWeight: '700', color: colors.text, borderWidth: 1, borderColor: colors.borderLight, textAlignVertical: 'center' },
+  calcCard: { backgroundColor: colors.infoSoft, borderRadius: 14, padding: 14, marginTop: 18 },
+  calcText: { fontSize: 12, color: colors.accent, fontWeight: '600' },
+  saveBtn: { backgroundColor: colors.accent, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: colors.background },
 });
 

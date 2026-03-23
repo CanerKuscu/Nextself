@@ -117,6 +117,7 @@ const AnimatedCard: React.FC<AnimatedCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // 8px grid aligned card
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.lg,

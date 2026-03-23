@@ -163,7 +163,7 @@ const PremiumFeaturesModal: React.FC<PremiumFeaturesModalProps> = ({
                         <View style={styles.crownWrap}>
                             <Ionicons name="diamond" size={32} color="#FFFFFF" />
                         </View>
-                        <Text style={styles.headerTitle}>BioSync Premium</Text>
+                        <Text style={styles.headerTitle}>NextSelf Premium</Text>
                         <Text style={styles.headerSub}>
                             {isTurkish
                                 ? 'Tum ozelliklerin kilidini acin'

@@ -1,9 +1,8 @@
 {
   "expo": {
-    "name": "BioSync",
-    "slug": "biosync",
+    "name": "NextSelf",
+    "slug": "nextself",
     "version": "1.0.1",
-    "buildNumber": "2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,18 +14,18 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.biosync.app",
+      "bundleIdentifier": "com.nextself.app",
       "infoPlist": {
         "NSHealthShareUsageDescription": "Access to Health data is used to provide personalized fitness insights.",
         "NSHealthUpdateUsageDescription": "Access to Health data is used to track workouts and nutrition.",
-        "NSCameraUsageDescription": "Camera access is required to scan food barcodes and take profile photos.",
+        "NSCameraUsageDescription": "Allow NextSelf to access your camera for on-device posture landmark extraction.",
         "NSPhotoLibraryUsageDescription": "Photo library access is required to select profile photos and share progress images."
       }
     },
     "android": {
       "versionCode": 2,
       "predictiveBackGestureEnabled": false,
-      "package": "com.biosync.app",
+      "package": "com.nextself.app",
       "permissions": [
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_HEART_RATE",
@@ -37,7 +36,9 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -59,22 +60,41 @@
         "@sentry/react-native/expo",
         {
           "url": "https://sentry.io/",
-          "project": "biosync",
+          "project": "nextself",
           "organization": "kuscu"
         }
       ],
       "react-native-health",
       "react-native-health-connect",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Allow NextSelf to access your camera for on-device posture landmark extraction."
+        }
+      ],
       "@sentry/react-native",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1CB0F6"
+        }
+      ],
       "expo-secure-store",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow NextSelf to access your calendar to sync workouts and events."
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "f3e82132-b0a8-4a38-bab8-dc42b16c0af2"
+        "projectId": "6a3a6c0f-f620-487b-9068-e0c105c5d5b7"
       }
     },
     "owner": "lca.nerl",
-    "scheme": "biosync"
+    "scheme": "nextself"
   }
 }

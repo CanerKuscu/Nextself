@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, useWindowDimensions, RefreshControl, Share, Alert,
+    ActivityIndicator, useWindowDimensions, RefreshControl, Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '../hooks/useTranslation';
 import AnimatedCard from '../components/AnimatedCard';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES, SHADOWS } from '../config/theme';
+import { TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 import { useProgressReport, Period } from '../hooks/useProgressReport';
 
 let LineChart: any;
@@ -38,7 +39,7 @@ export default function ProgressReportScreen({ navigation }: any) {
     const shareReport = async () => {
         const latest = bodyMetrics.length > 0 ? bodyMetrics[bodyMetrics.length - 1] : null;
         const reportText = [
-            `📊 BioSync ${isTurkish ? 'İlerleme Raporu' : 'Progress Report'}`,
+            `📊 NextSelf ${isTurkish ? 'İlerleme Raporu' : 'Progress Report'}`,
             `📅 ${period === 'weekly' ? (isTurkish ? 'Haftalık' : 'Weekly') : period === 'monthly' ? (isTurkish ? 'Aylık' : 'Monthly') : (isTurkish ? 'Yıllık' : 'Yearly')}`,
             '',
             latest ? `⚖️ ${isTurkish ? 'Kilo' : 'Weight'}: ${latest.weight} kg` : '',
@@ -96,7 +97,7 @@ export default function ProgressReportScreen({ navigation }: any) {
         <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16, borderBottomColor: colors.text + '15' }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.text + '10' }]}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={[styles.backBtn, { backgroundColor: colors.text + '10' }]}>
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>

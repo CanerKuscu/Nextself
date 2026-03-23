@@ -1,7 +1,7 @@
 {
     "translation": {
         "login": {
-            "title": "BioSync Professional",
+            "title": "NextSelf Professional",
             "subtitle": "Sign in to the Personal Trainer & Dietitian Dashboard",
             "email": "Email address",
             "password": "Password",
@@ -13,7 +13,7 @@
             "register": "Register here"
         },
         "register": {
-            "title": "Join BioSync Professional",
+            "title": "Join NextSelf Professional",
             "subtitle": "Create your Personal Trainer or Dietitian account",
             "iam": "I am a...",
             "pt": "Personal Trainer",
@@ -42,6 +42,10 @@
             "legal": "Legal Agreements",
             "logout": "Sign Out"
         },
+        "common": {
+            "professional": "Professional",
+            "roleLabel": "PT / Dietitian"
+        },
         "users": {
             "title": "Users",
             "subtitle": "Manage all registered users",
@@ -63,7 +67,40 @@
         "dashboard": {
             "title": "Dashboard",
             "welcome": "Welcome back",
-            "overview": "Here's an overview of your practice today."
+            "overview": "Here's an overview of your practice today.",
+            "totalWorkouts": "Total Workouts",
+            "newUsersToday": "New Users Today",
+            "activeUsers": "Active Users",
+            "totalNutritionLogs": "Total Nutrition Logs",
+            "workoutsToday": "Workouts Today",
+            "nutritionLogsToday": "Nutrition Logs Today",
+             "totalClients": "Total Clients",
+             "workouts": "Workouts",
+             "nutritionLogs": "Nutrition Logs",
+             "today": "today",
+             "vsLastWeek": "vs last week",
+             "scheduleSession": "Schedule Session",
+             "createProgram": "Create Program",
+             "viewCourses": "View Courses",
+             "clientList": "Client List"
+         },
+        "workouts": {
+            "title": "Workouts",
+            "totalWorkouts": "Total Workouts",
+            "todaysWorkouts": "Today's Workouts",
+            "avgDuration": "Avg Duration",
+            "avgCalories": "Avg Calories",
+            "perSession": "Per session",
+            "activeToday": "Active today"
+        },
+        "nutrition": {
+            "title": "Nutrition",
+            "totalLogs": "Total Logs",
+            "avgCalories": "Avg Calories",
+            "totalProtein": "Total Protein",
+            "totalCarbs": "Total Carbs",
+            "allTime": "All time",
+            "kcalDay": "kcal / day"
         }
     }
 }

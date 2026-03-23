@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { CONFIG } from '../config/config';
+import { CONFIG } from '@nextself/shared';
 import { importMetaFallback } from '../utils/importMetaFallback';
 
 // Helper utilities to integrate the `session-exchange` Edge Function for web

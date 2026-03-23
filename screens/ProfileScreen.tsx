@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, Animated, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AnimatedButton from '../components/AnimatedButton';
 import { useAlert } from '../components/CustomAlert';
-import { SupabaseService } from '../services/supabase';
+import { safeGoBack } from '../utils/navigation';
+import { SupabaseService } from '@nextself/shared';
 import { LeagueService, LEAGUE_TIERS, UserLeagueData } from '../services/leagueService';
 import { StreakService, StreakData } from '../services/streakService';
 import { StoreService, UserCurrency } from '../services/storeService';
 import { useTranslation } from '../hooks/useTranslation';
 import { useSupabaseAuth } from '../contexts/SupabaseContext';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } from '../config/theme';
+import { TYPOGRAPHY, SPACING } from '../config/theme';
 import LeagueTierIcon from '../components/LeagueTierIcon';
 import { useTheme } from '../contexts/ThemeContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -26,27 +26,100 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const STAT_W = (width - 40 - 12) / 2;
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [leagueData, setLeagueData] = useState<UserLeagueData | null>(null);
   const [streakData, setStreakData] = useState<StreakData | null>(null);
   const [currency, setCurrency] = useState<UserCurrency | null>(null);
   const [workoutCount, setWorkoutCount] = useState(0);
-  const { t, isTurkish, language, setLanguage } = useTranslation();
+  const [monthlyTracking, setMonthlyTracking] = useState<{ labels: string[]; datasets: { label: string; data: number[]; color: string }[] }>({ labels: [], datasets: [] });
+  const [monthlyProgramProgress, setMonthlyProgramProgress] = useState<{ labels: string[]; data: number[] }>({ labels: [], data: [] });
+  const [programAdjustments, setProgramAdjustments] = useState({ increase: 0, stable: 0, decrease: 0 });
+  const { t, isTurkish, language } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, AlertComponent } = useAlert();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const [isProfessional, setIsProfessional] = useState(false);
+  const { session: authSession, user: contextUser, proxiedFetch } = useSupabaseAuth();
 
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, [])
-  );
+  const buildMonthlyTracking = useCallback((
+    workoutRows: Array<{ created_at?: string }> | null | undefined,
+    nutritionRows: Array<{ logged_at?: string }> | null | undefined,
+    waterRows: Array<{ date?: string; created_at?: string }> | null | undefined,
+    vitaminRows: Array<{ logged_at?: string }> | null | undefined,
+    mineralRows: Array<{ created_at?: string }> | null | undefined,
+    assignedWorkoutRows: Array<{ completed_at?: string; is_completed?: boolean; client_feedback?: string }> | null | undefined,
+  ) => {
+    const locale = language === 'tr' ? 'tr-TR' : 'en-US';
+    const monthBuckets = Array.from({ length: 6 }, (_, index) => {
+      const monthDate = new Date();
+      monthDate.setDate(1);
+      monthDate.setHours(0, 0, 0, 0);
+      monthDate.setMonth(monthDate.getMonth() - (5 - index));
+      const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
+      return {
+        key,
+        label: monthDate.toLocaleDateString(locale, { month: 'short' }),
+      };
+    });
 
-  const loadProfile = async () => {
+    const buildSeries = <T,>(rows: T[] | null | undefined, getDate: (row: T) => string | undefined) => {
+      const counts = new Map(monthBuckets.map((bucket) => [bucket.key, 0]));
+      for (const row of rows || []) {
+        const rawDate = getDate(row);
+        if (!rawDate) continue;
+        const dt = new Date(rawDate);
+        if (Number.isNaN(dt.getTime())) continue;
+        const key = `${dt.getFullYear()}-${dt.getMonth()}`;
+        if (!counts.has(key)) continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      return monthBuckets.map((bucket) => counts.get(bucket.key) || 0);
+    };
+
+    const labels = monthBuckets.map((bucket) => bucket.label);
+    const workoutSeries = buildSeries(workoutRows, (row) => row.created_at);
+    const nutritionSeries = buildSeries(nutritionRows, (row) => row.logged_at);
+    const waterSeries = buildSeries(waterRows, (row) => row.date || row.created_at);
+    const vitaminSeries = buildSeries(vitaminRows, (row) => row.logged_at);
+    const mineralSeries = buildSeries(mineralRows, (row) => row.created_at);
+    const assignedSeries = buildSeries(
+      (assignedWorkoutRows || []).filter((row) => !!row?.is_completed),
+      (row) => row.completed_at,
+    );
+
+    setMonthlyTracking({
+      labels,
+      datasets: [
+        { label: isTurkish ? 'Spor' : 'Workout', data: workoutSeries, color: '#1CB0F6' },
+        { label: isTurkish ? 'Beslenme' : 'Nutrition', data: nutritionSeries, color: '#FF9600' },
+        { label: isTurkish ? 'Su' : 'Water', data: waterSeries, color: '#00B7FF' },
+        { label: isTurkish ? 'Vitamin' : 'Vitamin', data: vitaminSeries, color: '#8E44AD' },
+        { label: isTurkish ? 'Mineral' : 'Mineral', data: mineralSeries, color: '#2ECC71' },
+      ],
+    });
+
+    setMonthlyProgramProgress({
+      labels,
+      data: assignedSeries,
+    });
+
+    const summary = { increase: 0, stable: 0, decrease: 0 };
+    for (const row of assignedWorkoutRows || []) {
+      const payloadRaw = row?.client_feedback;
+      if (!payloadRaw) continue;
+      try {
+        const parsed = JSON.parse(payloadRaw);
+        const action = parsed?.weeklyAction as 'increase' | 'decrease' | 'stable' | undefined;
+        if (action === 'increase' || action === 'decrease' || action === 'stable') {
+          summary[action] += 1;
+        }
+      } catch { }
+    }
+    setProgramAdjustments(summary);
+  }, [isTurkish, language]);
+
+  const loadProfile = useCallback(async () => {
     try {
       const supabase = SupabaseService.getInstance();
-      const { user: contextUser, proxiedFetch } = useSupabaseAuth();
       let currentUser: any = contextUser ?? null;
       if (!currentUser) {
         const cur = await supabase.getCurrentUser();
@@ -54,6 +127,13 @@ const ProfileScreen = ({ navigation }: any) => {
       }
 
       if (currentUser) {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+        const sixMonthsAgoIso = sixMonthsAgo.toISOString();
+        const sixMonthsAgoDateOnly = sixMonthsAgoIso.split('T')[0];
+
         // On web prefer proxied fetch through Edge Function to avoid client-stored tokens
         if (Platform.OS === 'web' && proxiedFetch) {
           const select = 'id,full_name,first_name,last_name,username,avatar_url,created_at,height,weight,gender,dob';
@@ -68,19 +148,34 @@ const ProfileScreen = ({ navigation }: any) => {
           }
 
           // Load gamification data in parallel (keep existing service calls)
-          const [leagueResult, streakResult, currencyResult, workoutResult] = await Promise.allSettled([
+          const [leagueResult, streakResult, currencyResult, workoutResult, nutritionResult, waterResult, vitaminResult, mineralResult, assignedResult] = await Promise.allSettled([
             LeagueService.getInstance().getUserLeague(),
             StreakService.getInstance().getStreak(),
             StoreService.getInstance().getUserCurrency(),
             // Use proxiedFetch to get workouts list and count on web
-            proxiedFetch('GET', 'workouts', { query: `user_id=eq.${currentUser.id}&select=id` }),
+            proxiedFetch('GET', 'workouts', { query: `user_id=eq.${currentUser.id}&select=id,created_at&created_at=gte.${sixMonthsAgoIso}` }),
+            supabase.getClient().from('nutrition_logs').select('logged_at').eq('user_id', currentUser.id).gte('logged_at', sixMonthsAgoIso),
+            supabase.getClient().from('water_logs').select('date,created_at').eq('user_id', currentUser.id).gte('date', sixMonthsAgoDateOnly),
+            supabase.getClient().from('vitamin_logs').select('logged_at').eq('user_id', currentUser.id).gte('logged_at', sixMonthsAgoIso),
+            supabase.getClient().from('mineral_logs').select('created_at').eq('user_id', currentUser.id).gte('created_at', sixMonthsAgoIso),
+            supabase.getClient().from('assigned_workouts').select('completed_at,is_completed,client_feedback').eq('client_id', currentUser.id).gte('scheduled_date', sixMonthsAgoDateOnly),
           ]);
           if (leagueResult.status === 'fulfilled') setLeagueData(leagueResult.value);
           if (streakResult.status === 'fulfilled') setStreakData(streakResult.value);
           if (currencyResult.status === 'fulfilled') setCurrency(currencyResult.value);
           if (workoutResult.status === 'fulfilled') {
             const v: any = workoutResult.value;
-            if (v && v.ok && Array.isArray(v.data)) setWorkoutCount(v.data.length || 0);
+            if (v && v.ok && Array.isArray(v.data)) {
+              setWorkoutCount(v.data.length || 0);
+              buildMonthlyTracking(
+                v.data,
+                nutritionResult.status === 'fulfilled' ? (nutritionResult.value as any)?.data || [] : [],
+                waterResult.status === 'fulfilled' ? (waterResult.value as any)?.data || [] : [],
+                vitaminResult.status === 'fulfilled' ? (vitaminResult.value as any)?.data || [] : [],
+                mineralResult.status === 'fulfilled' ? (mineralResult.value as any)?.data || [] : [],
+                assignedResult.status === 'fulfilled' ? (assignedResult.value as any)?.data || [] : [],
+              );
+            }
             else if (v && typeof v.data === 'object' && 'count' in v.data) setWorkoutCount(v.data.count || 0);
           }
 
@@ -99,16 +194,38 @@ const ProfileScreen = ({ navigation }: any) => {
           const { data } = await supabase.getUserProfile(currentUser.id);
           setProfile(data);
           // Load gamification data in parallel
-          const [leagueResult, streakResult, currencyResult, workoutResult] = await Promise.allSettled([
+          const [leagueResult, streakResult, currencyResult, workoutCountResult, workoutProgressResult, nutritionResult, waterResult, vitaminResult, mineralResult, assignedResult] = await Promise.allSettled([
             LeagueService.getInstance().getUserLeague(),
             StreakService.getInstance().getStreak(),
             StoreService.getInstance().getUserCurrency(),
             supabase.getClient().from('workouts').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id),
+            supabase.getClient()
+              .from('workouts')
+              .select('id,created_at')
+              .eq('user_id', currentUser.id)
+              .gte('created_at', sixMonthsAgoIso)
+              .order('created_at', { ascending: false }),
+            supabase.getClient().from('nutrition_logs').select('logged_at').eq('user_id', currentUser.id).gte('logged_at', sixMonthsAgoIso),
+            supabase.getClient().from('water_logs').select('date,created_at').eq('user_id', currentUser.id).gte('date', sixMonthsAgoDateOnly),
+            supabase.getClient().from('vitamin_logs').select('logged_at').eq('user_id', currentUser.id).gte('logged_at', sixMonthsAgoIso),
+            supabase.getClient().from('mineral_logs').select('created_at').eq('user_id', currentUser.id).gte('created_at', sixMonthsAgoIso),
+            supabase.getClient().from('assigned_workouts').select('completed_at,is_completed,client_feedback').eq('client_id', currentUser.id).gte('scheduled_date', sixMonthsAgoDateOnly),
           ]);
           if (leagueResult.status === 'fulfilled') setLeagueData(leagueResult.value);
           if (streakResult.status === 'fulfilled') setStreakData(streakResult.value);
           if (currencyResult.status === 'fulfilled') setCurrency(currencyResult.value);
-          if (workoutResult.status === 'fulfilled') setWorkoutCount(workoutResult.value.count || 0);
+          if (workoutCountResult.status === 'fulfilled') setWorkoutCount(workoutCountResult.value.count || 0);
+          if (workoutProgressResult.status === 'fulfilled') {
+            const workoutRows = workoutProgressResult.value.data || [];
+            buildMonthlyTracking(
+              workoutRows,
+              nutritionResult.status === 'fulfilled' ? (nutritionResult.value as any)?.data || [] : [],
+              waterResult.status === 'fulfilled' ? (waterResult.value as any)?.data || [] : [],
+              vitaminResult.status === 'fulfilled' ? (vitaminResult.value as any)?.data || [] : [],
+              mineralResult.status === 'fulfilled' ? (mineralResult.value as any)?.data || [] : [],
+              assignedResult.status === 'fulfilled' ? (assignedResult.value as any)?.data || [] : [],
+            );
+          }
 
           const { data: profData } = await supabase.getClient()
             .from('professional_profiles')
@@ -120,12 +237,35 @@ const ProfileScreen = ({ navigation }: any) => {
         }
       }
     } catch (err) { console.error(err); }
-    finally { setLoading(false); Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start(); }
+    finally { Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start(); }
+  }, [contextUser, proxiedFetch, buildMonthlyTracking]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
+  const parseBirthDate = (value?: string) => {
+    if (!value || typeof value !== 'string') return null;
+    const normalized = value.trim();
+    const direct = new Date(normalized);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const parts = normalized.split(/[./-]/).map((p) => Number(p));
+    if (parts.length === 3) {
+      const [p1, p2, p3] = parts;
+      if (p3 > 1900 && p3 < 3000) {
+        const dayFirst = new Date(p3, p2 - 1, p1);
+        if (!Number.isNaN(dayFirst.getTime())) return dayFirst;
+      }
+    }
+    return null;
   };
 
   const calculateAge = (dob: string) => {
-    if (!dob) return null;
-    const bd = new Date(dob); const today = new Date();
+    const bd = parseBirthDate(dob);
+    if (!bd) return null;
+    const today = new Date();
     let age = today.getFullYear() - bd.getFullYear();
     const m = today.getMonth() - bd.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) age--;
@@ -135,72 +275,123 @@ const ProfileScreen = ({ navigation }: any) => {
   const handleLogout = () => {
     showAlert({
       type: 'confirm',
-      title: isTurkish ? 'Çıkış Yap' : 'Sign Out',
-      message: isTurkish ? 'Çıkış yapmak istediğinize emin misiniz?' : 'Are you sure you want to sign out?',
+      title: t('signOut'),
+      message: t('logout_confirm_msg'),
       buttons: [
-        { text: isTurkish ? 'İptal' : 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: isTurkish ? 'Çıkış Yap' : 'Sign Out', style: 'destructive',
+          text: t('signOut'), style: 'destructive',
           onPress: async () => { const s = SupabaseService.getInstance(); await s.signOut(); navigation.replace('Auth'); }
         },
       ],
     });
   };
 
-  const age = profile?.dob ? calculateAge(profile.dob) : null;
-  const name = profile?.full_name || (profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : profile?.username) || (isTurkish ? 'Kullanıcı' : 'User');
+  const birthDate = profile?.dob || profile?.birth_date || profile?.date_of_birth || null;
+  const age = birthDate ? calculateAge(birthDate) : null;
+  const name = profile?.full_name || (profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : profile?.username) || t('user_default');
 
   const streak = streakData?.currentStreak || 0;
-  const totalXP = leagueData?.total_xp || 0;
-  const tierInfo = leagueData ? LEAGUE_TIERS.find(l => l.tier === leagueData.current_tier) || LEAGUE_TIERS[0] : LEAGUE_TIERS[0];
+  const totalXP = leagueData?.totalXp || 0;
+  const tierInfo = leagueData ? LEAGUE_TIERS.find(l => l.tier === leagueData.currentTier) || LEAGUE_TIERS[0] : LEAGUE_TIERS[0];
 
-  const progressData = {
-    labels: isTurkish ? ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz'] : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [{ data: [0, 2, 5, 8, 12, 15] }],
-  };
+  // Memoized health calculations to prevent re-renders
+  const healthStats = React.useMemo(() => {
+    if (!profile?.height || !profile?.weight) return null;
 
-  const achievements = [
-    { icon: 'flame' as const, iconColor: '#FF6B6B', bg: '#FFF0F0', label: isTurkish ? 'Hafta Serisi' : 'Week Streak', unlocked: streak >= 7 },
+    const h = profile.height / 100; // meters
+    const w = profile.weight;
+    const bmi = w / (h * h);
+    const bmiCategory = bmi < 18.5 ? t('bmi_underweight')
+      : bmi < 25 ? t('bmi_normal')
+        : bmi < 30 ? t('bmi_overweight')
+          : t('bmi_obese');
+    const bmiColor = bmi < 18.5 ? '#1CB0F6' : bmi < 25 ? '#58CC02' : bmi < 30 ? '#FF9600' : '#FF4B4B';
+
+    // BMR (Mifflin-St Jeor)
+    let bmr = 10 * w + 6.25 * profile.height - 5 * (age || 25);
+    bmr = profile?.gender === 'female' ? bmr - 161 : bmr + 5;
+    const tdee = Math.round(bmr * 1.55); // moderate activity
+    const proteinNeed = Math.round(w * 1.8);
+
+    return { bmi, bmiCategory, bmiColor, bmr, tdee, proteinNeed };
+  }, [profile?.height, profile?.weight, profile?.gender, age, isTurkish]);
+
+  const trackingChartData = React.useMemo(() => ({
+    labels: monthlyTracking.labels.length > 0 ? monthlyTracking.labels : [t('jan'), t('feb'), t('mar'), t('apr'), t('may'), t('jun')],
+    datasets: (monthlyTracking.datasets.length > 0 ? monthlyTracking.datasets : [
+      { label: isTurkish ? 'Spor' : 'Workout', data: [0, 0, 0, 0, 0, 0], color: '#1CB0F6' },
+      { label: isTurkish ? 'Beslenme' : 'Nutrition', data: [0, 0, 0, 0, 0, 0], color: '#FF9600' },
+      { label: isTurkish ? 'Su' : 'Water', data: [0, 0, 0, 0, 0, 0], color: '#00B7FF' },
+      { label: isTurkish ? 'Vitamin' : 'Vitamin', data: [0, 0, 0, 0, 0, 0], color: '#8E44AD' },
+      { label: isTurkish ? 'Mineral' : 'Mineral', data: [0, 0, 0, 0, 0, 0], color: '#2ECC71' },
+    ]).map((dataset) => ({
+      data: dataset.data,
+      color: () => dataset.color,
+      strokeWidth: 2,
+    })),
+  }), [monthlyTracking, t, isTurkish]);
+
+  const trackingLegend = React.useMemo(() => (
+    monthlyTracking.datasets.length > 0 ? monthlyTracking.datasets : [
+      { label: isTurkish ? 'Spor' : 'Workout', data: [], color: '#1CB0F6' },
+      { label: isTurkish ? 'Beslenme' : 'Nutrition', data: [], color: '#FF9600' },
+      { label: isTurkish ? 'Su' : 'Water', data: [], color: '#00B7FF' },
+      { label: isTurkish ? 'Vitamin' : 'Vitamin', data: [], color: '#8E44AD' },
+      { label: isTurkish ? 'Mineral' : 'Mineral', data: [], color: '#2ECC71' },
+    ]
+  ), [monthlyTracking.datasets, isTurkish]);
+
+  const programProgressData = React.useMemo(() => ({
+    labels: monthlyProgramProgress.labels.length > 0 ? monthlyProgramProgress.labels : [t('jan'), t('feb'), t('mar'), t('apr'), t('may'), t('jun')],
+    datasets: [{ data: monthlyProgramProgress.data.length > 0 ? monthlyProgramProgress.data : [0, 0, 0, 0, 0, 0] }],
+  }), [monthlyProgramProgress, t]);
+
+  const achievements = React.useMemo(() => ([
+    { icon: 'flame' as const, iconColor: '#FF6B6B', bg: '#FFF0F0', label: t('week_streak'), unlocked: streak >= 7 },
     { icon: 'flash' as const, iconColor: '#FFC800', bg: '#FFFBEB', label: '100 XP', unlocked: totalXP >= 100 },
-    { icon: 'trophy' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: isTurkish ? 'İlk 10' : 'Top 10', unlocked: (leagueData?.rank_in_group || 0) > 0 && (leagueData?.rank_in_group || 99) <= 10 },
-    { icon: 'barbell' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: isTurkish ? '10 Antrenman' : '10 Workouts', unlocked: workoutCount >= 10 },
-    { icon: 'fitness' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: isTurkish ? 'Güçlü' : 'Strong', unlocked: workoutCount >= 50 },
-    { icon: 'rocket' as const, iconColor: '#CE82FF', bg: '#F5F0FF', label: isTurkish ? 'İlk Gün' : 'Day One', unlocked: true },
+    { icon: 'trophy' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: t('top_10'), unlocked: (leagueData?.rankInGroup || 0) > 0 && (leagueData?.rankInGroup || 99) <= 10 },
+    { icon: 'barbell' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: t('workouts_10'), unlocked: workoutCount >= 10 },
+    { icon: 'fitness' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: t('strong'), unlocked: workoutCount >= 50 },
+    { icon: 'rocket' as const, iconColor: '#CE82FF', bg: '#F5F0FF', label: t('day_one'), unlocked: true },
     { icon: 'star' as const, iconColor: '#FFD700', bg: '#FFFBEB', label: '500 XP', unlocked: totalXP >= 500 },
-    { icon: 'medal' as const, iconColor: '#CD7F32', bg: '#FFF5EB', label: isTurkish ? '30 Gün Serisi' : '30 Day Streak', unlocked: streak >= 30 },
-    { icon: 'shield-checkmark' as const, iconColor: '#0F52BA', bg: '#E0F4FF', label: isTurkish ? 'İlk 3' : 'Top 3', unlocked: (leagueData?.rank_in_group || 0) > 0 && (leagueData?.rank_in_group || 99) <= 3 },
-    { icon: 'restaurant' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: isTurkish ? '50 Öğün' : '50 Meals', unlocked: false },
-    { icon: 'water' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: isTurkish ? 'Su İçici' : 'Hydrated', unlocked: false },
-    { icon: 'ribbon' as const, iconColor: '#E0115F', bg: '#FFF0F5', label: isTurkish ? 'Terfi' : 'Promoted', unlocked: (leagueData?.promotion_count || 0) > 0 },
+    { icon: 'medal' as const, iconColor: '#CD7F32', bg: '#FFF5EB', label: t('streak_30_day'), unlocked: streak >= 30 },
+    { icon: 'shield-checkmark' as const, iconColor: '#0F52BA', bg: '#E0F4FF', label: t('top_3'), unlocked: (leagueData?.rankInGroup || 0) > 0 && (leagueData?.rankInGroup || 99) <= 3 },
+    { icon: 'restaurant' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: t('meals_50'), unlocked: false },
+    { icon: 'water' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: t('hydrated'), unlocked: false },
+    { icon: 'ribbon' as const, iconColor: '#E0115F', bg: '#FFF0F5', label: t('promoted'), unlocked: (leagueData?.promotionCount || 0) > 0 },
     { icon: 'sparkles' as const, iconColor: '#B9F2FF', bg: '#F0FAFF', label: '1000 XP', unlocked: totalXP >= 1000 },
-    { icon: 'body' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: isTurkish ? '100 Antrenman' : '100 Workouts', unlocked: workoutCount >= 100 },
-    { icon: 'heart' as const, iconColor: '#FF4B4B', bg: '#FFF0F0', label: isTurkish ? 'Sağlıklı' : 'Healthy', unlocked: false },
-    { icon: 'people' as const, iconColor: '#CE82FF', bg: '#F5F0FF', label: isTurkish ? 'Sosyal' : 'Social', unlocked: false },
-    { icon: 'trending-up' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: isTurkish ? '5kg Hedef' : '5kg Goal', unlocked: false },
-    { icon: 'time' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: isTurkish ? '90 Gün Serisi' : '90 Day Streak', unlocked: streak >= 90 },
+    { icon: 'body' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: t('workouts_100'), unlocked: workoutCount >= 100 },
+    { icon: 'heart' as const, iconColor: '#FF4B4B', bg: '#FFF0F0', label: t('healthy'), unlocked: false },
+    { icon: 'people' as const, iconColor: '#CE82FF', bg: '#F5F0FF', label: t('social'), unlocked: false },
+    { icon: 'trending-up' as const, iconColor: '#58CC02', bg: '#E8FFE0', label: t('goal_5kg'), unlocked: false },
+    { icon: 'time' as const, iconColor: '#FF9600', bg: '#FFF5EB', label: t('streak_90_day'), unlocked: streak >= 90 },
     { icon: 'diamond' as const, iconColor: '#0F52BA', bg: '#E0F4FF', label: '5000 XP', unlocked: totalXP >= 5000 },
-    { icon: 'globe' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: isTurkish ? 'Dünya Ligi' : 'World League', unlocked: (leagueData?.current_tier || 1) >= 10 },
-  ];
+    { icon: 'globe' as const, iconColor: '#1CB0F6', bg: '#E0F4FF', label: t('world_league'), unlocked: (leagueData?.currentTier || 1) >= 10 },
+  ]), [isTurkish, streak, totalXP, leagueData, workoutCount]);
 
-  const menuItems = [
+  const menuItems = React.useMemo(() => ([
     ...(isProfessional ? [
-      { icon: 'briefcase-outline', title: isTurkish ? 'Profesyonel Panel' : 'Professional Panel', color: '#8B5CF6', onPress: () => navigation.navigate('ProfessionalHome') },
-      { icon: 'people-circle-outline', title: isTurkish ? 'Danışanlarım' : 'My Clients', color: '#06B6D4', onPress: () => navigation.navigate('ClientsList') },
+      { icon: 'briefcase-outline', title: t('professional_panel'), color: '#8B5CF6', onPress: () => navigation.navigate('ProfessionalHome') },
+      { icon: 'people-circle-outline', title: t('my_clients'), color: '#06B6D4', onPress: () => navigation.navigate('ClientsList') },
     ] : []),
-    { icon: 'trophy-outline', title: isTurkish ? 'Lig Sıralaması' : 'League Rankings', color: '#FFC800', onPress: () => navigation.navigate('League') },
-    { icon: 'cart-outline', title: isTurkish ? 'Mağaza' : 'Store', color: '#58CC02', onPress: () => navigation.navigate('Store') },
-    { icon: 'stats-chart-outline', title: isTurkish ? 'İlerleme Raporu' : 'Progress Report', color: '#3498db', onPress: () => navigation.navigate('ProgressReport') },
-    { icon: 'scale-outline', title: isTurkish ? 'Akıllı Tartı' : 'Smart Scale', color: '#FF9600', onPress: () => navigation.navigate('SmartScale') },
-    { icon: 'people-outline', title: isTurkish ? 'PT / Diyetisyen Bul' : 'Find PT / Dietitian', color: '#1CB0F6', onPress: () => navigation.navigate('ProfessionalSearch') },
-    { icon: 'shield-checkmark-outline', title: isTurkish ? 'Veri Gizliliği' : 'Data Privacy', color: '#CE82FF', onPress: () => navigation.navigate('DataPrivacy') },
-  ];
+    { icon: 'trophy-outline', title: t('league_rankings'), color: '#FFC800', onPress: () => navigation.navigate('League') },
+    { icon: 'cart-outline', title: t('store'), color: '#58CC02', onPress: () => navigation.navigate('Store') },
+    { icon: 'stats-chart-outline', title: t('progress_report'), color: '#3498db', onPress: () => navigation.navigate('ProgressReport') },
+    { icon: 'scale-outline', title: t('smart_scale'), color: '#FF9600', onPress: () => navigation.navigate('SmartScale') },
+    { icon: 'people-outline', title: t('find_pt_dietitian'), color: '#1CB0F6', onPress: () => navigation.navigate('ProfessionalSearch') },
+    { icon: 'shield-checkmark-outline', title: t('data_privacy'), color: '#CE82FF', onPress: () => navigation.navigate('DataPrivacy') },
+  ]), [isProfessional, isTurkish, navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <AlertComponent />
 
-      {/* Top Header Row with Settings Icon */}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm }}>
+      {/* Top Header Row with Back + Settings */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm }}>
+        <TouchableOpacity onPress={() => safeGoBack(navigation, isProfessional ? 'ProfessionalMain' : 'Main')} style={{ padding: 8 }}>
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={{ padding: 8 }}>
           <Ionicons name="settings-outline" size={26} color={colors.text} />
         </TouchableOpacity>
@@ -229,7 +420,7 @@ const ProfileScreen = ({ navigation }: any) => {
                 onPress={() => navigation.navigate('EditProfile', { profile })}
                 style={{ paddingHorizontal: SPACING.xl, paddingVertical: 8, borderRadius: 30, borderWidth: 1, borderColor: colors.border }}
               >
-                <Text style={{ ...TYPOGRAPHY.button, color: colors.text, fontSize: 13 }}>{isTurkish ? 'Profili Düzenle' : 'Edit Profile'}</Text>
+                <Text style={{ ...TYPOGRAPHY.button, color: colors.text, fontSize: 13 }}>{t('edit_profile')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -239,70 +430,54 @@ const ProfileScreen = ({ navigation }: any) => {
             <View style={styles.bioCard}>
               <Ionicons name="resize" size={18} color="#1CB0F6" />
               <Text style={styles.bioValue}>{profile?.height ? `${profile.height} cm` : '--'}</Text>
-              <Text style={styles.bioLabel}>{isTurkish ? 'Boy' : 'Height'}</Text>
+              <Text style={styles.bioLabel}>{t('height')}</Text>
             </View>
             <View style={styles.bioCard}>
               <Ionicons name="barbell" size={18} color="#FF9600" />
               <Text style={styles.bioValue}>{profile?.weight ? `${profile.weight} kg` : '--'}</Text>
-              <Text style={styles.bioLabel}>{isTurkish ? 'Kilo' : 'Weight'}</Text>
+              <Text style={styles.bioLabel}>{t('weight')}</Text>
             </View>
             <View style={styles.bioCard}>
               <Ionicons name={profile?.gender === 'female' ? 'female' : 'male'} size={18} color="#CE82FF" />
-              <Text style={styles.bioValue}>{profile?.gender === 'female' ? (isTurkish ? 'Kadın' : 'Female') : profile?.gender === 'male' ? (isTurkish ? 'Erkek' : 'Male') : '--'}</Text>
-              <Text style={styles.bioLabel}>{isTurkish ? 'Cinsiyet' : 'Gender'}</Text>
+              <Text style={styles.bioValue}>{profile?.gender === 'female' ? t('gender_female') : profile?.gender === 'male' ? t('gender_male') : '--'}</Text>
+              <Text style={styles.bioLabel}>{t('gender')}</Text>
             </View>
             <View style={styles.bioCard}>
               <Ionicons name="calendar" size={18} color="#FF4B4B" />
               <Text style={styles.bioValue}>{age ?? '--'}</Text>
-              <Text style={styles.bioLabel}>{isTurkish ? 'Yaş' : 'Age'}</Text>
+              <Text style={styles.bioLabel}>{t('age') || (isTurkish ? 'Yaş' : 'Age')}</Text>
             </View>
           </View >
 
           {/* ─── HEALTH CALCULATIONS (BMI, BMR, TDEE) ─── */}
           {
-            profile?.height && profile?.weight ? (() => {
-              const h = profile.height / 100; // meters
-              const w = profile.weight;
-              const bmi = w / (h * h);
-              const bmiCategory = bmi < 18.5 ? (isTurkish ? 'Zayıf' : 'Underweight')
-                : bmi < 25 ? (isTurkish ? 'Normal' : 'Normal')
-                  : bmi < 30 ? (isTurkish ? 'Fazla Kilolu' : 'Overweight')
-                    : (isTurkish ? 'Obez' : 'Obese');
-              const bmiColor = bmi < 18.5 ? '#1CB0F6' : bmi < 25 ? '#58CC02' : bmi < 30 ? '#FF9600' : '#FF4B4B';
-
-              // BMR (Mifflin-St Jeor)
-              let bmr = 10 * w + 6.25 * profile.height - 5 * (age || 25);
-              bmr = profile?.gender === 'female' ? bmr - 161 : bmr + 5;
-              const tdee = Math.round(bmr * 1.55); // moderate activity
-
-              return (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={styles.sectionTitle}>{isTurkish ? 'Vücut Analizi' : 'Body Analysis'}</Text>
-                  <View style={styles.bioGrid}>
-                    <View style={[styles.bioCard, { borderWidth: 1.5, borderColor: bmiColor + '30' }]}>
-                      <Ionicons name="analytics" size={18} color={bmiColor} />
-                      <Text style={[styles.bioValue, { color: bmiColor }]}>{bmi.toFixed(1)}</Text>
-                      <Text style={styles.bioLabel}>BMI • {bmiCategory}</Text>
-                    </View>
-                    <View style={styles.bioCard}>
-                      <Ionicons name="flame" size={18} color="#FF6B6B" />
-                      <Text style={styles.bioValue}>{Math.round(bmr)}</Text>
-                      <Text style={styles.bioLabel}>BMR (kcal)</Text>
-                    </View>
-                    <View style={styles.bioCard}>
-                      <Ionicons name="trending-up" size={18} color="#58CC02" />
-                      <Text style={styles.bioValue}>{tdee}</Text>
-                      <Text style={styles.bioLabel}>TDEE (kcal)</Text>
-                    </View>
-                    <View style={styles.bioCard}>
-                      <Ionicons name="restaurant" size={18} color="#FF9600" />
-                      <Text style={styles.bioValue}>{Math.round(w * 1.8)}g</Text>
-                      <Text style={styles.bioLabel}>{isTurkish ? 'Protein İht.' : 'Protein Need'}</Text>
-                    </View>
+            healthStats ? (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.sectionTitle}>{t('body_analysis')}</Text>
+                <View style={styles.bioGrid}>
+                  <View style={[styles.bioCard, { borderWidth: 1.5, borderColor: healthStats.bmiColor + '30' }]}>
+                    <Ionicons name="analytics" size={18} color={healthStats.bmiColor} />
+                    <Text style={[styles.bioValue, { color: healthStats.bmiColor }]}>{healthStats.bmi.toFixed(1)}</Text>
+                    <Text style={styles.bioLabel}>BMI • {healthStats.bmiCategory}</Text>
+                  </View>
+                  <View style={styles.bioCard}>
+                    <Ionicons name="flame" size={18} color="#FF6B6B" />
+                    <Text style={styles.bioValue}>{Math.round(healthStats.bmr)}</Text>
+                    <Text style={styles.bioLabel}>BMR (kcal)</Text>
+                  </View>
+                  <View style={styles.bioCard}>
+                    <Ionicons name="trending-up" size={18} color="#58CC02" />
+                    <Text style={styles.bioValue}>{healthStats.tdee}</Text>
+                    <Text style={styles.bioLabel}>TDEE (kcal)</Text>
+                  </View>
+                  <View style={styles.bioCard}>
+                    <Ionicons name="restaurant" size={18} color="#FF9600" />
+                    <Text style={styles.bioValue}>{healthStats.proteinNeed}g</Text>
+                    <Text style={styles.bioLabel}>{isTurkish ? 'Protein İht.' : 'Protein Need'}</Text>
                   </View>
                 </View>
-              );
-            })() : null
+              </View>
+            ) : null
           }
 
           {/* ─── STATISTICS (2x2 colored cards like Duolingo) ─── */}
@@ -363,12 +538,53 @@ const ProfileScreen = ({ navigation }: any) => {
           </ScrollView>
 
           {/* ─── PROGRESS CHART ─── */}
-          {
-            LineChart && (
+          {LineChart && (
+            <>
               <View style={styles.chartCard}>
-                <Text style={styles.chartTitle}>{isTurkish ? 'Aylık İlerleme' : 'Monthly Progress'}</Text>
+                <Text style={styles.chartTitle}>{isTurkish ? 'Aylık Takipler' : 'Monthly Tracking'}</Text>
+                <View style={styles.legendWrap}>
+                  {trackingLegend.map((legendItem) => (
+                    <View key={legendItem.label} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: legendItem.color }]} />
+                      <Text style={styles.legendText}>{legendItem.label}</Text>
+                    </View>
+                  ))}
+                </View>
                 <LineChart
-                  data={progressData}
+                  data={trackingChartData}
+                  width={width - 40 - 32}
+                  height={180}
+                  chartConfig={{
+                    backgroundColor: colors.surface,
+                    backgroundGradientFrom: colors.surface,
+                    backgroundGradientTo: colors.surface,
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(88, 204, 2, ${opacity})`,
+                    labelColor: () => colors.textTertiary,
+                    propsForDots: { r: '3', strokeWidth: '1' },
+                    propsForBackgroundLines: { stroke: '#F0F0F0', strokeDasharray: '' }
+                  }}
+                  bezier
+                  style={{ borderRadius: 12, marginLeft: -8 }}
+                  withShadow={false}
+                />
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>{isTurkish ? 'Program Bazlı Spor Takibi' : 'Program Workout Tracking'}</Text>
+                <View style={styles.programSummaryRow}>
+                  <View style={[styles.programSummaryChip, { backgroundColor: '#E8FFE0' }]}>
+                    <Text style={[styles.programSummaryText, { color: '#2E7D32' }]}>{isTurkish ? 'Artır' : 'Increase'}: {programAdjustments.increase}</Text>
+                  </View>
+                  <View style={[styles.programSummaryChip, { backgroundColor: '#E0F4FF' }]}>
+                    <Text style={[styles.programSummaryText, { color: '#1CB0F6' }]}>{isTurkish ? 'Sabit' : 'Stable'}: {programAdjustments.stable}</Text>
+                  </View>
+                  <View style={[styles.programSummaryChip, { backgroundColor: '#FFF5EB' }]}>
+                    <Text style={[styles.programSummaryText, { color: '#FF9600' }]}>{isTurkish ? 'Azalt' : 'Decrease'}: {programAdjustments.decrease}</Text>
+                  </View>
+                </View>
+                <LineChart
+                  data={programProgressData}
                   width={width - 40 - 32}
                   height={150}
                   chartConfig={{
@@ -386,8 +602,8 @@ const ProfileScreen = ({ navigation }: any) => {
                   withShadow={false}
                 />
               </View>
-            )
-          }
+            </>
+          )}
 
 
 
@@ -423,8 +639,6 @@ const ProfileScreen = ({ navigation }: any) => {
 
 const getStyles = (colors: any) => StyleSheet.create({
   scroll: { paddingHorizontal: 20 },
-  topRow: { alignItems: 'flex-end', marginBottom: 8 },
-  gearBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
 
   // Avatar
   avatarSection: { alignItems: 'center', marginBottom: 28 },
@@ -435,22 +649,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   name: { fontSize: 24, fontWeight: '800', color: colors.text, marginBottom: 2 },
   handle: { fontSize: 13, color: colors.textTertiary, marginBottom: 18 },
-  username: { fontSize: 13, color: colors.textTertiary, marginBottom: 18 },
-
-  // Follow counts
-  followRow: { flexDirection: 'row', alignItems: 'center', gap: 24, marginBottom: 18 },
-  followItem: { alignItems: 'center' },
-  followValue: { fontSize: 18, fontWeight: '800', color: colors.text },
-  followLabel: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
-  followDivider: { width: 1, height: 28, backgroundColor: '#F0F0F0' },
-
-  // Add Friends
-  addFriendsBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 2, borderColor: '#58CC02',
-    paddingHorizontal: 28, paddingVertical: 12, borderRadius: 16,
-  },
-  addFriendsBtnText: { fontSize: 14, fontWeight: '800', color: '#58CC02', letterSpacing: 0.5 },
 
   // Bio info
   bioGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 28, gap: 10, paddingHorizontal: 4 },
@@ -490,6 +688,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 20, borderWidth: 1, borderColor: '#F0F0F0',
   },
   chartTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  legendWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: colors.background },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, fontWeight: '600', color: colors.textTertiary },
+  programSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+  programSummaryChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  programSummaryText: { fontSize: 11, fontWeight: '700' },
 
   // Menu
   menuCard: { backgroundColor: colors.surface, borderRadius: 18, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#F0F0F0' },

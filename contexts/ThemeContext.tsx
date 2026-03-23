@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 import { COLORS, DARK_COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, ANIMATION, COMMON_STYLES } from '../config/theme';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = 'light' | 'dark';
 
 interface ThemeContextType {
     mode: ThemeMode;
@@ -22,7 +22,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_STORAGE_KEY = 'biosync_theme_mode';
+const THEME_STORAGE_KEY = 'NextSelf_theme_mode';
 
 export const useTheme = () => {
     const context = useContext(ThemeContext);
@@ -38,28 +38,24 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     const systemColorScheme = useColorScheme();
-    const [mode, setMode] = useState<ThemeMode>('system');
-    const [isDark, setIsDark] = useState(false);
+    const [mode, setMode] = useState<ThemeMode>('light');
 
     // Load saved theme preference
     useEffect(() => {
         loadThemePreference();
     }, []);
 
-    // Update isDark based on mode and system preference
-    useEffect(() => {
-        if (mode === 'system') {
-            setIsDark(systemColorScheme === 'dark');
-        } else {
-            setIsDark(mode === 'dark');
-        }
-    }, [mode, systemColorScheme]);
-
     const loadThemePreference = async () => {
         try {
             const savedMode = await PlatformStorage.getItem(THEME_STORAGE_KEY);
-            if (savedMode && (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system')) {
-                setMode(savedMode as ThemeMode);
+            if (savedMode === 'light' || savedMode === 'dark') {
+                setMode(savedMode);
+                return;
+            }
+            if (savedMode === 'system') {
+                const migratedMode: ThemeMode = systemColorScheme === 'dark' ? 'dark' : 'light';
+                setMode(migratedMode);
+                saveThemePreference(migratedMode);
             }
         } catch (error) {
             console.error('Failed to load theme preference:', error);
@@ -75,7 +71,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     };
 
     const toggleTheme = useCallback(() => {
-        const newMode = mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light';
+        const newMode: ThemeMode = mode === 'dark' ? 'light' : 'dark';
         setMode(newMode);
         saveThemePreference(newMode);
     }, [mode]);
@@ -86,6 +82,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }, []);
 
     // Get colors based on current theme
+    const isDark = mode === 'dark';
     const colors = isDark ? DARK_COLORS : COLORS;
 
     // Update common styles with current colors (memoized to prevent unnecessary re-renders)

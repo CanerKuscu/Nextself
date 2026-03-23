@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { SupabaseService } from '../services/supabase';
+import { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { SupabaseService } from '@nextself/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAlert } from '../components/CustomAlert';
+import { safeGoBack } from '../utils/navigation';
 
 export default function ProfessionalBillingScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const [loading, setLoading] = useState(true);
     const [billingData, setBillingData] = useState<any[]>([]);
     const [activeClients, setActiveClients] = useState<any[]>([]);
@@ -104,7 +106,7 @@ export default function ProfessionalBillingScreen() {
         <View style={styles.container}>
             <AlertComponent />
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'ProfessionalHome')}>
                     <Ionicons name="arrow-back" size={24} color="#333" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Fatura ve Komisyonlar</Text>

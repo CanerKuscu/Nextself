@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import * as Localization from 'expo-localization';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 import { translations, Language, TranslationKey } from '../locales/i18n';
+import { NotificationService } from '../services/notificationService';
 
 interface LanguageContextType {
   language: Language;
@@ -24,7 +25,7 @@ interface LanguageProviderProps {
   children: React.ReactNode;
 }
 
-const STORAGE_KEY = 'biosync_language';
+const STORAGE_KEY = 'NextSelf_language';
 const SUPPORTED_LANGUAGES: Language[] = ['en', 'tr', 'ru'];
 
 const getDeviceLanguage = (): Language => {
@@ -70,6 +71,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     try {
       setLanguageState(newLanguage);
       await PlatformStorage.setItem(STORAGE_KEY, newLanguage);
+      // Reschedule notifications in new language
+      await NotificationService.getInstance().rescheduleAll(newLanguage);
     } catch (error) {
       console.error('Failed to save language:', error);
     }

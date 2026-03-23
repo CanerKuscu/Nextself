@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 
 export type Period = 'weekly' | 'monthly' | 'yearly';
 
@@ -29,12 +29,20 @@ export interface NutritionSummary {
     adherenceRate: number;
 }
 
-export function useProgressReport(period: Period, isTurkish: boolean) {
+export interface HydrationSummary {
+    totalLiters: number;
+    avgLitersPerDay: number;
+    totalVitamins: number;
+    totalMinerals: number;
+}
+
+export function useProgressReport(period: Period, isTurkish: boolean, targetUserId?: string) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [bodyMetrics, setBodyMetrics] = useState<BodyMetric[]>([]);
     const [workoutSummary, setWorkoutSummary] = useState<WorkoutSummary | null>(null);
     const [nutritionSummary, setNutritionSummary] = useState<NutritionSummary | null>(null);
+    const [hydrationSummary, setHydrationSummary] = useState<HydrationSummary | null>(null);
     const [goalProgress, setGoalProgress] = useState<{ label: string; current: number; target: number; unit: string; icon: string; color: string }[]>([]);
 
     const supabase = SupabaseService.getInstance();
@@ -42,8 +50,10 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const { user } = await supabase.getCurrentUser();
-            if (!user) return;
+            const { user: currentUser } = await supabase.getCurrentUser();
+            const userId = targetUserId || currentUser?.id;
+            
+            if (!userId) return;
 
             const now = new Date();
             let startDate: Date;
@@ -54,14 +64,34 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
             const startIso = startDate.toISOString();
             const startDateOnly = startIso.split('T')[0];
 
-            // 1. Fetch Body Metrics
-            const { data: healthData } = await supabase.getClient()
-                .from('health_data')
-                .select('*')
-                .eq('user_id', user.id)
-                .gte('timestamp', startIso)
-                .not('weight', 'is', null)
-                .order('timestamp', { ascending: true });
+            const [{ data: healthData }, { data: workoutData, error: wErr }, { data: nutData, error: nErr }, { data: waterData }, { data: vitData }, { data: minData }] = await Promise.all([
+                supabase.getClient()
+                    .from('health_data')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .gte('timestamp', startIso)
+                    .not('weight', 'is', null)
+                    .order('timestamp', { ascending: true }),
+                supabase.getClient()
+                    .rpc('get_workout_summary', { p_user_id: userId, p_start_date: startIso }),
+                supabase.getClient()
+                    .rpc('get_nutrition_summary', { p_user_id: userId, p_start_date: startDateOnly }),
+                supabase.getClient()
+                    .from('water_logs')
+                    .select('amount_ml')
+                    .eq('user_id', userId)
+                    .gte('date', startDateOnly),
+                supabase.getClient()
+                    .from('vitamin_logs')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .gte('logged_at', startIso),
+                supabase.getClient()
+                    .from('mineral_logs')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .gte('created_at', startIso),
+            ]);
 
             const metrics: BodyMetric[] = (healthData || []).map((r: any) => ({
                 weight: r.weight,
@@ -73,10 +103,6 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
                 recordedAt: r.timestamp,
             }));
             setBodyMetrics(metrics);
-
-            // 2. Fetch Workout Summary via RPC
-            const { data: workoutData, error: wErr } = await supabase.getClient()
-                .rpc('get_workout_summary', { p_user_id: user.id, p_start_date: startIso });
 
             if (workoutData && workoutData.length > 0) {
                 const w = workoutData[0];
@@ -91,10 +117,6 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
             } else if (wErr) {
                 console.warn('RPC get_workout_summary error:', wErr);
             }
-
-            // 3. Fetch Nutrition Summary via RPC
-            const { data: nutData, error: nErr } = await supabase.getClient()
-                .rpc('get_nutrition_summary', { p_user_id: user.id, p_start_date: startDateOnly });
 
             if (nutData && nutData.length > 0) {
                 const n = nutData[0];
@@ -116,14 +138,23 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
                 console.warn('RPC get_nutrition_summary error:', nErr);
             }
 
+            const totalWaterMl = (waterData || []).reduce((acc: number, curr: any) => acc + (curr.amount_ml || 0), 0);
+            const totalLiters = totalWaterMl / 1000;
+            const logDays = (waterData || []).length;
+            setHydrationSummary({
+                totalLiters: Math.round(totalLiters * 10) / 10,
+                avgLitersPerDay: logDays > 0 ? Math.round((totalLiters / logDays) * 10) / 10 : 0,
+                totalVitamins: vitData?.length || 0,
+                totalMinerals: minData?.length || 0,
+            });
+
             // Goal Progress calculation
             const goals: typeof goalProgress = [];
-            const isTurkish = false; // Note: You might want to pass translations into this hook
 
             if (metrics.length > 0) {
                 const latestWeight = metrics[metrics.length - 1].weight;
                 goals.push({
-                    label: 'Weight',
+                    label: isTurkish ? 'Kilo' : 'Weight',
                     current: latestWeight,
                     target: 75,
                     unit: 'kg',
@@ -132,7 +163,7 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
                 });
                 if (metrics[metrics.length - 1].bodyFat) {
                     goals.push({
-                        label: 'Body Fat',
+                        label: isTurkish ? 'Vücut Yağı' : 'Body Fat',
                         current: metrics[metrics.length - 1].bodyFat!,
                         target: 15,
                         unit: '%',
@@ -142,7 +173,7 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
                 }
                 if (metrics[metrics.length - 1].muscleMass) {
                     goals.push({
-                        label: 'Muscle',
+                        label: isTurkish ? 'Kas' : 'Muscle',
                         current: metrics[metrics.length - 1].muscleMass!,
                         target: 45,
                         unit: '%',
@@ -154,7 +185,7 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
             // Simplified goal adding
             if (workoutData && workoutData.length > 0) {
                 goals.push({
-                    label: 'Weekly Workouts',
+                    label: isTurkish ? 'Antrenman' : 'Workouts',
                     current: Number(workoutData[0].total_workouts) || 0,
                     target: period === 'weekly' ? 5 : period === 'monthly' ? 20 : 240,
                     unit: '',
@@ -170,7 +201,7 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [period]);
+    }, [period, targetUserId, isTurkish]);
 
     useEffect(() => {
         loadData();
@@ -187,6 +218,7 @@ export function useProgressReport(period: Period, isTurkish: boolean) {
         bodyMetrics,
         workoutSummary,
         nutritionSummary,
+        hydrationSummary,
         goalProgress,
         onRefresh,
     };

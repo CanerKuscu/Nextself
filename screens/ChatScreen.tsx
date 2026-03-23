@@ -3,15 +3,18 @@ import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Keyboard
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { SupabaseService } from '../services/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { SecurityUtils } from '../utils/security';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 export default function ChatScreen() {
     const { colors, isDark } = useTheme();
     const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
 
     const [messages, setMessages] = useState<any[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -108,8 +111,8 @@ export default function ChatScreen() {
             style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+                <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(navigation, 'ChatList')}>
                     <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{userName || (isTurkish ? 'Sohbet' : 'Chat')}</Text>
@@ -153,7 +156,7 @@ export default function ChatScreen() {
 
 const getStyles = (colors: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingTop: 60, paddingBottom: SPACING.md, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center' },
+    header: { paddingBottom: SPACING.md, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center' },
     backButton: { padding: SPACING.xs, marginRight: SPACING.sm },
     headerTitle: { ...TYPOGRAPHY.h2, color: colors.textInverse },
     listContent: { padding: SPACING.md, paddingBottom: SPACING.xl },

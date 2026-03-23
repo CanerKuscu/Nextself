@@ -7,8 +7,8 @@ export class DeepLinkingService {
     private static instance: DeepLinkingService;
     private navigationRef: NavigationContainerRef<any> | null = null;
     private linkHandlers: Map<string, DeepLinkHandler> = new Map();
-    private readonly SCHEME = 'biosync';
-    private readonly HOST = 'app.biosync.com';
+    private readonly SCHEME = 'nextself';
+    private readonly HOST = 'app.nextself.com';
 
     private constructor() {
         this.init();
@@ -22,7 +22,7 @@ export class DeepLinkingService {
     }
 
     private linkingSubscription: any;
-    private pendingInitialURL: string | null = null;
+    private pendingURLs: string[] = [];
 
     private init() {
         // Listen for incoming deep links
@@ -37,10 +37,18 @@ export class DeepLinkingService {
      */
     public setNavigationRef(ref: NavigationContainerRef<any>) {
         this.navigationRef = ref;
-        // Process any pending initial URL that arrived before navigation was ready
-        if (this.pendingInitialURL) {
-            this.processURL(this.pendingInitialURL);
-            this.pendingInitialURL = null;
+        // Process any pending URLs that arrived before navigation was ready
+        if (this.pendingURLs.length > 0) {
+            // Process in FIFO order
+            const pending = [...this.pendingURLs];
+            this.pendingURLs = [];
+            for (const url of pending) {
+                // processURL will route using the now-ready navigationRef
+                // process asynchronously to avoid blocking
+                setTimeout(() => {
+                    this.processURL(url);
+                }, 0);
+            }
         }
     }
 
@@ -125,6 +133,18 @@ export class DeepLinkingService {
     }
 
     /**
+     * Process any pending URLs now (useful after auth state changes)
+     */
+    public processPendingURLs() {
+        if (!this.navigationRef || this.pendingURLs.length === 0) return;
+        const pending = [...this.pendingURLs];
+        this.pendingURLs = [];
+        for (const url of pending) {
+            setTimeout(() => this.processURL(url), 0);
+        }
+    }
+
+    /**
      * Parse URL into path and parameters
      */
     private parseURL(url: string): { path: string; params: Record<string, string> } | null {
@@ -134,13 +154,13 @@ export class DeepLinkingService {
             let query = '';
 
             if (url.startsWith(`${this.SCHEME}://`)) {
-                // Custom scheme: biosync://path?param=value
+                // Custom scheme: NextSelf://path?param=value
                 const withoutScheme = url.substring(`${this.SCHEME}://`.length);
                 const [pathPart, queryPart] = withoutScheme.split('?');
                 path = pathPart;
                 query = queryPart || '';
             } else if (url.includes(this.HOST)) {
-                // Universal link: https://app.biosync.com/path?param=value
+                // Universal link: https://app.nextself.com/path?param=value
                 // SECURITY: Validate host strictly to prevent malicious redirects
                 let urlObj: URL;
                 try {
@@ -188,11 +208,30 @@ export class DeepLinkingService {
     private routeByPath(path: string, params: Record<string, string>) {
         if (!this.navigationRef) {
             // Queue URL for processing when navigation ref becomes available
-            this.pendingInitialURL = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
+            const url = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
+            if (this.pendingURLs.length >= 10) {
+                this.pendingURLs.shift();
+            }
+            this.pendingURLs.push(url);
             return;
         }
 
         const navigation = this.navigationRef;
+
+        // If the app is currently on the Auth flow and the deep link requires an
+        // authenticated route, re-queue it for processing after auth completes.
+        try {
+            const currentRoute = (this.navigationRef as any).getCurrentRoute?.();
+            const currentName = currentRoute?.name;
+            const authStackNames = new Set(['Auth']);
+            const allowedWhileAuth = new Set(['verify-email', 'reset-password']);
+            if (currentName && authStackNames.has(currentName) && !allowedWhileAuth.has(path)) {
+                const url = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
+                if (this.pendingURLs.length >= 10) this.pendingURLs.shift();
+                this.pendingURLs.push(url);
+                return;
+            }
+        } catch (_) { }
 
         switch (path) {
             case 'home':
@@ -200,7 +239,7 @@ export class DeepLinkingService {
                 break;
 
             case 'workout':
-                navigation.navigate('Workout');
+                navigation.navigate('Sports');
                 break;
 
             case 'nutrition':
@@ -244,50 +283,38 @@ export class DeepLinkingService {
                 break;
 
             case 'ai-coach':
-                navigation.navigate('AITools', { screen: 'AICoach' });
+                navigation.navigate('AIToolsStack', { screen: 'AICoach' });
                 break;
 
             case 'ai-dietitian':
-                navigation.navigate('AITools', { screen: 'AIDietitian' });
+                navigation.navigate('AIToolsStack', { screen: 'AIDietitian' });
                 break;
 
             case 'ai-chef':
-                navigation.navigate('AITools', { screen: 'AIChef' });
+                navigation.navigate('AIToolsStack', { screen: 'AIChef' });
                 break;
 
             case 'exercise':
                 if (params.id) {
-                    navigation.navigate('Workout', {
-                        screen: 'ExerciseDetail',
-                        params: { exerciseId: params.id }
-                    });
+                    navigation.navigate('ExerciseDetail', { exerciseId: params.id });
                 }
                 break;
 
             case 'food':
                 if (params.id) {
-                    navigation.navigate('Nutrition', {
-                        screen: 'FoodDetail',
-                        params: { foodId: params.id }
-                    });
+                    navigation.navigate('FoodScanner', { foodId: params.id });
                 }
                 break;
 
             case 'supplement':
                 if (params.id) {
-                    navigation.navigate('Supplements', {
-                        screen: 'SupplementDetail',
-                        params: { supplementId: params.id }
-                    });
+                    navigation.navigate('Supplements');
                 }
                 break;
 
             case 'professional':
                 if (params.id) {
-                    navigation.navigate('ProfessionalSearch', {
-                        screen: 'ProfessionalDetail',
-                        params: { professionalId: params.id }
-                    });
+                    navigation.navigate('ProfessionalSearch');
                 }
                 break;
 

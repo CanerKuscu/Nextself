@@ -1,7 +1,7 @@
 {
     "translation": {
         "login": {
-            "title": "BioSync Profesyonel",
+            "title": "NextSelf Profesyonel",
             "subtitle": "Personal Trainer ve Diyetisyen Paneline Giriş Yapın",
             "email": "E-posta",
             "password": "Şifre",
@@ -13,7 +13,7 @@
             "register": "Buradan kayıt olun"
         },
         "register": {
-            "title": "BioSync Profesyonel'e Katılın",
+            "title": "NextSelf Profesyonel'e Katılın",
             "subtitle": "Personal Trainer veya Diyetisyen hesabınızı oluşturun",
             "iam": "Ben bir...",
             "pt": "Personal Trainer",
@@ -42,6 +42,10 @@
             "legal": "Yasal Sözleşmeler",
             "logout": "Çıkış Yap"
         },
+        "common": {
+            "professional": "Profesyonel",
+            "roleLabel": "PT / Diyetisyen"
+        },
         "users": {
             "title": "Kullanıcılar",
             "subtitle": "Kayıtlı tüm kullanıcıları yönetin",
@@ -63,7 +67,40 @@
         "dashboard": {
             "title": "Ana Sayfa",
             "welcome": "Tekrar hoş geldiniz",
-            "overview": "Bugünkü işleyişinizin bir özeti."
+            "overview": "Bugünkü işleyişinizin bir özeti.",
+            "totalWorkouts": "Toplam Antrenman",
+            "newUsersToday": "Bugün Yeni Kullanıcılar",
+            "activeUsers": "Aktif Kullanıcılar",
+            "totalNutritionLogs": "Toplam Beslenme Kaydı",
+            "workoutsToday": "Bugünkü Antrenmanlar",
+            "nutritionLogsToday": "Bugünkü Beslenme Kayıtları",
+             "totalClients": "Toplam Müşteri",
+             "workouts": "Antrenmanlar",
+             "nutritionLogs": "Beslenme Kayıtları",
+             "today": "bugün",
+             "vsLastWeek": "geçen haftaya göre",
+             "scheduleSession": "Seans Planla",
+             "createProgram": "Program Oluştur",
+             "viewCourses": "Kursları Görüntüle",
+             "clientList": "Müşteri Listesi"
+         },
+        "workouts": {
+            "title": "Antrenmanlar",
+            "totalWorkouts": "Toplam Antrenman",
+            "todaysWorkouts": "Bugünkü Antrenmanlar",
+            "avgDuration": "Ort. Süre",
+            "avgCalories": "Ort. Kalori",
+            "perSession": "Seans başına",
+            "activeToday": "Bugün aktif"
+        },
+        "nutrition": {
+            "title": "Beslenme",
+            "totalLogs": "Toplam Kayıt",
+            "avgCalories": "Ort. Kalori",
+            "totalProtein": "Toplam Protein",
+            "totalCarbs": "Toplam Karbonhidrat",
+            "allTime": "Tüm zamanlar",
+            "kcalDay": "kcal / gün"
         }
     }
 }

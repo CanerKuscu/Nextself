@@ -8,7 +8,7 @@
  * Required env vars:
  *   - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (auto-injected)
  *   - RESEND_API_KEY (for email delivery)
- *   - SENDER_EMAIL (e.g. app.biosync@gmail.com)
+ *   - SENDER_EMAIL (e.g. app.nextself@gmail.com)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -175,7 +175,7 @@ async function sendEmailWithPdf(
     isTurkish: boolean
 ): Promise<{ success: boolean; error?: string }> {
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-    const SENDER_EMAIL = Deno.env.get('SENDER_EMAIL') || 'app.biosync@gmail.com';
+    const SENDER_EMAIL = Deno.env.get('SENDER_EMAIL') || 'app.nextself@gmail.com';
 
     if (!RESEND_API_KEY) {
         console.warn('RESEND_API_KEY not set — skipping email, PDF still generated');
@@ -185,29 +185,29 @@ async function sendEmailWithPdf(
     const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
 
     const subject = isTurkish
-        ? `BioSync - Mesafeli Satış Sözleşmeniz (${contractNumber})`
-        : `BioSync - Your Distance Sales Contract (${contractNumber})`;
+        ? `NextSelf - Mesafeli Satış Sözleşmeniz (${contractNumber})`
+        : `NextSelf - Your Distance Sales Contract (${contractNumber})`;
 
     const htmlBody = isTurkish
         ? `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #58CC02;">BioSync</h2>
+            <h2 style="color: #58CC02;">NextSelf</h2>
             <p>Sayın ${recipientName},</p>
             <p>Mesafeli Satış Sözleşmeniz (${contractNumber}) ekte PDF olarak sunulmuştur.</p>
             <p>6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği uyarınca bu sözleşme tarafınıza gönderilmektedir.</p>
             <p><strong>Cayma Hakkı:</strong> Sözleşme tarihinden itibaren 14 gün içinde cayma hakkınızı kullanabilirsiniz.</p>
             <br/>
-            <p>Saygılarımızla,<br/>BioSync Ekibi</p>
+            <p>Saygılarımızla,<br/>NextSelf Ekibi</p>
             <hr/>
             <p style="font-size: 11px; color: #888;">İletişim: ${SENDER_EMAIL}</p>
           </div>`
         : `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #58CC02;">BioSync</h2>
+            <h2 style="color: #58CC02;">NextSelf</h2>
             <p>Dear ${recipientName},</p>
             <p>Your Distance Sales Contract (${contractNumber}) is attached as a PDF.</p>
             <p>This contract is sent in accordance with the Consumer Protection Law and Distance Contracts Regulation.</p>
             <p><strong>Right of Withdrawal:</strong> You may exercise your right of withdrawal within 14 days from the contract date.</p>
             <br/>
-            <p>Best regards,<br/>BioSync Team</p>
+            <p>Best regards,<br/>NextSelf Team</p>
             <hr/>
             <p style="font-size: 11px; color: #888;">Contact: ${SENDER_EMAIL}</p>
           </div>`;
@@ -220,7 +220,7 @@ async function sendEmailWithPdf(
                 'Authorization': `Bearer ${RESEND_API_KEY}`,
             },
             body: JSON.stringify({
-                from: `BioSync <${SENDER_EMAIL}>`,
+                from: `NextSelf <${SENDER_EMAIL}>`,
                 to: [recipientEmail],
                 subject,
                 html: htmlBody,

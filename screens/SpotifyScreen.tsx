@@ -2,16 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassCard from '../components/GlassCard';
 import GradientButton from '../components/GradientButton';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 import { SpotifyService, SpotifyPlaylist, SpotifyTrack } from '../services/spotifyService';
 
 const SpotifyScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const { isTurkish } = useTranslation();
   const [isConnected, setIsConnected] = useState(false);
@@ -128,9 +131,9 @@ const SpotifyScreen = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <LinearGradient colors={['#1DB954', '#1ED760']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
+      <LinearGradient colors={['#1DB954', '#1ED760']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.xl }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: SPACING.sm }}>
+          <TouchableOpacity onPress={() => safeGoBack(navigation, 'Workout')} style={{ marginRight: SPACING.sm }}>
             <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <Ionicons name="musical-notes" size={32} color={colors.textInverse} />
@@ -228,7 +231,7 @@ const SpotifyScreen = ({ navigation }: any) => {
 
 const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 60, paddingBottom: SPACING.xl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  header: { paddingBottom: SPACING.xl, paddingHorizontal: SPACING.xxl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
   headerTitle: { ...TYPOGRAPHY.h1, color: colors.textInverse },
   headerSub: { ...TYPOGRAPHY.caption, color: 'rgba(255,255,255,0.8)' },

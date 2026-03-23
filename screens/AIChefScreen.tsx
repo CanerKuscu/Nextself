@@ -16,10 +16,12 @@ import PremiumBadge from '../components/PremiumBadge';
 import PremiumFeaturesModal from '../components/PremiumFeaturesModal';
 import { DeepSeekService } from '../services/deepseek';
 import { PaymentService } from '../services/paymentService';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
+import { SupplementService } from '../services/supplementService';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 interface Message {
   id: string;
@@ -27,6 +29,26 @@ interface Message {
   content: string;
   timestamp: Date;
 }
+
+const detectMessageLanguage = (text: string, fallback: string): string => {
+  const q = (text || '').trim();
+  if (!q) return fallback;
+  if (/[а-яё]/i.test(q)) return 'ru';
+  if (/[ء-ي]/i.test(q)) return 'ar';
+  if (/[一-龯]/.test(q)) return 'zh';
+  if (/[ぁ-ゖァ-ヺ]/.test(q)) return 'ja';
+  if (/[가-힣]/.test(q)) return 'ko';
+  if (/[ऀ-ॿ]/.test(q)) return 'hi';
+  if (/[ก-๙]/.test(q)) return 'th';
+  if (/[א-ת]/.test(q)) return 'he';
+  if (/[çğıöşüİı]/i.test(q) || /\b(merhaba|selam|tarif|yemek|mutfak|malzeme)\b/i.test(q)) return 'tr';
+  if (/\b(hola|gracias|receta|comida|cocina)\b/i.test(q)) return 'es';
+  if (/\b(bonjour|merci|recette|cuisine|alimentation)\b/i.test(q)) return 'fr';
+  if (/\b(hallo|danke|rezept|küche|ernährung)\b/i.test(q)) return 'de';
+  if (/\b(ciao|grazie|ricetta|cucina|cibo)\b/i.test(q)) return 'it';
+  if (/\b(olá|obrigado|receita|cozinha|alimentação)\b/i.test(q)) return 'pt';
+  return fallback;
+};
 
 const AIChefScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
@@ -41,41 +63,70 @@ const AIChefScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    checkPremium();
     const welcome: Message = {
       id: '0', role: 'ai',
       content: isTurkish
-        ? 'Merhaba! Ben BioSync AI Şefiniz. Kalori ve protein hedeflerinize uygun yemek tarifleri önerebilirim. Ne pişirmek istersiniz?'
-        : 'Hi! I\'m your BioSync AI Chef. I can suggest recipes to match your calorie and protein goals. What would you like to cook?',
+        ? 'Merhaba, ben AI Şef. Hedefine uygun besin önerisi, tarif ve yapılış adımları veririm.'
+        : 'Hi, I am AI Chef. I provide goal-based food suggestions, recipes, and step-by-step cooking guides.',
       timestamp: new Date(),
     };
     setMessages([welcome]);
-  }, []);
-
-  const checkPremium = async () => {
-    try {
-      const { user } = await SupabaseService.getInstance().getCurrentUser();
-      if (user) {
-        const isPremium = await PaymentService.getInstance().hasPremiumFeatures(user.id);
-        if (!isPremium) {
-          setShowPremiumModal(true);
-        }
-      }
-    } catch (err) {
-      console.warn('Premium check error:', err);
-    }
-  };
+  }, [isTurkish]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input.trim(), timestamp: new Date() };
+    const userInput = input.trim();
+    const detectedLanguage = userInput ? detectMessageLanguage(userInput, 'auto') : (isTurkish ? 'tr' : 'en');
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: userInput, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
     try {
       const deepseek = DeepSeekService.getInstance();
-      const prompt = `You are BioSync AI Chef. CRITICAL: Detect the language of the user's message and ALWAYS respond in that SAME language. If user writes in Turkish, respond in Turkish. If user writes in German, respond in German. If user writes in Arabic, respond in Arabic. Always match the user's language exactly. Suggest healthy recipes with calorie and macro info.\n\nUser: ${userMsg.content}`;
-      const response = await deepseek.generateContent(prompt, 'chef');
+      
+      // Fetch User Profile for better context
+      let contextData: any = {};
+      try {
+          const { user } = await SupabaseService.getInstance().getCurrentUser();
+          if (user) {
+              const { data: profile } = await SupabaseService.getInstance().getClient()
+                  .from('profiles')
+                  .select('fitness_goal, dietary_preferences, allergies')
+                  .eq('id', user.id)
+                  .single();
+              
+              // Fetch supplements
+              const { data: routines } = await SupplementService.getInstance().getUserRoutine(user.id);
+              let activeSupplements: string[] = [];
+              if (routines && routines.length > 0) {
+                  activeSupplements = routines.map((r: any) => 
+                      `${r.supplement.name_en || r.supplement.name_tr} (${r.supplement.dosage_amount || ''}${r.supplement.dosage_unit || ''})`
+                  );
+              }
+              
+              if (profile) {
+                  contextData = {
+                      goal: profile.fitness_goal,
+                      dietary_preferences: profile.dietary_preferences,
+                      allergies: profile.allergies,
+                      supplements: activeSupplements
+                  };
+              }
+          }
+      } catch (e) {
+          console.warn('Failed to fetch user context for AI Chef:', e);
+      }
+
+      // Send structured data to Edge Function
+      const response = await deepseek.generateContent('chef', {
+          query: `${userMsg.content}\n\n${isTurkish
+            ? 'Cevap formatı: 1) Hedefe göre besin önerisi 2) Tarifi adım adım nasıl yapacağım 3) İlgili en az 2 YouTube videosu için tam bağlantı (youtube.com arama linki olabilir).'
+            : 'Response format: 1) Goal-based food suggestion 2) Step-by-step preparation 3) At least 2 full YouTube links (youtube.com search links are acceptable).'
+          }`,
+          context: contextData,
+          language: detectedLanguage
+      });
+
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', content: response, timestamp: new Date() }]);
     } catch {
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', content: isTurkish ? 'Hata oluştu.' : 'Error occurred.', timestamp: new Date() }]);
@@ -83,17 +134,13 @@ const AIChefScreen = ({ navigation }: any) => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  const quickPrompts = isTurkish
-    ? ['500 kalorinin altında tarif', 'Yüksek proteinli akşam yemeği', 'Hızlı kahvaltı önerisi', 'Atıştırmalık tarifi']
-    : ['Under 500 calorie recipe', 'High protein dinner', 'Quick breakfast ideas', 'Healthy snack recipe'];
-
   return (
     <View style={COMMON_STYLES.screenContainer}>
       <PremiumFeaturesModal
         visible={showPremiumModal}
         onClose={() => {
           setShowPremiumModal(false);
-          navigation.goBack();
+          safeGoBack(navigation, 'AIToolsStack');
         }}
         onUpgrade={() => {
           setShowPremiumModal(false);
@@ -101,7 +148,7 @@ const AIChefScreen = ({ navigation }: any) => {
         }}
       />
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => safeGoBack(navigation, 'AIToolsStack')} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerRow}>
@@ -118,15 +165,6 @@ const AIChefScreen = ({ navigation }: any) => {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={10}>
         <ScrollView ref={scrollRef} contentContainerStyle={styles.chatContent} showsVerticalScrollIndicator={false}>
-          {messages.length <= 1 && (
-            <View style={styles.quickPrompts}>
-              {quickPrompts.map((p, i) => (
-                <TouchableOpacity key={i} style={styles.quickChip} onPress={() => setInput(p)} activeOpacity={0.7}>
-                  <Text style={styles.quickText}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
           {messages.map((msg) => (
             <View key={msg.id} style={[styles.messageBubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}>
               {msg.role === 'ai' && <View style={styles.aiAvatar}><Ionicons name="flame" size={14} color={colors.accent} /></View>}
@@ -136,18 +174,25 @@ const AIChefScreen = ({ navigation }: any) => {
             </View>
           ))}
           {loading && (
-            <View style={[styles.messageBubble, styles.aiBubble]}>
-              <View style={styles.aiAvatar}><Ionicons name="flame" size={14} color={colors.accent} /></View>
-              <View style={[styles.messageContent, styles.aiContent]}>
-                <ActivityIndicator size="small" color={colors.accent} />
-              </View>
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={styles.loadingText}>{isTurkish ? 'Tarif hazırlanıyor...' : 'Cooking up recipe...'}</Text>
             </View>
           )}
         </ScrollView>
-        <View style={[styles.inputArea, { paddingBottom: insets.bottom || SPACING.md }]}>
-          <TextInput style={styles.textInput} placeholder={isTurkish ? 'Mesajınızı yazın...' : 'Type your message...'} placeholderTextColor={colors.textTertiary} value={input} onChangeText={setInput} multiline maxLength={1000} />
-          <TouchableOpacity style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]} onPress={sendMessage} disabled={!input.trim() || loading}>
-            <Ionicons name="send" size={20} color={colors.textInverse} />
+
+        <View style={[styles.inputContainer, { marginBottom: Platform.OS === 'ios' ? insets.bottom : 20 }]}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder={isTurkish ? 'Bir şeyler sorun...' : 'Ask something...'}
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} onPress={sendMessage} disabled={!input.trim() || loading}>
+            {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -156,30 +201,54 @@ const AIChefScreen = ({ navigation }: any) => {
 };
 
 const getStyles = (colors: any) => StyleSheet.create({
-  header: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', marginBottom: SPACING.sm },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  headerIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { ...TYPOGRAPHY.h2, color: colors.text },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: { marginRight: SPACING.sm },
+  headerRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  headerIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.accent + '20',
+    alignItems: 'center', justifyContent: 'center', marginRight: SPACING.sm
+  },
+  headerTitle: { ...TYPOGRAPHY.h3, color: colors.text },
   headerSub: { ...TYPOGRAPHY.caption, color: colors.textSecondary },
-  chatContent: { padding: SPACING.lg, paddingBottom: SPACING.xxl },
-  quickPrompts: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.xl },
-  quickChip: { backgroundColor: colors.accentSoft, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.pill, borderWidth: 1, borderColor: colors.accent + '30' },
-  quickText: { ...TYPOGRAPHY.caption, color: colors.accentDark },
-  messageBubble: { flexDirection: 'row', marginBottom: SPACING.md, gap: SPACING.sm },
-  userBubble: { justifyContent: 'flex-end' },
-  aiBubble: { justifyContent: 'flex-start' },
-  aiAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
-  messageContent: { maxWidth: '75%', padding: SPACING.md, borderRadius: BORDER_RADIUS.lg },
-  userContent: { backgroundColor: colors.accent, borderBottomRightRadius: 4 },
-  aiContent: { backgroundColor: colors.surface, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.borderLight },
-  messageText: { ...TYPOGRAPHY.body, lineHeight: 22 },
-  userText: { color: colors.textInverse },
+  chatContent: { padding: SPACING.md, paddingBottom: 100 },
+  messageBubble: {
+    maxWidth: '85%', padding: SPACING.md, borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.md, flexDirection: 'row',
+  },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: colors.accent, borderBottomRightRadius: 2 },
+  aiBubble: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderBottomLeftRadius: 2, borderWidth: 1, borderColor: colors.border },
+  aiAvatar: { marginRight: SPACING.xs, marginTop: 2 },
+  messageContent: { flex: 1 },
+  userContent: { flex: 1 },
+  aiContent: { flex: 1 },
+  messageText: { ...TYPOGRAPHY.body },
+  userText: { color: '#FFF' },
   aiText: { color: colors.text },
-  inputArea: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.surface, gap: SPACING.sm },
-  textInput: { flex: 1, ...TYPOGRAPHY.body, color: colors.text, backgroundColor: colors.surfaceSecondary, borderRadius: BORDER_RADIUS.xl, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm + 2, maxHeight: 100 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
-  sendButtonDisabled: { opacity: 0.4 },
+  loadingWrap: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.md, marginBottom: SPACING.md },
+  loadingText: { marginLeft: SPACING.xs, color: colors.textSecondary, ...TYPOGRAPHY.caption },
+  inputContainer: {
+    flexDirection: 'row', alignItems: 'center', padding: SPACING.sm,
+    backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  input: {
+    flex: 1, backgroundColor: colors.background, borderRadius: BORDER_RADIUS.pill,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    color: colors.text, maxHeight: 100,
+  },
+  sendBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center', marginLeft: SPACING.sm,
+  },
+  sendBtnDisabled: { backgroundColor: colors.disabled || '#ccc' },
 });
 
 export default AIChefScreen;

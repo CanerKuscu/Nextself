@@ -1,56 +1,112 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, ScrollView, StyleSheet, TouchableOpacity,
-    ActivityIndicator, RefreshControl,
+    ActivityIndicator, RefreshControl, FlatList, useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StoreService, StoreItem, UserCurrency } from '../services/storeService';
 import { useTranslation } from '../hooks/useTranslation';
+import StoreIllustration from '../components/StoreIllustration';
+import LeagueTierIcon from '../components/LeagueTierIcon';
 import GlassCard from '../components/GlassCard';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
-import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
+import ScreenContainer from '../components/ScreenContainer';
+import SkeletonCard from '../components/SkeletonCard';
+
+const PAGE_SIZE = 16;
 
 const StoreScreen = ({ navigation }: any) => {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+    const { width } = useWindowDimensions();
+    const itemWidth = React.useMemo(() => Math.max((width - 60) / 2, 150), [width]);
 
     const { isTurkish } = useTranslation();
     const { showAlert, AlertComponent } = useAlert();
-    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
-    const [currency, setCurrency] = useState<UserCurrency>({ points: 0, gems: 0, total_earned_points: 0, total_spent_points: 0 });
+    const [currency, setCurrency] = useState<UserCurrency>({ points: 0, gems: 0, totalEarnedPoints: 0, totalSpentPoints: 0 });
     const [activeTab, setActiveTab] = useState<string>('all');
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [purchasing, setPurchasing] = useState<string | null>(null);
 
-    const loadData = useCallback(async () => {
-        try {
-            const storeService = StoreService.getInstance();
-            const [items, curr] = await Promise.all([
-                storeService.getStoreItems(),
-                storeService.getUserCurrency(),
-            ]);
-            setStoreItems(items);
-            setCurrency(curr);
-        } catch (err) {
-            console.warn('Store load error:', err);
-        } finally {
-            setLoading(false);
-        }
+    const loadCurrency = useCallback(async () => {
+        const storeService = StoreService.getInstance();
+        const curr = await storeService.getUserCurrency();
+        setCurrency(curr);
     }, []);
 
-    useEffect(() => { loadData(); }, [loadData]);
-    const onRefresh = useCallback(async () => { setRefreshing(true); await loadData(); setRefreshing(false); }, [loadData]);
+    const loadStoreItems = useCallback(async (pageParam: number, replace: boolean) => {
+        try {
+            if (pageParam > 0) {
+                setLoadingMore(true);
+            }
+            setLoadError(null);
+            const storeService = StoreService.getInstance();
+            const items = await storeService.getStoreItems(activeTab, pageParam, PAGE_SIZE);
+            setHasMore(items.length === PAGE_SIZE);
+            setPage(pageParam);
+            setStoreItems(prev => {
+                if (replace) return items;
+                const existing = new Set(prev.map(item => item.id));
+                const next = items.filter(item => !existing.has(item.id));
+                return prev.concat(next);
+            });
+        } catch (err) {
+            console.warn('Store load error:', err);
+            setLoadError(isTurkish ? 'Ürünler yüklenemedi' : 'Failed to load store items');
+            if (replace) {
+                setStoreItems([]);
+            }
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [activeTab, isTurkish]);
+
+    const refreshStore = useCallback(async () => {
+        await Promise.all([
+            loadCurrency(),
+            loadStoreItems(0, true),
+        ]);
+    }, [loadCurrency, loadStoreItems]);
+
+    useEffect(() => {
+        let mounted = true;
+        const bootstrap = async () => {
+            setLoading(true);
+            if (mounted) {
+                await refreshStore();
+                setLoading(false);
+            }
+        };
+        bootstrap();
+        return () => { mounted = false; };
+    }, [refreshStore]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await refreshStore();
+        setRefreshing(false);
+    }, [refreshStore]);
+
+    const handleLoadMore = useCallback(() => {
+        if (loading || loadingMore || !hasMore) return;
+        loadStoreItems(page + 1, false);
+    }, [hasMore, loading, loadingMore, loadStoreItems, page]);
 
     const handlePurchase = async (item: StoreItem) => {
-        if (currency.points < item.price_points) {
+        if (currency.points < item.pricePoints) {
             showAlert({
                 title: isTurkish ? 'Yetersiz Puan' : 'Insufficient Points',
-                message: isTurkish ? `Bu ürün için ${item.price_points} puan gerekli. Mevcut: ${currency.points}` : `This item requires ${item.price_points} points. Available: ${currency.points}`,
+                message: isTurkish ? `Bu ürün için ${item.pricePoints} puan gerekli. Mevcut: ${currency.points}` : `This item requires ${item.pricePoints} points. Available: ${currency.points}`,
                 type: 'error'
             });
             return;
@@ -59,8 +115,8 @@ const StoreScreen = ({ navigation }: any) => {
         showAlert({
             title: isTurkish ? 'Satın Al' : 'Purchase',
             message: isTurkish
-                ? `${item.name_tr} satın almak istiyor musunuz?\n\nFiyat: ${item.price_points} puan`
-                : `Do you want to buy ${item.name}?\n\nPrice: ${item.price_points} points`,
+                ? `${item.nameTr} satın almak istiyor musunuz?\n\nFiyat: ${item.pricePoints} puan`
+                : `Do you want to buy ${item.name}?\n\nPrice: ${item.pricePoints} points`,
             type: 'info',
             buttons: [
                 { text: isTurkish ? 'İptal' : 'Cancel', style: 'cancel' },
@@ -73,10 +129,10 @@ const StoreScreen = ({ navigation }: any) => {
                             if (result.success) {
                                 showAlert({
                                     title: isTurkish ? 'Başarılı!' : 'Success!',
-                                    message: isTurkish ? `${item.name_tr} satın alındı!` : `${item.name} purchased!`,
+                                    message: isTurkish ? `${item.nameTr} satın alındı!` : `${item.name} purchased!`,
                                     type: 'success'
                                 });
-                                await loadData();
+                                await refreshStore();
                             } else {
                                 const messages: Record<string, string> = {
                                     insufficient_points: isTurkish ? 'Yetersiz puan' : 'Insufficient points',
@@ -104,9 +160,27 @@ const StoreScreen = ({ navigation }: any) => {
         });
     };
 
-    const filteredItems = activeTab === 'all' ? storeItems : storeItems.filter(item => item.category === activeTab);
+    const getCategoryIcon = (category: string, itemIcon?: string): keyof typeof Ionicons.glyphMap => {
+        // Use item-specific icon if available
+        if (itemIcon) {
+            const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
+                'snow': 'snow', 'heart': 'heart', 'gift': 'gift',
+                'flash': 'flash', 'shield': 'shield', 'barbell': 'barbell',
+                'nutrition': 'nutrition', 'rocket': 'rocket', 'people': 'people',
+                'compass': 'compass', 'eye': 'eye', 'dice': 'dice',
+                'ribbon': 'ribbon', 'medal': 'medal', 'color-palette': 'color-palette',
+                'sparkles': 'sparkles', 'diamond': 'diamond', 'aperture': 'aperture',
+                'happy': 'happy', 'flame': 'flame', 'fitness': 'fitness',
+                'body': 'body', 'pulse': 'pulse', 'medical': 'medical',
+                'brain': 'analytics', 'scan': 'scan', 'create': 'create',
+                'star': 'star', 'leaf': 'leaf', 'calculator': 'calculator',
+                'restaurant': 'restaurant', 'water': 'water', 'moon': 'moon',
+                'flower': 'flower', 'sunny': 'sunny',
+            };
+            if (iconMap[itemIcon]) return iconMap[itemIcon];
+        }
 
-    const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
+        // Fallback to category icon
         switch (category) {
             case 'all': return 'grid';
             case 'booster': return 'flash';
@@ -136,234 +210,388 @@ const StoreScreen = ({ navigation }: any) => {
         return isTurkish ? labels[cat]?.tr || cat : labels[cat]?.en || cat;
     };
 
-    const getRarityColor = (rarity?: string) => {
+    const getRarityGradient = (rarity?: string): readonly [string, string, ...string[]] => {
         switch (rarity) {
-            case 'uncommon': return '#2ecc71';
-            case 'rare': return '#3498db';
-            case 'epic': return '#9b59b6';
-            case 'legendary': return '#f39c12';
-            default: return colors.textTertiary;
+            case 'uncommon': return ['#2ecc71', '#27ae60'];
+            case 'rare': return ['#3498db', '#2980b9'];
+            case 'epic': return ['#9b59b6', '#8e44ad'];
+            case 'legendary': return ['#f39c12', '#e67e22'];
+            default: return ['#95a5a6', '#7f8c8d'];
         }
     };
 
     if (loading) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+            <ScreenContainer backgroundColor={colors.background} edges={['top', 'left', 'right']}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => safeGoBack(navigation, 'Home')} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>{isTurkish ? 'Mağaza' : 'Store'}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView contentContainerStyle={styles.gridContent}>
+                     <View style={styles.grid}>
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                             <View key={i} style={styles.gridItem}>
+                                <SkeletonCard height={200} />
+                             </View>
+                        ))}
+                     </View>
+                </ScrollView>
+            </ScreenContainer>
         );
     }
 
     return (
-        <View style={[styles.container, { paddingBottom: insets.bottom, backgroundColor: colors.background }]}>
+        <ScreenContainer backgroundColor={colors.background} edges={['top', 'left', 'right']}>
             <AlertComponent />
+            
             {/* Header */}
-            <LinearGradient colors={GRADIENTS.primary as any} style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Home')} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Mağaza' : 'Store'}</Text>
                 <View style={{ width: 40 }} />
-            </LinearGradient>
-
-            {/* Currency Bar */}
-            <View style={styles.currencyBar}>
-                <View style={styles.currencyItem}>
-                    <Ionicons name="wallet-outline" size={20} color={colors.text} />
-                    <Text style={styles.currencyValue}>{currency.points}</Text>
-                    <Text style={styles.currencyLabel}>{isTurkish ? 'Puan' : 'Points'}</Text>
-                </View>
-                <View style={styles.currencyDivider} />
-                <View style={styles.currencyItem}>
-                    <Ionicons name="diamond-outline" size={20} color={colors.text} />
-                    <Text style={styles.currencyValue}>{currency.gems}</Text>
-                    <Text style={styles.currencyLabel}>{isTurkish ? 'Elmas' : 'Gems'}</Text>
-                </View>
-                <View style={styles.currencyDivider} />
-                <View style={styles.currencyItem}>
-                    <Ionicons name="stats-chart-outline" size={20} color={colors.text} />
-                    <Text style={styles.currencyValue}>{currency.total_earned_points}</Text>
-                    <Text style={styles.currencyLabel}>{isTurkish ? 'Toplam' : 'Total'}</Text>
-                </View>
             </View>
 
-            {/* Category Tabs - Horizontal Scroll */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabContainer}>
-                {(['all', 'booster', 'utility', 'cosmetic', 'equipment', 'nutrition', 'recovery', 'seasonal', 'premium'] as const).map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && styles.activeTab]}
-                        onPress={() => setActiveTab(tab)}
-                        activeOpacity={1}
-                    >
-                        <Ionicons name={getCategoryIcon(tab)} size={16} color={activeTab === tab ? '#fff' : colors.textTertiary} />
-                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                            {getCategoryLabel(tab)}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            {/* Currency Bar */}
+            <View style={styles.currencyContainer}>
+                <LinearGradient
+                    colors={['#FFF5F0', '#FFF0E0']}
+                    style={styles.currencyCard}
+                >
+                    <View style={styles.currencyRow}>
+                        <View style={styles.currencyIconBg}>
+                            <Ionicons name="wallet" size={20} color="#FF9600" />
+                        </View>
+                        <View>
+                            <Text style={styles.currencyLabel}>{isTurkish ? 'Puan' : 'Points'}</Text>
+                            <Text style={styles.currencyValue}>{currency.points}</Text>
+                        </View>
+                    </View>
+                </LinearGradient>
+            </View>
+
+            {/* Category Tabs */}
+            <View>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={styles.tabContainer}
+                    style={styles.tabScroll}
+                >
+                    {(['all', 'booster', 'utility', 'cosmetic', 'equipment', 'nutrition', 'recovery', 'seasonal', 'premium'] as const).map((tab) => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[styles.tab, activeTab === tab && styles.activeTab]}
+                            onPress={() => {
+                                setActiveTab(tab);
+                                setStoreItems([]);
+                                setPage(0);
+                                setHasMore(true);
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name={getCategoryIcon(tab)} size={16} color={activeTab === tab ? '#fff' : colors.textTertiary} />
+                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                                {getCategoryLabel(tab)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
 
             {/* Items Grid */}
-            <ScrollView
-                style={{ flex: 1, marginTop: SPACING.md }}
-                contentContainerStyle={styles.content}
+            <FlatList
+                style={{ flex: 1 }}
+                data={storeItems}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.gridContent}
                 showsVerticalScrollIndicator={false}
+                initialNumToRender={6}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-            >
-                {filteredItems.length > 0 ? filteredItems.map((item) => (
-                    <GlassCard key={item.id} style={styles.itemCard}>
-                        {/* Badge */}
-                        {item.badge_text && (
-                            <View style={[styles.badgeContainer, { backgroundColor: item.badge_color || colors.primary }]}>
-                                <Text style={styles.badgeText}>{item.badge_text}</Text>
-                            </View>
-                        )}
-                        <View style={styles.itemHeader}>
-                            <View style={[styles.itemIconWrap, { backgroundColor: getRarityColor(item.rarity) + '15' }]}>
-                                <Ionicons name={getCategoryIcon(item.category)} size={24} color={getRarityColor(item.rarity)} />
-                            </View>
-                            <View style={styles.itemInfo}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Text style={styles.itemName}>{isTurkish ? item.name_tr : item.name}</Text>
-                                    {item.rarity && item.rarity !== 'common' && (
-                                        <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(item.rarity) + '20' }]}>
-                                            <Text style={[styles.rarityText, { color: getRarityColor(item.rarity) }]}>{item.rarity.toUpperCase()}</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <Text style={styles.itemDesc}>{isTurkish ? item.description_tr : item.description}</Text>
-                            </View>
-                        </View>
+                numColumns={2}
+                columnWrapperStyle={styles.grid}
+                onEndReachedThreshold={0.4}
+                onEndReached={handleLoadMore}
+                renderItem={({ item, index }) => (
+                    <View style={[styles.gridItem, { width: itemWidth }]}>
+                        <GlassCard
+                            style={styles.itemCard}
+                            variant={item.rarity === 'legendary' || item.rarity === 'epic' ? 'premium' : 'default'}
+                            delay={index * 50}
+                            onPress={() => handlePurchase(item)}
+                            noPadding
+                        >
+                            {item.rarity && item.rarity !== 'common' && (
+                                <LinearGradient
+                                    colors={getRarityGradient(item.rarity)}
+                                    style={styles.rarityStripe}
+                                />
+                            )}
 
-                        <View style={styles.itemFooter}>
-                            {item.effect_duration_minutes && (
-                                <View style={styles.durationBadge}>
-                                    <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
-                                    <Text style={styles.durationText}>
-                                        {item.effect_duration_minutes >= 60
-                                            ? `${Math.floor(item.effect_duration_minutes / 60)}${isTurkish ? ' saat' : 'h'}`
-                                            : `${item.effect_duration_minutes}${isTurkish ? ' dk' : 'm'}`}
-                                    </Text>
+                            {item.badgeText && (
+                                <View style={[styles.badgeContainer, { backgroundColor: item.badgeColor || colors.primary }]}>
+                                    <Text style={styles.badgeText}>{item.badgeText}</Text>
                                 </View>
                             )}
 
-                            <View style={styles.stackBadge}>
-                                <Text style={styles.stackText}>Max: {item.max_stack}</Text>
-                            </View>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.buyButton,
-                                    currency.points < item.price_points && styles.buyButtonDisabled,
-                                    purchasing === item.id && styles.buyButtonLoading,
-                                ]}
-                                onPress={() => handlePurchase(item)}
-                                disabled={purchasing !== null}
-                                activeOpacity={1}
+                            <LinearGradient
+                                colors={isDark ? ['rgba(88,204,2,0.22)', 'rgba(28,176,246,0.1)'] : ['#F2FFE8', '#ECF8FF']}
+                                style={styles.iconContainer}
                             >
-                                {purchasing === item.id ? (
-                                    <ActivityIndicator size="small" color="#fff" />
-                                ) : (
-                                    <>
-                                        <Text style={styles.buyPrice}>{item.price_points}</Text>
-                                        <Ionicons name="wallet-outline" size={14} color="#fff" />
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </GlassCard>
-                )) : (
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="cart-outline" size={48} color={colors.textTertiary} />
-                        <Text style={styles.emptyText}>{isTurkish ? 'Bu kategoride ürün yok' : 'No items in this category'}</Text>
+                                <StoreIllustration
+                                    itemId={item.id}
+                                    size={62}
+                                    variant={(item.rarity === 'legendary' || item.rarity === 'epic') ? 'fancy' : 'normal'}
+                                    iconName={item.icon}
+                                />
+                            </LinearGradient>
+
+                            <View style={styles.itemContent}>
+                                <View>
+                                    <Text style={styles.itemName} numberOfLines={1}>{isTurkish ? item.nameTr : item.name}</Text>
+                                    <Text style={styles.itemDesc} numberOfLines={3}>{isTurkish ? item.descriptionTr : item.description}</Text>
+                                </View>
+
+                                <View style={styles.priceContainer}>
+                                    <View style={styles.priceBadge}>
+                                        <Ionicons name="wallet" size={12} color="#fff" />
+                                        <Text style={styles.priceText}>{item.pricePoints}</Text>
+                                    </View>
+                                    {item.maxStack > 1 && (
+                                        <Text style={styles.stockText}>x{item.maxStack}</Text>
+                                    )}
+                                </View>
+                            </View>
+                        </GlassCard>
                     </View>
                 )}
-
-                {/* Info Card */}
-                <GlassCard style={styles.infoCard}>
-                    <Text style={styles.infoTitle}>{isTurkish ? 'Puan Nasıl Kazanılır?' : 'How to Earn Points?'}</Text>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="barbell" size={22} color={colors.text} />
-                        <Text style={styles.infoText}>{isTurkish ? 'Antrenman tamamla — 15-30 puan' : 'Complete workouts — 15-30 points'}</Text>
+                ListFooterComponent={loadingMore ? (
+                    <View style={{ paddingVertical: 24 }}>
+                        <ActivityIndicator color={colors.primary} />
                     </View>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="restaurant" size={22} color={colors.text} />
-                        <Text style={styles.infoText}>{isTurkish ? 'Öğün kaydet — 5-10 puan' : 'Log meals — 5-10 points'}</Text>
+                ) : <View style={{ height: 40 }} />}
+                ListEmptyComponent={!loading ? (
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="cart-outline" size={64} color={colors.textTertiary} />
+                        <Text style={styles.emptyText}>
+                            {loadError || (isTurkish ? 'Bu kategoride ürün yok' : 'No items in this category')}
+                        </Text>
+                        {loadError && (
+                            <TouchableOpacity style={styles.retryButton} onPress={() => refreshStore()}>
+                                <Text style={styles.retryButtonText}>{isTurkish ? 'Tekrar Dene' : 'Try Again'}</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="flag" size={22} color={colors.text} />
-                        <Text style={styles.infoText}>{isTurkish ? 'Görevleri tamamla — 10-100 puan' : 'Complete missions — 10-100 points'}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="flame" size={22} color="#FF6B6B" />
-                        <Text style={styles.infoText}>{isTurkish ? 'Seri sürdür — 5 puan/gün' : 'Maintain streak — 5 points/day'}</Text>
-                    </View>
-                </GlassCard>
-            </ScrollView>
-        </View>
+                ) : null}
+            />
+        </ScreenContainer>
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.xl, paddingHorizontal: SPACING.lg },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center' },
-    currencyBar: {
-        flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
-        backgroundColor: colors.surface, marginHorizontal: SPACING.lg, marginTop: -20,
-        borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, ...SHADOWS.sm,
+    header: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: SPACING.md,
     },
-    currencyItem: { alignItems: 'center' },
-    currencyIcon: { fontSize: 20, marginBottom: 2 },
-    currencyValue: { ...TYPOGRAPHY.h3, color: colors.text },
-    currencyLabel: { ...TYPOGRAPHY.small, color: colors.textTertiary },
-    currencyDivider: { width: 1, height: 36, backgroundColor: colors.borderLight },
-    tabScroll: { marginTop: SPACING.lg, maxHeight: 50 },
+    backBtn: { 
+        width: 40, 
+        height: 40, 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        borderRadius: 20,
+        backgroundColor: colors.surface,
+    },
+    headerTitle: { 
+        ...TYPOGRAPHY.h3, 
+        color: colors.text, 
+        fontWeight: '700'
+    },
+    currencyContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: SPACING.lg,
+        gap: SPACING.md,
+        marginBottom: SPACING.md,
+    },
+    currencyCard: {
+        flex: 1,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+    },
+    currencyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.sm,
+    },
+    currencyIconBg: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFF5F0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    currencyLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#F97316',
+        marginBottom: 2,
+    },
+    currencyValue: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#EA580C',
+        lineHeight: 22,
+    },
+    tabScroll: {
+        marginBottom: SPACING.md,
+    },
     tabContainer: {
-        flexDirection: 'row', paddingHorizontal: SPACING.lg, gap: 6,
+        paddingHorizontal: SPACING.lg,
+        gap: 8,
+        paddingBottom: 8,
     },
     tab: {
-        flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4,
-        paddingVertical: 8, paddingHorizontal: 14, borderRadius: BORDER_RADIUS.pill,
-        backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
     },
-    activeTab: { backgroundColor: colors.primary, borderColor: colors.primary },
-    tabText: { ...TYPOGRAPHY.small, color: colors.textTertiary, fontWeight: '600' },
-    activeTabText: { color: '#fff' },
-    content: { padding: SPACING.lg, paddingBottom: 100 },
-    itemCard: { padding: SPACING.lg, marginBottom: SPACING.md, overflow: 'hidden' },
-    badgeContainer: { position: 'absolute', top: 0, right: 0, paddingHorizontal: 10, paddingVertical: 4, borderBottomLeftRadius: BORDER_RADIUS.md, zIndex: 1 },
-    badgeText: { ...TYPOGRAPHY.small, color: '#fff', fontWeight: '800', fontSize: 10 },
-    itemHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md, marginBottom: SPACING.md },
-    itemIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    itemInfo: { flex: 1 },
-    itemName: { ...TYPOGRAPHY.bodyBold, color: colors.text },
-    rarityBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    rarityText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-    itemDesc: { ...TYPOGRAPHY.caption, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
-    itemFooter: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-    durationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: BORDER_RADIUS.pill },
-    durationText: { ...TYPOGRAPHY.small, color: colors.textSecondary },
-    stackBadge: { backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: BORDER_RADIUS.pill },
-    stackText: { ...TYPOGRAPHY.small, color: colors.textTertiary },
-    buyButton: {
-        flexDirection: 'row', alignItems: 'center', gap: 4,
-        backgroundColor: colors.primary, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-        borderRadius: BORDER_RADIUS.pill, marginLeft: 'auto',
+    activeTab: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
-    buyButtonDisabled: { backgroundColor: colors.textTertiary, opacity: 0.6 },
-    buyButtonLoading: { paddingHorizontal: SPACING.lg },
-    buyPrice: { ...TYPOGRAPHY.bodyBold, color: '#fff' },
-    buyCurrency: { fontSize: 14 },
-    emptyContainer: { alignItems: 'center', paddingVertical: SPACING.xxxl, gap: SPACING.md },
-    emptyText: { ...TYPOGRAPHY.body, color: colors.textTertiary },
-    infoCard: { padding: SPACING.lg, marginTop: SPACING.md, marginBottom: SPACING.xl },
-    infoTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginBottom: SPACING.md },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
-    infoIcon: { fontSize: 18 },
-    infoText: { ...TYPOGRAPHY.body, color: colors.textSecondary, flex: 1 },
+    tabText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textTertiary,
+    },
+    activeTabText: {
+        color: '#fff',
+    },
+    gridContent: {
+        paddingHorizontal: SPACING.lg,
+        paddingBottom: 100,
+    },
+    grid: {
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    gridItem: {
+        marginBottom: 12,
+    },
+    itemCard: {
+        // padding: 0, // Handled by GlassCard prop noPadding
+        height: 248,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.8)',
+    },
+    rarityStripe: {
+        height: 3,
+        width: '100%',
+    },
+    badgeContainer: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        zIndex: 1,
+    },
+    badgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    iconContainer: {
+        height: 112,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: isDark ? colors.border : colors.borderLight,
+        marginTop: 3,
+    },
+    itemContent: {
+        padding: 12,
+        flex: 1,
+        justifyContent: 'space-between',
+    },
+    itemName: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.text,
+        marginBottom: 4,
+    },
+    itemDesc: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        lineHeight: 16,
+        marginBottom: 8,
+    },
+    priceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 'auto',
+    },
+    priceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: colors.primary,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    priceText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    stockText: {
+        fontSize: 11,
+        color: colors.textTertiary,
+        fontWeight: '600',
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+        gap: 16,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: colors.textTertiary,
+        textAlign: 'center',
+    },
+    retryButton: {
+        marginTop: 8,
+        backgroundColor: colors.primary,
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    retryButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
 });
 
 export default StoreScreen;

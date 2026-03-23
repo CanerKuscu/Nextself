@@ -55,6 +55,7 @@
     "web-build",
     "dist",
     "*.js",
-    "supabase"
+    "supabase",
+    "web/dashboard"
   ]
 }

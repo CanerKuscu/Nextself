@@ -3,15 +3,18 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator }
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { SupabaseService } from '../services/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import GlassCard from '../components/GlassCard';
 import { GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 export default function ChatListScreen() {
     const { colors, isDark } = useTheme();
     const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
 
     const [chats, setChats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -93,8 +96,8 @@ export default function ChatListScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+                <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(navigation, 'Main')}>
                     <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Mesajlar' : 'Messages'}</Text>
@@ -137,7 +140,7 @@ export default function ChatListScreen() {
 
 const getStyles = (colors: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingTop: 60, paddingBottom: SPACING.lg, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+    header: { paddingBottom: SPACING.lg, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
     backButton: { padding: SPACING.xs, marginRight: SPACING.sm },
     headerTitle: { ...TYPOGRAPHY.h2, color: colors.textInverse },
     listContent: { padding: SPACING.md },

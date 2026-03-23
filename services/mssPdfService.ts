@@ -11,7 +11,7 @@
  */
 
 import { Platform } from 'react-native';
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { AgreementService } from './agreementService';
 
 export interface MssPdfResult {

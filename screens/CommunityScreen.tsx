@@ -7,7 +7,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { useTranslation } from '../hooks/useTranslation';
 import { TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 
 interface LeaderboardUser {
     id: string; name: string; points: number; avatar?: string;

@@ -1,5 +1,5 @@
-import { SupabaseService } from './supabase';
-import { Rating, ProfessionalProfile, ProfessionalSearchFilters, LocationBasedSearch, ClientRelationship } from '../types/rating';
+import { SupabaseService } from '@nextself/shared';
+import { Rating, ProfessionalProfile, ProfessionalSearchFilters, LocationBasedSearch, ClientRelationship } from '@nextself/shared';
 
 export class RatingService {
   private static instance: RatingService;

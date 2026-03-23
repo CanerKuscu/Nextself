@@ -1,7 +1,7 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import { PrivacyUtils } from './deepseek';
 import { getLocalDateString } from '../utils/dateUtils';
-import { NutritionalProfile, HealthMetrics } from '../types';
+import { NutritionalProfile, HealthMetrics } from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 

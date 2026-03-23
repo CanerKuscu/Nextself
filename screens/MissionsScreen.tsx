@@ -12,6 +12,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useAlert } from '../components/CustomAlert';
 import { COLORS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const CATEGORY_META: Record<string, { icon: string; color: string; gradient: string[] }> = {
     workout: { icon: 'barbell', color: '#FF6B6B', gradient: ['#FF6B6B', '#FF4757'] },
@@ -21,6 +22,7 @@ const CATEGORY_META: Record<string, { icon: string; color: string; gradient: str
     streak: { icon: 'flame', color: '#FF9600', gradient: ['#FF9600', '#FF6B00'] },
     mindfulness: { icon: 'leaf', color: '#7C3AED', gradient: ['#7C3AED', '#6D28D9'] },
     hydration: { icon: 'water', color: '#06B6D4', gradient: ['#06B6D4', '#0891B2'] },
+    supplements: { icon: 'flask', color: '#F59E0B', gradient: ['#F59E0B', '#D97706'] },
 };
 
 const MissionsScreen = ({ navigation }: any) => {
@@ -41,13 +43,16 @@ const MissionsScreen = ({ navigation }: any) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const loadMissions = useCallback(async () => {
-        setLoading(true);
+        // Don't set loading true if refreshing, to show refresh control instead
+        if (!refreshing) setLoading(true);
         try {
             const service = MissionService.getInstance();
+            console.log('MissionsScreen: Fetching missions...');
             const [weekly, daily] = await Promise.all([
                 service.getWeeklyMissions(),
                 service.getDailyMissions(),
             ]);
+            console.log(`MissionsScreen: Loaded ${weekly.length} weekly, ${daily.length} daily`);
             setWeeklyMissions(weekly);
             setDailyMissions(daily);
         } catch (err) {
@@ -57,20 +62,20 @@ const MissionsScreen = ({ navigation }: any) => {
             setRefreshing(false);
             Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         }
-    }, []);
+    }, [refreshing]);
 
     useEffect(() => { loadMissions(); }, []);
 
     const onRefresh = () => { setRefreshing(true); loadMissions(); };
 
     // Calculate totals
-    const weeklyTotal = weeklyMissions.reduce((s, m) => s + m.xp_reward, 0);
-    const weeklyEarned = weeklyMissions.filter(m => m.is_completed).reduce((s, m) => s + m.xp_reward, 0);
-    const weeklyCompleted = weeklyMissions.filter(m => m.is_completed).length;
+    const weeklyTotal = weeklyMissions.reduce((s, m) => s + m.xpReward, 0);
+    const weeklyEarned = weeklyMissions.filter(m => m.isCompleted).reduce((s, m) => s + m.xpReward, 0);
+    const weeklyCompleted = weeklyMissions.filter(m => m.isCompleted).length;
 
-    const dailyTotal = dailyMissions.reduce((s, m) => s + m.xp_reward, 0);
-    const dailyEarned = dailyMissions.filter(m => m.is_completed).reduce((s, m) => s + m.xp_reward, 0);
-    const dailyCompleted = dailyMissions.filter(m => m.is_completed).length;
+    const dailyTotal = dailyMissions.reduce((s, m) => s + m.xpReward, 0);
+    const dailyEarned = dailyMissions.filter(m => m.isCompleted).reduce((s, m) => s + m.xpReward, 0);
+    const dailyCompleted = dailyMissions.filter(m => m.isCompleted).length;
 
     const activeMissions = tab === 'weekly' ? weeklyMissions : dailyMissions;
     const activeCompleted = tab === 'weekly' ? weeklyCompleted : dailyCompleted;
@@ -78,11 +83,11 @@ const MissionsScreen = ({ navigation }: any) => {
     const activeEarned = tab === 'weekly' ? weeklyEarned : dailyEarned;
 
     const overallProgress = activeMissions.length > 0
-        ? activeMissions.reduce((s, m) => s + Math.min(m.current_progress / m.target_value, 1), 0) / activeMissions.length
+        ? activeMissions.reduce((s, m) => s + Math.min(m.currentProgress / m.targetValue, 1), 0) / activeMissions.length
         : 0;
 
     const handleClaim = async (mission: WeeklyMission | DailyMission, type: 'weekly' | 'daily') => {
-        if (!mission.is_completed) return;
+        if (!mission.isCompleted) return;
         try {
             const result = await MissionService.getInstance().claimMissionReward(mission.id, type);
             if (result.xp > 0) {
@@ -100,8 +105,12 @@ const MissionsScreen = ({ navigation }: any) => {
 
     const renderMissionCard = (mission: WeeklyMission | DailyMission, index: number, type: 'weekly' | 'daily') => {
         const meta = CATEGORY_META[mission.category] || CATEGORY_META.workout;
-        const progress = Math.min(mission.current_progress / mission.target_value, 1);
-        const completed = mission.is_completed;
+        const progress = Math.min(mission.currentProgress / mission.targetValue, 1);
+        const completed = mission.isCompleted;
+
+        // Use safe fallback if titleTr is missing
+        const title = isTurkish ? (mission.titleTr || mission.title) : mission.title;
+        const description = isTurkish ? ((mission as any).descriptionTr || mission.description) : mission.description;
 
         return (
             <Animated.View key={mission.id || index} style={[st.missionCard, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
@@ -119,7 +128,7 @@ const MissionsScreen = ({ navigation }: any) => {
                     <View style={st.missionContent}>
                         <View style={st.missionHeader}>
                             <Text style={[st.missionTitle, completed && st.missionTitleDone]} numberOfLines={2}>
-                                {isTurkish ? (mission.title_tr || mission.title) : mission.title}
+                                {title}
                             </Text>
                             {completed && (
                                 <View style={st.completedBadge}>
@@ -128,9 +137,9 @@ const MissionsScreen = ({ navigation }: any) => {
                             )}
                         </View>
 
-                        {mission.description && (
+                        {description && (
                             <Text style={st.missionDesc} numberOfLines={1}>
-                                {isTurkish ? ((mission as any).description_tr || mission.description) : mission.description}
+                                {description}
                             </Text>
                         )}
 
@@ -143,18 +152,18 @@ const MissionsScreen = ({ navigation }: any) => {
                                     style={[st.progressInner, { width: `${progress * 100}%` }]}
                                 />
                             </View>
-                            <Text style={st.progressText}>{mission.current_progress}/{mission.target_value}</Text>
+                            <Text style={st.progressText}>{mission.currentProgress}/{mission.targetValue}</Text>
                         </View>
 
                         {/* Rewards */}
                         <View style={st.rewardRow}>
                             <View style={st.rewardBadge}>
                                 <Ionicons name="flash" size={11} color="#FFC800" />
-                                <Text style={st.rewardText}>{mission.xp_reward} XP</Text>
+                                <Text style={st.rewardText}>{mission.xpReward} XP</Text>
                             </View>
                             <View style={[st.rewardBadge, { backgroundColor: '#F0EAFF' }]}>
                                 <Ionicons name="diamond" size={11} color="#CE82FF" />
-                                <Text style={[st.rewardText, { color: '#CE82FF' }]}>{mission.point_reward}</Text>
+                                <Text style={[st.rewardText, { color: '#CE82FF' }]}>{mission.pointReward}</Text>
                             </View>
                             <View style={[st.categoryTag, { backgroundColor: meta.color + '15' }]}>
                                 <Text style={[st.categoryText, { color: meta.color }]}>
@@ -178,16 +187,16 @@ const MissionsScreen = ({ navigation }: any) => {
     }
 
     return (
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
             <AlertComponent />
             <ScrollView
-                contentContainerStyle={[st.scroll, { paddingTop: insets.top + 8 }]}
+                contentContainerStyle={[st.scroll, { paddingTop: 8 }]}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             >
                 {/* Header */}
                 <View style={st.headerRow}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn}>
+                    <TouchableOpacity onPress={() => safeGoBack(navigation, 'Home')} style={st.backBtn}>
                         <Ionicons name="arrow-back" size={22} color={colors.text} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
@@ -254,7 +263,7 @@ const MissionsScreen = ({ navigation }: any) => {
                     <View style={st.weekDates}>
                         <Ionicons name="calendar-outline" size={14} color={colors.textTertiary} />
                         <Text style={st.weekDateText}>
-                            {weeklyMissions[0].week_start} — {weeklyMissions[0].week_end}
+                            {weeklyMissions[0].weekStart} — {weeklyMissions[0].weekEnd}
                         </Text>
                     </View>
                 )}

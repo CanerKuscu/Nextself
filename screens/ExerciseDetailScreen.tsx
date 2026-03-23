@@ -3,10 +3,14 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, Anima
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from '../hooks/useTranslation';
 import GlassCard from '../components/GlassCard';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
+import { SupabaseService } from '@nextself/shared';
+import { useAlert } from '../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +31,7 @@ const ExerciseDetailScreen = ({ navigation, route }: any) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
     const [showAllInstructions, setShowAllInstructions] = useState(false);
+    const { showAlert, AlertComponent } = useAlert();
 
     useEffect(() => {
         Animated.parallel([
@@ -36,7 +41,7 @@ const ExerciseDetailScreen = ({ navigation, route }: any) => {
     }, []);
 
     const dc = getDifficultyColor(exercise.difficulty);
-    const name = isTurkish && exercise.name_tr ? exercise.name_tr : exercise.name;
+    const name = exercise.name; // Always display English name per language rules
     const description = isTurkish && exercise.description_tr ? exercise.description_tr : exercise.description;
     const muscleGroup = isTurkish && exercise.muscle_group_tr ? exercise.muscle_group_tr : exercise.muscle_group;
     const instructions = isTurkish && exercise.instructions_tr ? exercise.instructions_tr : exercise.instructions;
@@ -55,10 +60,71 @@ const ExerciseDetailScreen = ({ navigation, route }: any) => {
     const tipList = Array.isArray(tips) ? tips : (tips || '').split('\n').filter(Boolean);
     const visibleInstructions = showAllInstructions ? instructionList : instructionList.slice(0, 4);
 
+    const handleAddToProgram = async () => {
+        try {
+            const supabase = SupabaseService.getInstance();
+            const { user } = await supabase.getCurrentUser();
+            if (!user) {
+                showAlert({
+                    type: 'warning',
+                    title: isTurkish ? 'Giriş Gerekli' : 'Login Required',
+                    message: isTurkish ? 'Programa eklemek için giriş yapmalısınız.' : 'Please sign in to add this to your program.',
+                    buttons: [{ text: 'OK' }],
+                });
+                return;
+            }
+
+            const equipmentLower = String(exercise.equipment || '').toLowerCase();
+            const nameLower = String(name || '').toLowerCase();
+            const isCalisthenics = equipmentLower.includes('body') || equipmentLower.includes('none');
+            const isCardio = ['cardio', 'run', 'koş', 'jump', 'zıpla', 'bike', 'bisiklet', 'rope', 'ip'].some((k) =>
+                nameLower.includes(k) || equipmentLower.includes(k)
+            );
+
+            const recommendationLine = isCardio
+                ? `${isTurkish ? 'Öneri' : 'Recommendation'}: ${isTurkish ? '25-40 dk orta-yoğun kardiyo' : '25-40 min moderate-vigorous cardio'}`
+                : isCalisthenics
+                    ? `${isTurkish ? 'Öneri' : 'Recommendation'}: ${exercise.difficulty === 'beginner' ? '3 x 8-12' : exercise.difficulty === 'intermediate' ? '4 x 10-15' : '4-5 x 12-20'}`
+                    : `${isTurkish ? 'Öneri' : 'Recommendation'}: ${exercise.difficulty === 'beginner' ? '3 x 12-15' : exercise.difficulty === 'intermediate' ? '4 x 8-12' : '4-5 x 6-8'} (${isTurkish ? 'ağırlık eklenebilir' : 'load can be increased progressively'})`;
+
+            const content = [
+                `${isTurkish ? 'Egzersiz' : 'Exercise'}: ${name}`,
+                `${isTurkish ? 'Kas grubu' : 'Muscle group'}: ${muscleGroup}`,
+                `${isTurkish ? 'Zorluk' : 'Difficulty'}: ${difficultyLabel}`,
+                recommendationLine,
+            ].join('\n');
+
+            const { error } = await supabase.createAiProgram({
+                userId: user.id,
+                type: 'workout',
+                title: `${name} ${isTurkish ? 'Programı' : 'Program'}`,
+                content,
+            });
+
+            if (error) throw error;
+
+            showAlert({
+                type: 'success',
+                title: isTurkish ? 'Programa Eklendi' : 'Added to Program',
+                message: isTurkish ? `${name} programına eklendi.` : `${name} has been added to your program.`,
+                buttons: [{ text: 'OK' }],
+            });
+        } catch {
+            showAlert({
+                type: 'error',
+                title: isTurkish ? 'Hata' : 'Error',
+                message: isTurkish ? 'Programa eklenemedi. Lütfen tekrar deneyin.' : 'Failed to add to program. Please try again.',
+                buttons: [{ text: 'OK' }],
+            });
+        }
+    };
+
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom, backgroundColor: colors.background }]}>
+            <StatusBar style={isDark ? 'light' : 'dark'} translucent={false} />
+            <AlertComponent />
             {/* Hero Header */}
-            <View style={styles.heroWrap}>
+            <View style={[styles.heroWrap, { marginTop: insets.top }]}>
                 {exercise.image_url ? (
                     <Image source={{ uri: exercise.image_url }} style={styles.heroImage} resizeMode="cover" />
                 ) : (
@@ -67,8 +133,8 @@ const ExerciseDetailScreen = ({ navigation, route }: any) => {
                     </LinearGradient>
                 )}
                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.heroOverlay}>
-                    <View style={[styles.headerBtns, { paddingTop: insets.top + 8 }]}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                    <View style={[styles.headerBtns, { paddingTop: 8 }]}>
+                        <TouchableOpacity onPress={() => safeGoBack(navigation, 'MuscleExercises')} style={styles.backBtn}>
                             <Ionicons name="arrow-back" size={22} color={colors.background} />
                         </TouchableOpacity>
                     </View>
@@ -190,14 +256,14 @@ const ExerciseDetailScreen = ({ navigation, route }: any) => {
                         </View>
                     </GlassCard>
 
-                    {/* Start Workout Button */}
+                    {/* Add Program Button */}
                     <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => navigation.navigate('ActiveWorkout', { workoutName: name })}
+                        onPress={handleAddToProgram}
                     >
                         <LinearGradient colors={[dc, dc + 'CC']} style={styles.startBtn}>
-                            <Ionicons name="play" size={20} color={colors.background} />
-                            <Text style={styles.startBtnText}>{isTurkish ? 'Antrenmana Başla' : 'Start Exercise'}</Text>
+                            <Ionicons name="add-circle" size={20} color={colors.background} />
+                            <Text style={styles.startBtnText}>{isTurkish ? 'Programa Ekle' : 'Add to Program'}</Text>
                         </LinearGradient>
                     </TouchableOpacity>
 

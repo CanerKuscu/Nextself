@@ -4,19 +4,19 @@ module.exports = function (api) {
     // Use Expo's preset when available, fallback to a sensible default.
     const presets = [];
     try {
-        // Enable Expo preset and request its unstable import.meta transform.
-        // This lets Expo's tooling transform `import.meta` into a safe runtime
-        // representation when possible.
         presets.push([require.resolve('babel-preset-expo'), { unstable_transformImportMeta: true }]);
     } catch (e) {
-        // preset not installed in CI/dev; let Expo/Metro handle defaults.
+    }
+
+    const plugins = [];
+    try {
+        plugins.push(require.resolve('react-native-worklets-core/plugin'));
+    } catch (e) {
     }
 
     return {
         presets,
         plugins: [
-            // Allow parsing of import.meta and replace it with a safe empty object
-            // so runtime checks like `(import.meta.env ? ...)` become safe.
             function replaceImportMeta() {
                 return {
                     visitor: {
@@ -33,6 +33,7 @@ module.exports = function (api) {
                     },
                 };
             },
+            ...plugins,
         ],
     };
 };

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { OfflineService } from '../utils/offlineService';
 import { ContentModerationService } from '../services/contentModerationService';
+import { DeepLinkingService } from '../utils/deepLinking';
 import { Platform } from 'react-native';
 import { signInAndExchange, proxiedRequest, defaultEdgeFunctionUrl } from '../services/webSession';
 import { importMetaFallback } from '../utils/importMetaFallback';
@@ -150,6 +151,16 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       } catch (_) { }
     };
   }, [supabaseService, signOut]);
+
+  // After successful authentication (session becomes non-null), process any
+  // deep links that were queued while auth/navigation was initializing.
+  useEffect(() => {
+    if (session) {
+      try {
+        DeepLinkingService.getInstance().processPendingURLs();
+      } catch (_) { }
+    }
+  }, [session]);
 
   // Sign-in wrapper that uses signInAndExchange on web to set HttpOnly cookie and clear client session
   const signIn = useCallback(async (email: string, password: string) => {

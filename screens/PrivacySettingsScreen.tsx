@@ -3,15 +3,18 @@ import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, ActivityI
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { SupabaseService } from '../services/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SupabaseService } from '@nextself/shared';
 import { useTranslation } from '../hooks/useTranslation';
 import GlassCard from '../components/GlassCard';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 export default function PrivacySettingsScreen() {
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -114,7 +117,7 @@ export default function PrivacySettingsScreen() {
             if (error) throw error;
             alert(isTurkish ? 'Ayarlar kaydedildi.' : 'Settings saved successfully.');
         } catch (err) {
-            console.error('Save error');
+            console.error('Save error:', err);
             alert(isTurkish ? 'Kaydedilemedi.' : 'Failed to save.');
         } finally {
             setSaving(false);
@@ -157,8 +160,8 @@ export default function PrivacySettingsScreen() {
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+                <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(navigation, 'Settings')}>
                     <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Veri Gizliliği' : 'Privacy Settings'}</Text>
@@ -252,7 +255,7 @@ export default function PrivacySettingsScreen() {
 
 const getStyles = (colors: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingTop: 60, paddingBottom: SPACING.lg, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+    header: { paddingBottom: SPACING.lg, paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
     backButton: { padding: SPACING.xs },
     headerTitle: { ...TYPOGRAPHY.h2, color: colors.textInverse, flex: 1, textAlign: 'center' },
     saveButton: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: BORDER_RADIUS.pill },

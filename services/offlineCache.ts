@@ -1,7 +1,7 @@
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 
-const CACHE_KEY_PREFIX = '@biosync_cache_';
-const CACHE_KEYS_INDEX = '@biosync_cache_keys_index';
+const CACHE_KEY_PREFIX = 'NextSelf_cache_';
+const CACHE_KEYS_INDEX = 'NextSelf_cache_keys_index';
 
 export const offlineCache = {
     /**

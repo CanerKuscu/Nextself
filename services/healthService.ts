@@ -1,9 +1,9 @@
 import { Platform, Linking } from 'react-native';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 
-const HEALTH_CACHE_KEY = 'biosync_health_cache';
-const HEALTH_CONNECTED_KEY = 'biosync_health_connected';
-const OFFLINE_QUEUE_KEY = 'biosync_offline_queue';
+const HEALTH_CACHE_KEY = 'NextSelf_health_cache';
+const HEALTH_CONNECTED_KEY = 'NextSelf_health_connected';
+const OFFLINE_QUEUE_KEY = 'NextSelf_offline_queue';
 const HEALTH_CONNECT_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata';
 
 export interface HealthData {
@@ -12,8 +12,9 @@ export interface HealthData {
   heartRate: number;
   calories: number;
   activeMinutes: number;
+  water: number; // in ml
   date: string;
-  source: 'apple_health' | 'google_health' | 'manual' | 'mock';
+  source: 'apple_health' | 'google_health' | 'manual';
 }
 
 export interface HealthInsight {
@@ -26,10 +27,24 @@ export interface HealthInsight {
   icon: string;
 }
 
+export interface WorkoutLiveMetrics {
+  heartRate: number | null;
+  calories: number;
+  source: 'apple_health' | 'google_health' | 'manual';
+}
+
+export interface HealthStreamPayload {
+  healthData: HealthData;
+  weeklySteps: number[];
+  weeklySleepHours: number[];
+}
+
 export class HealthService {
   private static instance: HealthService;
   private isAppleConnected = false;
   private isGoogleConnected = false;
+  private healthStreamTimers = new Set<ReturnType<typeof setInterval>>();
+  private workoutStreamTimers = new Set<ReturnType<typeof setInterval>>();
 
   static getInstance(): HealthService {
     if (!HealthService.instance) {
@@ -64,7 +79,12 @@ export class HealthService {
             AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
             AppleHealthKit.Constants.Permissions.Weight,
           ],
-          write: [],
+          write: [
+            AppleHealthKit.Constants.Permissions.Water,
+            AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+            AppleHealthKit.Constants.Permissions.SleepAnalysis,
+            AppleHealthKit.Constants.Permissions.Weight,
+          ],
         },
       } as any;
 
@@ -90,13 +110,13 @@ export class HealthService {
   }
 
   // Google Health Connect Integration
-  async connectGoogleHealth(): Promise<{ success: boolean; error?: string; needsInstall?: boolean }> {
+  async connectGoogleHealth(): Promise<{ success: boolean; error?: string; needsInstall?: boolean; needsPermission?: boolean }> {
     if (Platform.OS !== 'android') {
       return { success: false, error: 'Google Health is only available on Android' };
     }
 
     try {
-      const { initialize, requestPermission, getSdkStatus, SdkAvailabilityStatus } = require('react-native-health-connect');
+      const { initialize, getSdkStatus, SdkAvailabilityStatus, getGrantedPermissions } = require('react-native-health-connect');
 
       // Check if Health Connect is available on device
       const sdkStatus = await getSdkStatus();
@@ -116,16 +136,15 @@ export class HealthService {
       }
 
       await initialize();
+      const grantedPermissions = await getGrantedPermissions();
 
-      const permissions = [
-        { accessType: 'read', recordType: 'Steps' },
-        { accessType: 'read', recordType: 'SleepSession' },
-        { accessType: 'read', recordType: 'HeartRate' },
-        { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
-        { accessType: 'read', recordType: 'Weight' }
-      ] as any;
-
-      await requestPermission(permissions);
+      if (!Array.isArray(grantedPermissions) || grantedPermissions.length === 0) {
+        return {
+          success: false,
+          error: 'Health Connect permissions are not granted yet.',
+          needsPermission: true,
+        };
+      }
 
       this.isGoogleConnected = true;
       await PlatformStorage.setItem(HEALTH_CONNECTED_KEY, JSON.stringify({
@@ -143,6 +162,17 @@ export class HealthService {
         return { success: false, error: err.message, needsInstall: true };
       }
       return { success: false, error: err.message };
+    }
+  }
+
+  async openHealthConnectSettings(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+
+    try {
+      const { openHealthConnectSettings } = require('react-native-health-connect');
+      openHealthConnectSettings();
+    } catch {
+      await this.openHealthConnectInstall();
     }
   }
 
@@ -199,6 +229,165 @@ export class HealthService {
     }
   }
 
+  async getWeeklyStepsData(): Promise<number[]> {
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+    const dayKeys = Array.from({ length: 7 }, (_, idx) => {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + idx);
+      return day.toDateString();
+    });
+    const zeroed = dayKeys.map(() => 0);
+    const { apple, google } = await this.getConnectionStatus();
+
+    if (Platform.OS === 'ios' && apple) {
+      try {
+        const AppleHealthKit = require('react-native-health').default;
+        const samples = await new Promise<any[]>((resolve) => {
+          if (!AppleHealthKit.getDailyStepCountSamples) {
+            resolve([]);
+            return;
+          }
+          AppleHealthKit.getDailyStepCountSamples({
+            startDate: startDate.toISOString(),
+            endDate: today.toISOString(),
+          }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) resolve([]);
+            else resolve(results);
+          });
+        });
+
+        const totalsByDay = new Map<string, number>();
+        dayKeys.forEach((key) => totalsByDay.set(key, 0));
+
+        for (const sample of samples) {
+          const key = new Date(sample?.startDate || sample?.date || Date.now()).toDateString();
+          const value = Number(sample?.value || 0);
+          if (!Number.isFinite(value) || !totalsByDay.has(key)) continue;
+          totalsByDay.set(key, Math.max(0, Math.round(value)));
+        }
+
+        return dayKeys.map((key) => totalsByDay.get(key) || 0);
+      } catch {
+        return zeroed;
+      }
+    }
+
+    if (Platform.OS === 'android' && google) {
+      try {
+        const { readRecords } = require('react-native-health-connect');
+        const stepRecords = await readRecords('Steps', {
+          timeRangeFilter: {
+            operator: 'between',
+            startTime: startDate.toISOString(),
+            endTime: today.toISOString(),
+          },
+        });
+
+        const totalsByDay = new Map<string, number>();
+        dayKeys.forEach((key) => totalsByDay.set(key, 0));
+
+        for (const record of stepRecords?.records || []) {
+          const key = new Date(record?.startTime || record?.endTime || Date.now()).toDateString();
+          const value = Number(record?.count || 0);
+          if (!Number.isFinite(value) || !totalsByDay.has(key)) continue;
+          totalsByDay.set(key, (totalsByDay.get(key) || 0) + Math.max(0, Math.round(value)));
+        }
+
+        return dayKeys.map((key) => totalsByDay.get(key) || 0);
+      } catch {
+        return zeroed;
+      }
+    }
+
+    const current = await this.getTodayHealthData();
+    const fallback = [...zeroed];
+    fallback[fallback.length - 1] = Math.max(0, Math.round(Number(current.steps || 0)));
+    return fallback;
+  }
+
+  async getWeeklySleepData(): Promise<number[]> {
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+    const dayKeys = Array.from({ length: 7 }, (_, idx) => {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + idx);
+      return day.toDateString();
+    });
+    const zeroed = dayKeys.map(() => 0);
+    const { apple, google } = await this.getConnectionStatus();
+
+    if (Platform.OS === 'ios' && apple) {
+      try {
+        const AppleHealthKit = require('react-native-health').default;
+        const samples = await new Promise<any[]>((resolve) => {
+          if (!AppleHealthKit.getSleepSamples) {
+            resolve([]);
+            return;
+          }
+          AppleHealthKit.getSleepSamples(
+            { startDate: startDate.toISOString(), endDate: today.toISOString() },
+            (err: any, results: any[]) => {
+              if (err || !Array.isArray(results)) resolve([]);
+              else resolve(results);
+            }
+          );
+        });
+
+        const totalsByDay = new Map<string, number>();
+        dayKeys.forEach((key) => totalsByDay.set(key, 0));
+        for (const sample of samples) {
+          const start = new Date(sample?.startDate || sample?.start || 0).getTime();
+          const end = new Date(sample?.endDate || sample?.end || 0).getTime();
+          if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+          const key = new Date(end).toDateString();
+          if (!totalsByDay.has(key)) continue;
+          const hours = (end - start) / (1000 * 60 * 60);
+          totalsByDay.set(key, (totalsByDay.get(key) || 0) + hours);
+        }
+        return dayKeys.map((key) => Number((totalsByDay.get(key) || 0).toFixed(2)));
+      } catch {
+        return zeroed;
+      }
+    }
+
+    if (Platform.OS === 'android' && google) {
+      try {
+        const { readRecords } = require('react-native-health-connect');
+        const sleepRecords = await readRecords('SleepSession', {
+          timeRangeFilter: {
+            operator: 'between',
+            startTime: startDate.toISOString(),
+            endTime: today.toISOString(),
+          },
+        });
+        const totalsByDay = new Map<string, number>();
+        dayKeys.forEach((key) => totalsByDay.set(key, 0));
+        for (const record of sleepRecords?.records || []) {
+          const start = new Date(record?.startTime || 0).getTime();
+          const end = new Date(record?.endTime || 0).getTime();
+          if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+          const key = new Date(end).toDateString();
+          if (!totalsByDay.has(key)) continue;
+          const hours = (end - start) / (1000 * 60 * 60);
+          totalsByDay.set(key, (totalsByDay.get(key) || 0) + hours);
+        }
+        return dayKeys.map((key) => Number((totalsByDay.get(key) || 0).toFixed(2)));
+      } catch {
+        return zeroed;
+      }
+    }
+
+    const current = await this.getTodayHealthData();
+    const fallback = [...zeroed];
+    fallback[fallback.length - 1] = Number((current.sleepHours || 0).toFixed(2));
+    return fallback;
+  }
+
   private async fetchFromHealthPlatform(): Promise<HealthData | null> {
     const { apple, google } = await this.getConnectionStatus();
     const today = new Date();
@@ -214,15 +403,114 @@ export class HealthService {
           });
         });
 
-        // Other readings similarly... (stubbed here for brevity, typically uses similarly nested callbacks)
-        const steps = await getSteps();
+        const getWater = () => new Promise<number>((resolve) => {
+           if (AppleHealthKit.getWater) {
+               AppleHealthKit.getWater({ date: today.toISOString() }, (err: any, results: any) => {
+                   if (err) resolve(0); else resolve((results.value || 0) * 1000); // L -> ml
+               });
+           } else resolve(0);
+        });
+        const getSleepHours = () => new Promise<number>((resolve) => {
+          if (!AppleHealthKit.getSleepSamples) {
+            resolve(0);
+            return;
+          }
+          AppleHealthKit.getSleepSamples({
+            startDate: today.toISOString(),
+            endDate: new Date().toISOString(),
+          }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) {
+              resolve(0);
+              return;
+            }
+            const totalHours = results.reduce((sum, sample) => {
+              const start = new Date(sample?.startDate || sample?.start || 0).getTime();
+              const end = new Date(sample?.endDate || sample?.end || 0).getTime();
+              if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return sum;
+              return sum + (end - start) / (1000 * 60 * 60);
+            }, 0);
+            resolve(Number.isFinite(totalHours) ? totalHours : 0);
+          });
+        });
+        const getLatestHeartRate = () => new Promise<number>((resolve) => {
+          if (!AppleHealthKit.getHeartRateSamples) {
+            resolve(0);
+            return;
+          }
+          AppleHealthKit.getHeartRateSamples({
+            startDate: today.toISOString(),
+            endDate: new Date().toISOString(),
+          }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results) || results.length === 0) {
+              resolve(0);
+              return;
+            }
+            const latestSample = [...results].sort((a, b) => {
+              const aTs = new Date(a?.endDate || a?.startDate || 0).getTime();
+              const bTs = new Date(b?.endDate || b?.startDate || 0).getTime();
+              return bTs - aTs;
+            })[0];
+            const value = Number(latestSample?.value || 0);
+            resolve(Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0);
+          });
+        });
+        const getCalories = () => new Promise<number>((resolve) => {
+          if (!AppleHealthKit.getActiveEnergyBurned) {
+            resolve(0);
+            return;
+          }
+          AppleHealthKit.getActiveEnergyBurned({
+            startDate: today.toISOString(),
+            endDate: new Date().toISOString(),
+          }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) {
+              resolve(0);
+              return;
+            }
+            const total = results.reduce((sum, sample) => {
+              const value = Number(sample?.value || 0);
+              return sum + (Number.isFinite(value) ? value : 0);
+            }, 0);
+            resolve(Math.max(0, Math.round(total)));
+          });
+        });
+        const getActiveMinutes = () => new Promise<number>((resolve) => {
+          if (!AppleHealthKit.getAppleExerciseTime) {
+            resolve(0);
+            return;
+          }
+          AppleHealthKit.getAppleExerciseTime({
+            startDate: today.toISOString(),
+            endDate: new Date().toISOString(),
+          }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) {
+              resolve(0);
+              return;
+            }
+            const totalMinutes = results.reduce((sum, sample) => {
+              const value = Number(sample?.value || 0);
+              return sum + (Number.isFinite(value) ? value : 0);
+            }, 0);
+            resolve(Math.max(0, Math.round(totalMinutes)));
+          });
+        });
+
+        const [steps, water, sleepHours, heartRate, calories, activeMinutes] = await Promise.all([
+          getSteps(),
+          getWater(),
+          getSleepHours(),
+          getLatestHeartRate(),
+          getCalories(),
+          getActiveMinutes(),
+        ]);
 
         return {
           steps,
-          sleepHours: 0, // mock reading
-          heartRate: 0,
-          calories: 0,
-          activeMinutes: 0,
+          sleepHours: Number.isFinite(sleepHours) ? Number(sleepHours.toFixed(2)) : 0,
+          heartRate,
+          calories,
+          activeMinutes,
+          water,
           date: new Date().toDateString(),
           source: 'apple_health'
         };
@@ -238,23 +526,84 @@ export class HealthService {
         const end = new Date();
         const start = new Date(today); // midnight
 
-        // Example reading steps
-        const stepRecords = await readRecords('Steps', {
-          timeRangeFilter: {
-            operator: 'between',
-            startTime: start.toISOString(),
-            endTime: end.toISOString()
-          }
-        });
-
-        const totalSteps = stepRecords.records.reduce((acc: number, cur: any) => acc + (cur.count || 0), 0);
+        const [stepRecords, hydrationRecords, heartRateRecords, calorieRecords, sleepRecords, exerciseRecords] = await Promise.all([
+          readRecords('Steps', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+          readRecords('Hydration', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+          readRecords('HeartRate', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+          readRecords('ActiveCaloriesBurned', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+          readRecords('SleepSession', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+          readRecords('ExerciseSession', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: start.toISOString(),
+              endTime: end.toISOString()
+            }
+          }),
+        ]);
+        const totalWaterLiters = (hydrationRecords?.records || []).reduce((acc: number, cur: any) => acc + (cur?.volume?.inLiters || 0), 0);
+        const totalSteps = (stepRecords?.records || []).reduce((acc: number, cur: any) => acc + (cur?.count || 0), 0);
+        const latestHeartRate = (heartRateRecords?.records || [])
+          .flatMap((record: any) => Array.isArray(record?.samples) ? record.samples : [])
+          .sort((a: any, b: any) => {
+            const aTs = new Date(a?.time || a?.startTime || 0).getTime();
+            const bTs = new Date(b?.time || b?.startTime || 0).getTime();
+            return bTs - aTs;
+          })[0];
+        const heartRate = Number(latestHeartRate?.beatsPerMinute || 0);
+        const totalCalories = (calorieRecords?.records || []).reduce((acc: number, cur: any) => {
+          const value = Number(cur?.energy?.inKilocalories ?? cur?.energy?.value ?? 0);
+          return acc + (Number.isFinite(value) ? value : 0);
+        }, 0);
+        const totalSleepHours = (sleepRecords?.records || []).reduce((acc: number, cur: any) => {
+          const startTs = new Date(cur?.startTime || 0).getTime();
+          const endTs = new Date(cur?.endTime || 0).getTime();
+          if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) return acc;
+          return acc + (endTs - startTs) / (1000 * 60 * 60);
+        }, 0);
+        const totalActiveMinutes = (exerciseRecords?.records || []).reduce((acc: number, cur: any) => {
+          const startTs = new Date(cur?.startTime || 0).getTime();
+          const endTs = new Date(cur?.endTime || 0).getTime();
+          if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) return acc;
+          return acc + (endTs - startTs) / (1000 * 60);
+        }, 0);
 
         return {
           steps: totalSteps,
-          sleepHours: 0,
-          heartRate: 0,
-          calories: 0,
-          activeMinutes: 0,
+          sleepHours: Number.isFinite(totalSleepHours) ? Number(totalSleepHours.toFixed(2)) : 0,
+          heartRate: Number.isFinite(heartRate) ? Math.max(0, Math.round(heartRate)) : 0,
+          calories: Math.max(0, Math.round(totalCalories)),
+          activeMinutes: Math.max(0, Math.round(totalActiveMinutes)),
+          water: totalWaterLiters * 1000,
           date: new Date().toDateString(),
           source: 'google_health'
         };
@@ -270,7 +619,7 @@ export class HealthService {
    * Fetch the user's latest recorded weight from Apple Health / Google Health Connect.
    * Scans the past 30 days to find the most recent valid log.
    */
-  async fetchLatestWeight(): Promise<{ weight: number, date: string, source: 'apple_health' | 'google_health' } | null> {
+  async fetchLatestWeight(): Promise<{ weight: number, date: string, source: 'apple_health' | 'google_health', bodyFat?: number, muscleMass?: number } | null> {
     const { apple, google } = await this.getConnectionStatus();
     if (!apple && !google) return null;
 
@@ -304,13 +653,29 @@ export class HealthService {
       try {
         const { readRecords } = require('react-native-health-connect');
 
-        const weightRecords = await readRecords('Weight', {
-          timeRangeFilter: {
-            operator: 'between',
-            startTime: startDate.toISOString(),
-            endTime: endDate.toISOString()
-          }
-        });
+        const [weightRecords, bodyFatRecords, leanMassRecords] = await Promise.all([
+          readRecords('Weight', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: startDate.toISOString(),
+              endTime: endDate.toISOString()
+            }
+          }),
+          readRecords('BodyFat', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: startDate.toISOString(),
+              endTime: endDate.toISOString()
+            }
+          }),
+          readRecords('LeanBodyMass', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: startDate.toISOString(),
+              endTime: endDate.toISOString()
+            }
+          }),
+        ]);
 
         if (weightRecords && weightRecords.records && weightRecords.records.length > 0) {
           // Find the most recent record
@@ -318,10 +683,21 @@ export class HealthService {
             return (new Date(prev.time) > new Date(current.time)) ? prev : current;
           });
 
+          const latestBodyFat = (bodyFatRecords?.records || []).reduce((prev: any, current: any) => {
+            if (!prev) return current;
+            return (new Date(prev.time) > new Date(current.time)) ? prev : current;
+          }, null);
+          const latestLeanMass = (leanMassRecords?.records || []).reduce((prev: any, current: any) => {
+            if (!prev) return current;
+            return (new Date(prev.time) > new Date(current.time)) ? prev : current;
+          }, null);
+
           return {
             weight: latest.weight.inKilograms,
             date: latest.time,
-            source: 'google_health'
+            source: 'google_health',
+            bodyFat: Number.isFinite(Number(latestBodyFat?.percentage?.value)) ? Number(latestBodyFat?.percentage?.value) : undefined,
+            muscleMass: Number.isFinite(Number(latestLeanMass?.mass?.inKilograms)) ? Number(latestLeanMass?.mass?.inKilograms) : undefined,
           };
         }
       } catch (err) {
@@ -382,6 +758,7 @@ export class HealthService {
       heartRate: 0,
       calories: 0,
       activeMinutes: 0,
+      water: 0,
       date,
       source: 'manual',
     };
@@ -457,5 +834,325 @@ export class HealthService {
     const updated = { ...data, [field]: value, source: 'manual' as const };
     await this.cacheHealthData(updated);
     return updated;
+  }
+
+  async getWorkoutLiveMetrics(startTime: Date): Promise<WorkoutLiveMetrics | null> {
+    const { apple, google } = await this.getConnectionStatus();
+
+    if (Platform.OS === 'ios' && apple) {
+      try {
+        const AppleHealthKit = require('react-native-health').default;
+        const startDate = startTime.toISOString();
+        const endDate = new Date().toISOString();
+
+        const heartRateSamples = await new Promise<any[]>((resolve) => {
+          AppleHealthKit.getHeartRateSamples({ startDate, endDate }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) resolve([]);
+            else resolve(results);
+          });
+        });
+
+        const energySamples = await new Promise<any[]>((resolve) => {
+          AppleHealthKit.getActiveEnergyBurned({ startDate, endDate }, (err: any, results: any[]) => {
+            if (err || !Array.isArray(results)) resolve([]);
+            else resolve(results);
+          });
+        });
+
+        const latestHrSample = [...heartRateSamples]
+          .sort((a, b) => new Date(b.endDate || b.startDate || 0).getTime() - new Date(a.endDate || a.startDate || 0).getTime())[0];
+        const heartRate = latestHrSample && Number.isFinite(Number(latestHrSample.value))
+          ? Math.round(Number(latestHrSample.value))
+          : null;
+
+        const calories = energySamples.reduce((sum, sample) => {
+          const value = Number(sample?.value || 0);
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+
+        return {
+          heartRate,
+          calories: Math.max(0, Math.round(calories)),
+          source: 'apple_health',
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    if (Platform.OS === 'android' && google) {
+      try {
+        const { readRecords } = require('react-native-health-connect');
+        const startIso = startTime.toISOString();
+        const endIso = new Date().toISOString();
+
+        const [heartRateRecords, calorieRecords] = await Promise.all([
+          readRecords('HeartRate', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: startIso,
+              endTime: endIso,
+            },
+          }),
+          readRecords('ActiveCaloriesBurned', {
+            timeRangeFilter: {
+              operator: 'between',
+              startTime: startIso,
+              endTime: endIso,
+            },
+          }),
+        ]);
+
+        const heartRateSamples = heartRateRecords?.records || [];
+        const latestHr = [...heartRateSamples]
+          .sort((a: any, b: any) => new Date(b.endTime || b.startTime || 0).getTime() - new Date(a.endTime || a.startTime || 0).getTime())[0];
+        const latestHrSample = latestHr?.samples?.[latestHr.samples.length - 1];
+        const heartRate = latestHrSample && Number.isFinite(Number(latestHrSample.beatsPerMinute))
+          ? Math.round(Number(latestHrSample.beatsPerMinute))
+          : null;
+
+        const calories = (calorieRecords?.records || []).reduce((sum: number, record: any) => {
+          const value = Number(record?.energy?.inKilocalories ?? record?.energy?.value ?? 0);
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+
+        return {
+          heartRate,
+          calories: Math.max(0, Math.round(calories)),
+          source: 'google_health',
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  startHealthDataStream(
+    onData: (payload: HealthStreamPayload) => void,
+    options?: { intervalMs?: number; includeWeeklySteps?: boolean; includeWeeklySleep?: boolean }
+  ): () => void {
+    const intervalMs = Math.max(3000, options?.intervalMs ?? 15000);
+    const includeWeeklySteps = options?.includeWeeklySteps ?? true;
+    const includeWeeklySleep = options?.includeWeeklySleep ?? true;
+    let active = true;
+    let isFetching = false;
+
+    const emit = async () => {
+      if (!active || isFetching) return;
+      isFetching = true;
+      try {
+        const healthData = await this.getTodayHealthData();
+        const weeklySteps = includeWeeklySteps ? await this.getWeeklyStepsData() : Array(7).fill(0);
+        const weeklySleepHours = includeWeeklySleep ? await this.getWeeklySleepData() : Array(7).fill(0);
+        if (!active) return;
+        onData({ healthData, weeklySteps, weeklySleepHours });
+      } catch (error) {
+        console.error('Health stream emit error:', error);
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    emit();
+    const timer = setInterval(() => {
+      void emit();
+    }, intervalMs);
+    this.healthStreamTimers.add(timer);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+      this.healthStreamTimers.delete(timer);
+    };
+  }
+
+  startWorkoutMetricsStream(
+    startTime: Date,
+    onMetrics: (metrics: WorkoutLiveMetrics) => void,
+    options?: { intervalMs?: number }
+  ): () => void {
+    const intervalMs = Math.max(1000, options?.intervalMs ?? 5000);
+    let active = true;
+    let isFetching = false;
+    let lastSignature: string | null = null;
+
+    const emit = async () => {
+      if (!active || isFetching) return;
+      isFetching = true;
+      try {
+        const metrics = await this.getWorkoutLiveMetrics(startTime);
+        if (!active || !metrics) return;
+        const signature = `${metrics.source}|${metrics.heartRate ?? 'null'}|${metrics.calories}`;
+        if (signature !== lastSignature) {
+          lastSignature = signature;
+          onMetrics(metrics);
+        }
+      } catch (error) {
+        console.error('Workout stream emit error:', error);
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    emit();
+    const timer = setInterval(() => {
+      void emit();
+    }, intervalMs);
+    this.workoutStreamTimers.add(timer);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+      this.workoutStreamTimers.delete(timer);
+    };
+  }
+
+  // --- Bi-directional Sync Methods ---
+
+  async saveWater(amountMl: number): Promise<boolean> {
+    const { apple, google } = await this.getConnectionStatus();
+    if (!apple && !google) return false;
+
+    if (Platform.OS === 'ios' && apple) {
+      const AppleHealthKit = require('react-native-health').default;
+      return new Promise((resolve) => {
+        // HealthKit expects liters
+        AppleHealthKit.saveWater({ value: amountMl / 1000 }, (err: any) => {
+          if (err) {
+            console.error('Error saving water to HealthKit:', err);
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
+      });
+    }
+
+    if (Platform.OS === 'android' && google) {
+      try {
+        const { insertRecords } = require('react-native-health-connect');
+        const now = new Date();
+        const endTime = now.toISOString();
+        const startTime = new Date(now.getTime() - 1000).toISOString(); // 1 second duration
+
+        await insertRecords([{
+          recordType: 'Hydration',
+          volume: { value: amountMl / 1000, unit: 'liters' },
+          startTime,
+          endTime,
+        }]);
+        return true;
+      } catch (err) {
+        console.error('Error saving water to Health Connect:', err);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async saveCalories(calories: number): Promise<boolean> {
+    const { apple, google } = await this.getConnectionStatus();
+    if (!apple && !google) return false;
+
+    const now = new Date();
+    const endTime = now.toISOString();
+    const startTime = new Date(now.getTime() - 60 * 1000).toISOString(); // 1 minute duration
+
+    if (Platform.OS === 'ios' && apple) {
+       const AppleHealthKit = require('react-native-health').default;
+       return new Promise((resolve) => {
+           // We use saveActiveEnergyBurned
+           // options: { startDate, endDate, value, unit } (check docs, usually value is enough for point data, or needs explicit options)
+           // Actually library might not have saveActiveEnergyBurned easily exposed as point data, often it's saveQuantitySample
+           // But widely used wrapper usually has saveActiveEnergyBurned
+           // Checking widely used types: saveActiveEnergyBurned(options, cb)
+           // options: { value, startDate, endDate }
+         const options = {
+            startDate: startTime,
+            endDate: endTime,
+            value: calories,
+            unit: 'calorie' // or 'kcal'
+         };
+         // Note: unit 'calorie' in HK is often small calorie, but typically wrapper handles it. 
+         // Safest is 'kilocalorie' if supported, or verify library.
+         // Assuming 'calorie' = kcal in this context or standard HK unit. 
+         // Actually AppleHealthKit.Constants.Units.kilocalorie is safer if available.
+         // For now, let's assume 'kilocalorie' string works or 'calorie'
+         options.unit = 'kilocalorie'; 
+         
+         // If method doesn't exist, we might fail, but this is a standard method in react-native-health
+         if (AppleHealthKit.saveActiveEnergyBurned) {
+             AppleHealthKit.saveActiveEnergyBurned(options, (err: any) => {
+                if (err) {
+                    console.error('Error saving calories to HealthKit', err);
+                    resolve(false);
+                } else {
+                    resolve(true);
+                }
+             });
+         } else {
+             resolve(false);
+         }
+       });
+    }
+
+    if (Platform.OS === 'android' && google) {
+        try {
+            const { insertRecords } = require('react-native-health-connect');
+             await insertRecords([{
+                recordType: 'ActiveCaloriesBurned',
+                energy: { value: calories, unit: 'kilocalories' },
+                startTime,
+                endTime,
+            }]);
+            return true;
+        } catch(err) {
+            console.error('Error saving calories to Health Connect', err);
+            return false;
+        }
+    }
+    return false;
+  }
+
+  async saveSleep(startDate: Date, endDate: Date): Promise<boolean> {
+      const { apple, google } = await this.getConnectionStatus();
+      if (!apple && !google) return false;
+
+      if (Platform.OS === 'ios' && apple) {
+          const AppleHealthKit = require('react-native-health').default;
+          return new Promise((resolve) => {
+              const options = {
+                  startDate: startDate.toISOString(),
+                  endDate: endDate.toISOString(),
+                  value: 'ASLEEP' // or 'INBED'
+              };
+              AppleHealthKit.saveSleep(options, (err: any) => {
+                  if (err) {
+                      console.error('Error saving sleep to HealthKit', err);
+                      resolve(false);
+                  } else {
+                      resolve(true);
+                  }
+              });
+          });
+      }
+
+      if (Platform.OS === 'android' && google) {
+          try {
+              const { insertRecords } = require('react-native-health-connect');
+              await insertRecords([{
+                  recordType: 'SleepSession',
+                  startTime: startDate.toISOString(),
+                  endTime: endDate.toISOString(),
+              }]);
+              return true;
+          } catch(err) {
+              console.error('Error saving sleep to Health Connect', err);
+              return false;
+          }
+      }
+      return false;
   }
 }

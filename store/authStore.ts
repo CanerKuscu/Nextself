@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import PlatformStorage from '../utils/platformStorage';
+import PlatformStorage from '@nextself/shared';
 import { Session } from '@supabase/supabase-js';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 
 // Custom Storage adapter for Zustand using PlatformStorage (web-safe)
 const zustandSecureStorage = {
@@ -19,7 +19,7 @@ const zustandSecureStorage = {
 
 export type UserRole = 'user' | 'pt' | 'dietitian';
 
-export interface BioSyncUserProfile {
+export interface NextSelfUserProfile {
     id: string;
     username: string;
     email: string;
@@ -33,13 +33,13 @@ export interface BioSyncUserProfile {
 
 interface AuthState {
     session: Session | null;
-    profile: BioSyncUserProfile | null;
+    profile: NextSelfUserProfile | null;
     isAuthenticated: boolean;
     isLoading: boolean;
 
     // Actions
     setSession: (session: Session | null) => void;
-    setProfile: (profile: BioSyncUserProfile | null) => void;
+    setProfile: (profile: NextSelfUserProfile | null) => void;
     setLoading: (isLoading: boolean) => void;
     logout: () => Promise<void>;
 }
@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthState>()(
             },
         }),
         {
-            name: 'biosync-auth-storage', // The key by which it will be saved in SecureStore
+            name: 'NextSelf-auth-storage', // The key by which it will be saved in SecureStore
             storage: createJSONStorage(() => zustandSecureStorage),
             // Partialize dictates what is stored. `isLoading` should be omitted as we only want session data.
             partialize: (state) => ({

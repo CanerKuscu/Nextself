@@ -1,8 +1,10 @@
 import { Platform } from 'react-native';
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { translations, TranslationKey } from '../locales/i18n';
+import PlatformStorage from '@nextself/shared';
 
 const supabase = SupabaseService.getInstance().getClient();
 
@@ -94,10 +96,26 @@ export class PushNotificationService {
 
             if (Platform.OS === 'android') {
                 await Notifications.setNotificationChannelAsync('default', {
-                    name: 'default',
-                    importance: Notifications.AndroidImportance.MAX,
+                    name: 'Default',
+                    importance: Notifications.AndroidImportance.DEFAULT,
                     vibrationPattern: [0, 250, 250, 250],
                     lightColor: '#FF231F7C',
+                });
+                await Notifications.setNotificationChannelAsync('workout', {
+                    name: 'Workouts',
+                    importance: Notifications.AndroidImportance.HIGH,
+                    sound: 'default',
+                    vibrationPattern: [0, 500, 200, 500],
+                });
+                await Notifications.setNotificationChannelAsync('nutrition', {
+                    name: 'Nutrition',
+                    importance: Notifications.AndroidImportance.DEFAULT,
+                    sound: 'default',
+                });
+                await Notifications.setNotificationChannelAsync('supplement', {
+                    name: 'Supplements',
+                    importance: Notifications.AndroidImportance.HIGH,
+                    sound: 'default',
                 });
             }
         } catch (error) {
@@ -274,7 +292,8 @@ export class PushNotificationService {
                 title,
                 body,
                 data: data || {},
-                priority: this.mapPriorityToExpo(priority)
+                priority: this.mapPriorityToExpo(priority),
+                channelId: this.getChannelIdForType(type)
             };
 
             const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -381,13 +400,41 @@ export class PushNotificationService {
         }
     }
 
+    private async getTranslation(key: TranslationKey, params?: Record<string, string | number>): Promise<string> {
+        try {
+            const lang = await PlatformStorage.getItem('NextSelf_language') || 'en';
+            // @ts-ignore
+            const translation = translations[lang]?.[key] || translations.en[key] || key;
+
+            if (params) {
+                return Object.entries(params).reduce(
+                    (str, [param, value]) => str.replaceAll(`{${param}}`, String(value)),
+                    translation
+                );
+            }
+            return translation;
+        } catch (error) {
+            console.error('Error translating:', error);
+            // Fallback to English
+            // @ts-ignore
+            const translation = translations.en[key] || key;
+            if (params) {
+                return Object.entries(params).reduce(
+                    (str, [param, value]) => str.replaceAll(`{${param}}`, String(value)),
+                    translation
+                );
+            }
+            return translation;
+        }
+    }
+
     /**
      * Send workout reminder
      */
     public async sendWorkoutReminder(userId: string, workoutTime: string): Promise<boolean> {
         try {
-            const title = 'Workout Time!';
-            const body = `It's time for your scheduled workout at ${workoutTime}. Let's get moving!`;
+            const title = await this.getTranslation('workout_time_title');
+            const body = await this.getTranslation('workout_reminder_body', { time: workoutTime });
 
             return await this.sendPushNotification(
                 userId,
@@ -411,8 +458,8 @@ export class PushNotificationService {
      */
     public async sendHydrationReminder(userId: string): Promise<boolean> {
         try {
-            const title = 'Stay Hydrated!';
-            const body = 'Time to drink some water. Staying hydrated helps with energy and recovery.';
+            const title = await this.getTranslation('hydration_title');
+            const body = await this.getTranslation('hydration_body');
 
             return await this.sendPushNotification(
                 userId,
@@ -441,8 +488,12 @@ export class PushNotificationService {
         xpReward: number
     ): Promise<boolean> {
         try {
-            const title = 'Achievement Unlocked!';
-            const body = `${achievementTitle}: ${achievementDescription} (+${xpReward} XP)`;
+            const title = await this.getTranslation('achievement_unlocked_title');
+            const body = await this.getTranslation('achievement_unlocked_body', {
+                title: achievementTitle,
+                description: achievementDescription,
+                reward: xpReward
+            });
 
             return await this.sendPushNotification(
                 userId,
@@ -467,8 +518,8 @@ export class PushNotificationService {
      */
     public async sendStreakNotification(userId: string, streakDays: number): Promise<boolean> {
         try {
-            const title = 'Streak Alert!';
-            const body = `You're on a ${streakDays}-day streak! Keep up the great work!`;
+            const title = await this.getTranslation('streak_alert_title');
+            const body = await this.getTranslation('streak_alert_body', { days: streakDays });
 
             return await this.sendPushNotification(
                 userId,
@@ -496,8 +547,8 @@ export class PushNotificationService {
         friendId: string
     ): Promise<boolean> {
         try {
-            const title = 'New Friend Request';
-            const body = `${friendName} sent you a friend request`;
+            const title = await this.getTranslation('friend_request_title');
+            const body = await this.getTranslation('friend_request_body', { name: friendName });
 
             return await this.sendPushNotification(
                 userId,
@@ -527,8 +578,11 @@ export class PushNotificationService {
         challengeId: string
     ): Promise<boolean> {
         try {
-            const title = 'Challenge Invitation!';
-            const body = `${challengerName} invited you to join "${challengeName}"`;
+            const title = await this.getTranslation('challenge_invitation_title');
+            const body = await this.getTranslation('challenge_invitation_body', {
+                challenger: challengerName,
+                challenge: challengeName
+            });
 
             return await this.sendPushNotification(
                 userId,
@@ -554,8 +608,11 @@ export class PushNotificationService {
      */
     public async sendDailySummary(userId: string, summaryData: any): Promise<boolean> {
         try {
-            const title = 'Your Daily Summary';
-            const body = `You completed ${summaryData.workouts || 0} workouts and burned ${summaryData.calories || 0} calories today`;
+            const title = await this.getTranslation('daily_summary_title');
+            const body = await this.getTranslation('daily_summary_body', {
+                workouts: summaryData.workouts || 0,
+                calories: summaryData.calories || 0
+            });
 
             return await this.sendPushNotification(
                 userId,
@@ -579,8 +636,8 @@ export class PushNotificationService {
      */
     public async sendWeeklyReport(userId: string, reportData: any): Promise<boolean> {
         try {
-            const title = 'Weekly Progress Report';
-            const body = 'Check out your progress from the past week!';
+            const title = await this.getTranslation('weekly_report_title');
+            const body = await this.getTranslation('weekly_report_body');
 
             return await this.sendPushNotification(
                 userId,
@@ -919,6 +976,23 @@ export class PushNotificationService {
                 return 'default';
             default:
                 return 'normal';
+        }
+    }
+
+    private getChannelIdForType(type: Notification['type']): string {
+        switch (type) {
+            case 'reminder':
+                return 'workout'; // Assuming reminders are mostly workouts/supplements
+            case 'achievement':
+                return 'default';
+            case 'social':
+                return 'default';
+            case 'system':
+                return 'default';
+            case 'promotional':
+                return 'default';
+            default:
+                return 'default';
         }
     }
 

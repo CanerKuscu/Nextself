@@ -1,5 +1,5 @@
-import { CONFIG } from '../config/config';
-import { Request, Response, NextFunction } from '../types';
+import { CONFIG } from '@nextself/shared';
+import { Request, Response, NextFunction } from '@nextself/shared';
 
 /**
  * Security middleware for enforcing HTTPS and adding security headers
@@ -54,7 +54,7 @@ export class SecurityMiddleware {
                 "style-src 'self'; " +
                 "img-src 'self' data: https:; " +
                 "font-src 'self' data:; " +
-                "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://api.biosync.com;";
+                "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://api.nextself.com;";
         }
 
         // Content Security Policy
@@ -119,11 +119,11 @@ export class SecurityMiddleware {
                 }
             }
 
-            // Add rate limit headers
+            // Add rate limit headers (use numeric values so tests can assert numbers)
             const record = requests.get(ip)!;
-            res.setHeader('X-RateLimit-Limit', String(maxRequests));
-            res.setHeader('X-RateLimit-Remaining', String(maxRequests - record.count));
-            res.setHeader('X-RateLimit-Reset', String(Math.ceil(record.resetTime / 1000)));
+            res.setHeader('X-RateLimit-Limit', maxRequests);
+            res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - record.count));
+            res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000));
 
             next();
         };

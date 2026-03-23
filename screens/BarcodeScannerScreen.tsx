@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,18 +8,22 @@ import { COLORS, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../config/theme';
 import AnimatedButton from '../components/AnimatedButton';
 import BiometricConsentModal from '../components/BiometricConsentModal';
 import { AgreementService } from '../services/agreementService';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
+import { useAlert } from '../components/CustomAlert';
 
 export default function BarcodeScannerScreen({ navigation }: any) {
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
 
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [scanned, setScanned] = useState(false);
+    const [loadingProduct, setLoadingProduct] = useState(false);
     const [showConsentModal, setShowConsentModal] = useState(false);
     const { isTurkish } = useTranslation();
     const insets = useSafeAreaInsets();
+    const { showAlert, AlertComponent } = useAlert();
 
     useEffect(() => {
         const checkConsentAndPermission = async () => {
@@ -49,18 +53,109 @@ export default function BarcodeScannerScreen({ navigation }: any) {
 
     const handleConsentDeclined = () => {
         setShowConsentModal(false);
-        navigation.goBack();
+        safeGoBack(navigation, 'Nutrition');
     };
 
-    const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+    const handleBarcodeScanned = async ({ data }: { type: string; data: string }) => {
         setScanned(true);
-        // In a real app, you would fetch product data using this barcode from an API (e.g. OpenFoodFacts)
-        alert((isTurkish ? 'Barkod okundu: ' : 'Barcode scanned: ') + data);
+        setLoadingProduct(true);
+        try {
+            const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(data)}.json`);
+            const payload = await response.json();
+            const product = payload?.product;
 
-        // Mock returning to previous screen after a delay
-        setTimeout(() => {
-            navigation.goBack();
-        }, 1500);
+            if (!product) {
+                showAlert({
+                    type: 'warning',
+                    title: isTurkish ? 'Ürün Bulunamadı' : 'Product Not Found',
+                    message: isTurkish ? 'Bu barkod için ürün verisi bulunamadı.' : 'No product data found for this barcode.',
+                    buttons: [
+                        { text: isTurkish ? 'Tekrar Okut' : 'Scan Again', onPress: () => setScanned(false) },
+                        { text: isTurkish ? 'Kapat' : 'Close', onPress: () => safeGoBack(navigation, 'Nutrition') }
+                    ],
+                });
+                return;
+            }
+
+            const nutriments = product.nutriments || {};
+            const calories = Number(nutriments['energy-kcal_100g'] || nutriments.energy_kcal_100g || 0);
+            const protein = Number(nutriments.proteins_100g || 0);
+            const carbs = Number(nutriments.carbohydrates_100g || 0);
+            const fat = Number(nutriments.fat_100g || 0);
+            const foodName = (isTurkish ? (product.product_name_tr || product.product_name) : (product.product_name || product.product_name_tr)) || (isTurkish ? 'Bilinmeyen Ürün' : 'Unknown Product');
+            const brand = product.brands || null;
+            const imageUrl = product.image_front_url || product.image_url || null;
+
+            const supabase = SupabaseService.getInstance();
+            const { user } = await supabase.getCurrentUser();
+            if (user) {
+                await supabase.logFoodScan(user.id, {
+                    barcode: data,
+                    food_name: foodName,
+                    brand: brand,
+                    calories,
+                    protein,
+                    carbs,
+                    fat,
+                    image_url: imageUrl,
+                    serving_size: '100',
+                    serving_unit: 'g',
+                });
+            }
+
+            showAlert({
+                type: 'confirm',
+                title: foodName,
+                message: `${isTurkish ? '100g için' : 'Per 100g'}: ${Math.round(calories)} kcal • P ${Math.round(protein)}g • K ${Math.round(carbs)}g • Y ${Math.round(fat)}g`,
+                buttons: [
+                    { text: isTurkish ? 'Tekrar Okut' : 'Scan Again', onPress: () => setScanned(false) },
+                    {
+                        text: isTurkish ? 'Günlüğe Ekle' : 'Add to Diary',
+                        onPress: async () => {
+                            try {
+                                if (user) {
+                                    const { error } = await supabase.getClient()
+                                        .from('nutrition_logs')
+                                        .insert({
+                                            user_id: user.id,
+                                            food_name: foodName,
+                                            calories: Math.round(calories),
+                                            protein: Math.round(protein),
+                                            carbs: Math.round(carbs),
+                                            fat: Math.round(fat),
+                                            source: 'barcode_scan',
+                                            logged_at: new Date().toISOString(),
+                                        });
+                                    if (error) throw error;
+                                }
+                                showAlert({
+                                    type: 'success',
+                                    title: isTurkish ? 'Eklendi' : 'Added',
+                                    message: isTurkish ? 'Ürün beslenme günlüğüne eklendi.' : 'Product added to nutrition diary.',
+                                    buttons: [{ text: 'OK', onPress: () => safeGoBack(navigation, 'Nutrition') }],
+                                });
+                            } catch {
+                                showAlert({
+                                    type: 'error',
+                                    title: isTurkish ? 'Hata' : 'Error',
+                                    message: isTurkish ? 'Günlüğe eklenemedi.' : 'Failed to add to diary.',
+                                    buttons: [{ text: 'OK', onPress: () => setScanned(false) }],
+                                });
+                            }
+                        },
+                    },
+                ],
+            });
+        } catch {
+            showAlert({
+                type: 'error',
+                title: isTurkish ? 'Tarama Hatası' : 'Scan Error',
+                message: isTurkish ? 'Barkod bilgisi alınamadı. Lütfen tekrar deneyin.' : 'Failed to fetch barcode details. Please try again.',
+                buttons: [{ text: isTurkish ? 'Tekrar Dene' : 'Try Again', onPress: () => setScanned(false) }],
+            });
+        } finally {
+            setLoadingProduct(false);
+        }
     };
 
     if (hasPermission === null) {
@@ -72,13 +167,14 @@ export default function BarcodeScannerScreen({ navigation }: any) {
                 <Text style={{ ...TYPOGRAPHY.body, textAlign: 'center', padding: SPACING.lg }}>
                     {isTurkish ? 'Kamera izni verilmedi.' : 'No access to camera.'}
                 </Text>
-                <AnimatedButton title={isTurkish ? 'Geri Dön' : 'Go Back'} onPress={() => navigation.goBack()} />
+                <AnimatedButton title={isTurkish ? 'Geri Dön' : 'Go Back'} onPress={() => safeGoBack(navigation, 'Nutrition')} />
             </View>
         );
     }
 
     return (
         <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]}>
+            <AlertComponent />
             <BiometricConsentModal
                 visible={showConsentModal}
                 consentType="barcode_scanner"
@@ -87,7 +183,7 @@ export default function BarcodeScannerScreen({ navigation }: any) {
             />
 
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Nutrition')} style={styles.backBtn} activeOpacity={0.7}>
                     <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Ürün Okut' : 'Scan Product'}</Text>
@@ -114,10 +210,17 @@ export default function BarcodeScannerScreen({ navigation }: any) {
 
                 {scanned && (
                     <View style={styles.scannedContainer}>
-                        <AnimatedButton
-                            title={isTurkish ? 'Tekrar Okut' : 'Scan Again'}
-                            onPress={() => setScanned(false)}
-                        />
+                        {loadingProduct ? (
+                            <View style={styles.loadingWrap}>
+                                <ActivityIndicator size="small" color="#fff" />
+                                <Text style={styles.loadingText}>{isTurkish ? 'Ürün bilgisi alınıyor...' : 'Fetching product details...'}</Text>
+                            </View>
+                        ) : (
+                            <AnimatedButton
+                                title={isTurkish ? 'Tekrar Okut' : 'Scan Again'}
+                                onPress={() => setScanned(false)}
+                            />
+                        )}
                     </View>
                 )}
             </View>
@@ -133,5 +236,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
     scanFrame: { width: 250, height: 250, borderWidth: 2, borderColor: colors.primary, backgroundColor: 'transparent', borderRadius: 16 },
     scanText: { ...TYPOGRAPHY.bodyBold, color: '#fff', marginTop: SPACING.xl, textAlign: 'center' },
-    scannedContainer: { position: 'absolute', bottom: 50, left: 0, right: 0, alignItems: 'center' }
+    scannedContainer: { position: 'absolute', bottom: 50, left: 0, right: 0, alignItems: 'center' },
+    loadingWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
+    loadingText: { ...TYPOGRAPHY.caption, color: '#fff' }
 });

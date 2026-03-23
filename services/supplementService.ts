@@ -1,32 +1,28 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 
 export interface Supplement {
   id: string;
-  name: string;
-  brand?: string;
-  category: 'vitamin' | 'mineral' | 'protein' | 'pre_workout' | 'post_workout' | 'other';
-  type: 'tablet' | 'capsule' | 'powder' | 'liquid' | 'gummy';
-  dosage: string;
-  unit: string; // mg, g, ml, mcg, IU, etc.
+  name: string; // Dynamic based on language (name_en or name_tr)
+  nameEn?: string;
+  nameTr?: string;
+  description?: string; // Dynamic
+  descriptionEn?: string;
+  descriptionTr?: string;
+  category: 'vitamin' | 'mineral' | 'protein' | 'amino_acid' | 'herbal' | 'other';
+  form: 'tablet' | 'capsule' | 'powder' | 'liquid' | 'gummy' | 'softgel' | 'drops';
+  dosageAmount: string;
+  dosageUnit: string;
   servingSize: string;
-  ingredients: string[];
-  benefits: string[];
-  sideEffects: string[];
-  warnings: string[];
-  interactions: string[];
-  contraindications: string[];
-  recommendedIntake: {
-    min: number;
-    max: number;
-    unit: string;
-    frequency: string;
-  };
-  price: {
-    min: number;
-    max: number;
-    currency: string;
-  };
-  availability: boolean;
+  benefits: string[]; // Dynamic
+  benefitsEn?: string[];
+  benefitsTr?: string[];
+  sideEffects: string[]; // Dynamic
+  sideEffectsEn?: string[];
+  sideEffectsTr?: string[];
+  usageInstructions: string; // Dynamic
+  usageInstructionsEn?: string;
+  usageInstructionsTr?: string;
+  imageUrl?: string;
   isVerified: boolean;
   createdAt: string;
   updatedAt: string;
@@ -39,81 +35,19 @@ export interface SupplementLog {
   quantity: number;
   unit: string;
   takenAt: string;
-  scheduledTime?: string;
   notes?: string;
   createdAt: string;
-}
-
-export interface SupplementPlan {
-  id: string;
-  userId: string;
-  name: string;
-  description: string;
-  supplements: {
-    supplementId: string;
-    quantity: number;
-    unit: string;
-    timeOfDay: 'morning' | 'afternoon' | 'evening' | 'with_meal' | 'pre_workout' | 'post_workout';
-  }[];
-  duration: number; // in days
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Maps camelCase TypeScript keys to snake_case PostgreSQL column names
-function mapSupplementToDb(obj: Record<string, any>): Record<string, any> {
-  const keyMap: Record<string, string> = {
-    servingSize: 'serving_size',
-    sideEffects: 'side_effects',
-    recommendedIntake: 'recommended_intake',
-    isVerified: 'is_verified',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    result[keyMap[key] ?? key] = value;
-  }
-  return result;
-}
-
-function mapSupplementLogToDb(obj: Record<string, any>): Record<string, any> {
-  const keyMap: Record<string, string> = {
-    userId: 'user_id',
-    supplementId: 'supplement_id',
-    takenAt: 'taken_at',
-    scheduledTime: 'scheduled_time',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    result[keyMap[key] ?? key] = value;
-  }
-  return result;
-}
-
-function mapSupplementPlanToDb(obj: Record<string, any>): Record<string, any> {
-  const keyMap: Record<string, string> = {
-    userId: 'user_id',
-    isActive: 'is_active',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    result[keyMap[key] ?? key] = value;
-  }
-  return result;
+  // Expanded fields for UI
+  supplementName?: string;
+  supplementCategory?: string;
 }
 
 export class SupplementService {
   private static instance: SupplementService;
-  private supabaseService: SupabaseService;
+  private supabase: any;
 
   private constructor() {
-    this.supabaseService = SupabaseService.getInstance();
+    this.supabase = SupabaseService.getInstance().getClient();
   }
 
   public static getInstance(): SupplementService {
@@ -123,17 +57,18 @@ export class SupplementService {
     return SupplementService.instance;
   }
 
-  // Get all supplements
+  // Get all supplements with language support
   public async getSupplements(
+    language: 'en' | 'tr' = 'en',
     category?: string,
     search?: string,
     page: number = 1,
     limit: number = 50
   ): Promise<{ data: Supplement[]; count: number }> {
     try {
-      let query = this.supabaseService.getClient()
+      let query = this.supabase
         .from('supplements')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('is_verified', true);
 
       if (category) {
@@ -142,552 +77,227 @@ export class SupplementService {
 
       if (search) {
         const safe = search.replace(/[,.*()%_\\]/g, '');
-        query = query.or(`name.ilike.%${safe}%,brand.ilike.%${safe}%,ingredients.ilike.%${safe}%`);
+        if (language === 'tr') {
+          query = query.or(`name_tr.ilike.%${safe}%`);
+        } else {
+          query = query.or(`name_en.ilike.%${safe}%`);
+        }
       }
 
-      query = query
-        .order('name', { ascending: true })
-        .range((page - 1) * limit, page * limit - 1);
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      
+      const { data, count, error } = await query
+        .order(language === 'tr' ? 'name_tr' : 'name_en', { ascending: true })
+        .range(from, to);
 
-      const { data, count, error } = await query;
+      if (error) throw error;
 
-      if (error) {
-        throw new Error(`Failed to get supplements: ${error.message}`);
-      }
+      const formattedData = (data || []).map((item: any) => this.mapDbToSupplement(item, language));
 
-      return { data: data || [], count: count || 0 };
+      return { data: formattedData, count: count || 0 };
     } catch (error) {
       console.error('Error getting supplements:', error);
-      throw error;
+      return { data: [], count: 0 };
     }
   }
 
   // Get supplement by ID
-  public async getSupplementById(supplementId: string): Promise<Supplement> {
+  public async getSupplementById(supplementId: string, language: 'en' | 'tr' = 'en'): Promise<Supplement | null> {
     try {
-      const { data, error } = await this.supabaseService.getClient()
+      const { data, error } = await this.supabase
         .from('supplements')
         .select('*')
         .eq('id', supplementId)
         .single();
 
-      if (error) {
-        throw new Error(`Failed to get supplement: ${error.message}`);
-      }
+      if (error) throw error;
+      if (!data) return null;
 
-      return data;
+      return this.mapDbToSupplement(data, language);
     } catch (error) {
       console.error('Error getting supplement by ID:', error);
-      throw error;
+      return null;
     }
   }
 
-  // Create supplement (admin only)
-  public async createSupplement(supplement: Omit<Supplement, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplement> {
-    try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplements')
-        .insert({
-          ...mapSupplementToDb(supplement),
-          is_verified: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to create supplement: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error creating supplement:', error);
-      throw error;
-    }
-  }
-
-  // Update supplement (admin only)
-  public async updateSupplement(
-    supplementId: string,
-    updates: Partial<Supplement>
-  ): Promise<Supplement> {
-    try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplements')
-        .update({
-          ...mapSupplementToDb(updates),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', supplementId)
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to update supplement: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error updating supplement:', error);
-      throw error;
-    }
-  }
-
-  // Delete supplement (admin only)
-  public async deleteSupplement(supplementId: string): Promise<void> {
-    try {
-      const { error } = await this.supabaseService.getClient()
-        .from('supplements')
-        .delete()
-        .eq('id', supplementId);
-
-      if (error) {
-        throw new Error(`Failed to delete supplement: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('Error deleting supplement:', error);
-      throw error;
-    }
+  // Helper to map DB row to Supplement interface
+  private mapDbToSupplement(item: any, language: 'en' | 'tr'): Supplement {
+    return {
+      id: item.id,
+      name: language === 'tr' ? item.name_tr : item.name_en,
+      nameEn: item.name_en,
+      nameTr: item.name_tr,
+      description: language === 'tr' ? item.description_tr : item.description_en,
+      descriptionEn: item.description_en,
+      descriptionTr: item.description_tr,
+      category: item.category,
+      form: item.form,
+      dosageAmount: item.dosage_amount,
+      dosageUnit: item.dosage_unit,
+      servingSize: item.serving_size,
+      benefits: language === 'tr' ? (item.benefits_tr || []) : (item.benefits_en || []),
+      benefitsEn: item.benefits_en,
+      benefitsTr: item.benefits_tr,
+      sideEffects: language === 'tr' ? (item.side_effects_tr || []) : (item.side_effects_en || []),
+      sideEffectsEn: item.side_effects_en,
+      sideEffectsTr: item.side_effects_tr,
+      usageInstructions: language === 'tr' ? item.usage_instructions_tr : item.usage_instructions_en,
+      usageInstructionsEn: item.usage_instructions_en,
+      usageInstructionsTr: item.usage_instructions_tr,
+      imageUrl: item.image_url,
+      isVerified: item.is_verified,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    };
   }
 
   // Get supplement logs for a user
   public async getSupplementLogs(
     userId: string,
+    language: 'en' | 'tr' = 'en',
     date?: string,
     page: number = 1,
     limit: number = 50
   ): Promise<{ data: SupplementLog[]; count: number }> {
     try {
-      let query = this.supabaseService.getClient()
-        .from('supplement_logs')
-        .select('*')
+      let query = this.supabase
+        .from('user_supplement_logs')
+        .select(`
+          *,
+          supplement:supplements(name_en, name_tr, category)
+        `, { count: 'exact' })
         .eq('user_id', userId)
         .order('taken_at', { ascending: false });
 
       if (date) {
         const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
         query = query
-          .gte('created_at', startOfDay.toISOString())
-          .lte('created_at', endOfDay.toISOString());
+          .gte('taken_at', startOfDay.toISOString())
+          .lte('taken_at', endOfDay.toISOString());
       }
 
-      query = query
-        .range((page - 1) * limit, page * limit - 1);
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      
+      const { data, count, error } = await query.range(from, to);
 
-      const { data, count, error } = await query;
+      if (error) throw error;
 
-      if (error) {
-        throw new Error(`Failed to get supplement logs: ${error.message}`);
-      }
+      const formattedData = (data || []).map((item: any) => ({
+        id: item.id,
+        userId: item.user_id,
+        supplementId: item.supplement_id,
+        quantity: item.quantity,
+        unit: item.unit,
+        takenAt: item.taken_at,
+        notes: item.notes,
+        createdAt: item.created_at,
+        supplementName: language === 'tr' ? item.supplement?.name_tr : item.supplement?.name_en,
+        supplementCategory: item.supplement?.category,
+      }));
 
-      return { data: data || [], count: count || 0 };
+      return { data: formattedData, count: count || 0 };
     } catch (error) {
       console.error('Error getting supplement logs:', error);
-      throw error;
+      return { data: [], count: 0 };
     }
   }
 
   // Add supplement log
-  public async addSupplementLog(log: Omit<SupplementLog, 'id' | 'createdAt'>): Promise<SupplementLog> {
+  public async addSupplementLog(log: Omit<SupplementLog, 'id' | 'createdAt'>): Promise<{ success: boolean; error?: any }> {
     try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplement_logs')
+      const { error } = await this.supabase
+        .from('user_supplement_logs')
         .insert({
-          ...mapSupplementLogToDb(log),
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+          user_id: log.userId,
+          supplement_id: log.supplementId,
+          quantity: log.quantity,
+          unit: log.unit,
+          taken_at: log.takenAt,
+          notes: log.notes
+        });
 
-      if (error) {
-        throw new Error(`Failed to add supplement log: ${error.message}`);
-      }
-
-      return data;
+      if (error) throw error;
+      return { success: true };
     } catch (error) {
       console.error('Error adding supplement log:', error);
-      throw error;
-    }
-  }
-
-  // Update supplement log
-  public async updateSupplementLog(
-    logId: string,
-    updates: Partial<SupplementLog>
-  ): Promise<SupplementLog> {
-    try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplement_logs')
-        .update({
-          ...mapSupplementLogToDb(updates),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', logId)
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to update supplement log: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error updating supplement log:', error);
-      throw error;
+      return { success: false, error };
     }
   }
 
   // Delete supplement log
-  public async deleteSupplementLog(logId: string): Promise<void> {
+  public async deleteSupplementLog(logId: string): Promise<{ success: boolean; error?: any }> {
     try {
-      const { error } = await this.supabaseService.getClient()
-        .from('supplement_logs')
+      const { error } = await this.supabase
+        .from('user_supplement_logs')
         .delete()
         .eq('id', logId);
 
-      if (error) {
-        throw new Error(`Failed to delete supplement log: ${error.message}`);
-      }
+      if (error) throw error;
+      return { success: true };
     } catch (error) {
       console.error('Error deleting supplement log:', error);
-      throw error;
+      return { success: false, error };
     }
   }
 
-  // Get supplement plans for a user
-  public async getSupplementPlans(
-    userId: string,
-    isActive: boolean = true
-  ): Promise<SupplementPlan[]> {
+  // Get user's supplement routine
+  public async getUserRoutine(userId: string): Promise<{ data: any[]; error?: any }> {
     try {
-      let query = this.supabaseService.getClient()
-        .from('supplement_plans')
-        .select('*')
-        .eq('user_id', userId);
+      const { data, error } = await this.supabase
+        .from('user_supplement_routines')
+        .select('*, supplement:supplements(name_en, name_tr, category, dosage_amount, dosage_unit)')
+        .eq('user_id', userId)
+        .eq('is_active', true);
 
-      if (isActive !== undefined) {
-        query = query.eq('is_active', isActive);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        throw new Error(`Failed to get supplement plans: ${error.message}`);
-      }
-
-      return data || [];
+      if (error) throw error;
+      return { data };
     } catch (error) {
-      console.error('Error getting supplement plans:', error);
-      throw error;
+      console.error('Error getting user routine:', error);
+      return { data: [], error };
     }
   }
 
-  // Create supplement plan
-  public async createSupplementPlan(
-    plan: Omit<SupplementPlan, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<SupplementPlan> {
+  // Add supplement to routine
+  public async addToRoutine(userId: string, supplementId: string, reminderTime?: string): Promise<{ success: boolean; error?: any }> {
     try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplement_plans')
-        .insert({
-          ...mapSupplementPlanToDb(plan),
+      const { error } = await this.supabase
+        .from('user_supplement_routines')
+        .upsert({
+          user_id: userId,
+          supplement_id: supplementId,
+          reminder_time: reminderTime,
           is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+          updated_at: new Date()
+        }, { onConflict: 'user_id,supplement_id' });
 
-      if (error) {
-        throw new Error(`Failed to create supplement plan: ${error.message}`);
-      }
-
-      return data;
+      if (error) throw error;
+      return { success: true };
     } catch (error) {
-      console.error('Error creating supplement plan:', error);
-      throw error;
+      console.error('Error adding to routine:', error);
+      return { success: false, error };
     }
   }
 
-  // Update supplement plan
-  public async updateSupplementPlan(
-    planId: string,
-    updates: Partial<SupplementPlan>
-  ): Promise<SupplementPlan> {
+  // Remove supplement from routine (set is_active to false)
+  public async removeFromRoutine(userId: string, supplementId: string): Promise<{ success: boolean; error?: any }> {
     try {
-      const { data, error } = await this.supabaseService.getClient()
-        .from('supplement_plans')
-        .update({
-          ...mapSupplementPlanToDb(updates),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', planId)
-        .select()
-        .single();
+      const { error } = await this.supabase
+        .from('user_supplement_routines')
+        .update({ is_active: false, updated_at: new Date() })
+        .eq('user_id', userId)
+        .eq('supplement_id', supplementId);
 
-      if (error) {
-        throw new Error(`Failed to update supplement plan: ${error.message}`);
-      }
-
-      return data;
+      if (error) throw error;
+      return { success: true };
     } catch (error) {
-      console.error('Error updating supplement plan:', error);
-      throw error;
-    }
-  }
-
-  // Delete supplement plan
-  public async deleteSupplementPlan(planId: string): Promise<void> {
-    try {
-      const { error } = await this.supabaseService.getClient()
-        .from('supplement_plans')
-        .delete()
-        .eq('id', planId);
-
-      if (error) {
-        throw new Error(`Failed to delete supplement plan: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('Error deleting supplement plan:', error);
-      throw error;
-    }
-  }
-
-  // Get supplement recommendations based on user goals
-  public async getSupplementRecommendations(
-    userId: string,
-    goals: string[],
-    healthProfile: any
-  ): Promise<Supplement[]> {
-    try {
-      // This would integrate with AI to provide personalized recommendations
-      // For now, return popular supplements based on goals
-      const recommendations: Supplement[] = [];
-
-      if (goals.includes('muscle_gain')) {
-        const protein = await this.getSupplementByCategory('protein');
-        const preWorkout = await this.getSupplementByCategory('pre_workout');
-        const postWorkout = await this.getSupplementByCategory('post_workout');
-        recommendations.push(...protein, ...preWorkout, ...postWorkout);
-      }
-
-      if (goals.includes('general_health')) {
-        const vitamins = await this.getSupplementByCategory('vitamin');
-        const minerals = await this.getSupplementByCategory('mineral');
-        recommendations.push(...vitamins, ...minerals);
-      }
-
-      if (goals.includes('energy')) {
-        const others = await this.getSupplementByCategory('other');
-        recommendations.push(...others);
-      }
-
-      // Remove duplicates
-      const uniqueRecommendations = recommendations.filter(
-        (supplement, index, self) =>
-          recommendations.findIndex((s) => s.id === supplement.id) === index
-      );
-
-      return uniqueRecommendations.slice(0, 10);
-    } catch (error) {
-      console.error('Error getting supplement recommendations:', error);
-      throw error;
-    }
-  }
-
-  // Get supplements by category
-  private async getSupplementByCategory(category: string): Promise<Supplement[]> {
-    try {
-      const { data } = await this.supabaseService.getClient()
-        .from('supplements')
-        .select('*')
-        .eq('category', category)
-        .eq('is_verified', true)
-        .order('name', { ascending: true })
-        .limit(20);
-
-      return data || [];
-    } catch (error) {
-      console.error('Error getting supplements by category:', error);
-      return [];
-    }
-  }
-
-  // Search supplements by name
-  public async searchSupplements(query: string): Promise<Supplement[]> {
-    try {
-      const { data } = await this.supabaseService.getClient()
-        .from('supplements')
-        .select('*')
-        .or(`name.ilike.%${query.replace(/[,.*()%_\\]/g, '')}%,brand.ilike.%${query.replace(/[,.*()%_\\]/g, '')}%,ingredients.ilike.%${query.replace(/[,.*()%_\\]/g, '')}%`)
-        .eq('is_verified', true)
-        .order('name', { ascending: true })
-        .limit(20);
-
-      return data || [];
-    } catch (error) {
-      console.error('Error searching supplements:', error);
-      return [];
-    }
-  }
-
-  // Check for supplement interactions
-  public async checkSupplementInteractions(
-    supplementIds: string[]
-  ): Promise<{ supplementId: string; interactions: string[] }[]> {
-    try {
-      const interactions: { supplementId: string; interactions: string[] }[] = [];
-
-      for (const supplementId of supplementIds) {
-        const supplement = await this.getSupplementById(supplementId);
-
-        const { data: relatedSupplements } = await this.getSupplements();
-        const currentIngredients = supplement.ingredients || [];
-
-        const foundInteractions = relatedSupplements
-          .filter(s =>
-            s.ingredients.some(ingredient =>
-              currentIngredients.includes(ingredient)
-            )
-          )
-          .map(s => s.id);
-
-        interactions.push({
-          supplementId,
-          interactions: foundInteractions,
-        });
-      }
-
-      return interactions;
-    } catch (error) {
-      console.error('Error checking supplement interactions:', error);
-      return [];
-    }
-  }
-
-  // Get supplement intake recommendations (fetches from Supabase)
-  public async getSupplementIntakeRecommendations(
-    userId: string,
-    age: number,
-    gender: 'male' | 'female' | 'other',
-    healthGoals: string[]
-  ): Promise<{ supplement: Supplement; dosage: string; timing: string }[]> {
-    try {
-      const recommendations: { supplement: Supplement; dosage: string; timing: string }[] = [];
-
-      // Fetch supplements from Supabase instead of using hardcoded data
-      const supplementNames = ['Multivitamin', 'Vitamin D', 'Omega-3', 'Calcium', 'Vitamin B12', 'Vitamin C', 'Zinc'];
-      const supplementMap: Record<string, Supplement> = {};
-
-      for (const name of supplementNames) {
-        try {
-          const { data } = await this.supabaseService.getClient()
-            .from('supplements')
-            .select('*')
-            .ilike('name', `%${name}%`)
-            .eq('is_verified', true)
-            .limit(1)
-            .single();
-
-          if (data) {
-            supplementMap[name.toLowerCase().replace(/[-\s]/g, '_')] = data;
-          }
-        } catch (e) {
-          // Supplement not found in database, skip
-          console.warn(`Supplement not found: ${name}`);
-        }
-      }
-
-      if (age < 18 && supplementMap.multivitamin) {
-        recommendations.push({
-          supplement: supplementMap.multivitamin,
-          dosage: '1 tablet daily',
-          timing: 'morning',
-        });
-      }
-
-      if (age >= 18 && age < 30 && supplementMap.vitamin_d) {
-        recommendations.push({
-          supplement: supplementMap.vitamin_d,
-          dosage: '1 tablet daily',
-          timing: 'with_meal',
-        });
-      }
-
-      if (age >= 30 && age < 50 && supplementMap.omega_3) {
-        recommendations.push({
-          supplement: supplementMap.omega_3,
-          dosage: '1000mg daily',
-          timing: 'with_meal',
-        });
-      }
-
-      if (age >= 50) {
-        if (supplementMap.vitamin_d) {
-          recommendations.push({
-            supplement: supplementMap.vitamin_d,
-            dosage: '1 tablet daily',
-            timing: 'morning',
-          });
-        }
-        if (supplementMap.calcium) {
-          recommendations.push({
-            supplement: supplementMap.calcium,
-            dosage: '500mg twice daily',
-            timing: 'with_meal',
-          });
-        }
-        if (supplementMap.vitamin_b12) {
-          recommendations.push({
-            supplement: supplementMap.vitamin_b12,
-            dosage: '1000mcg daily',
-            timing: 'morning',
-          });
-        }
-      }
-
-      if (healthGoals.includes('bone_health')) {
-        if (supplementMap.calcium) {
-          recommendations.push({
-            supplement: supplementMap.calcium,
-            dosage: '500mg twice daily',
-            timing: 'with_meal',
-          });
-        }
-        if (supplementMap.vitamin_d) {
-          recommendations.push({
-            supplement: supplementMap.vitamin_d,
-            dosage: '1 tablet daily',
-            timing: 'morning',
-          });
-        }
-      }
-
-      if (healthGoals.includes('immune_support')) {
-        if (supplementMap.vitamin_c) {
-          recommendations.push({
-            supplement: supplementMap.vitamin_c,
-            dosage: '1000mg daily',
-            timing: 'morning',
-          });
-        }
-        if (supplementMap.zinc) {
-          recommendations.push({
-            supplement: supplementMap.zinc,
-            dosage: '15mg daily',
-            timing: 'with_meal',
-          });
-        }
-      }
-
-      return recommendations;
-    } catch (error) {
-      console.error('Error getting supplement intake recommendations:', error);
-      return [];
+      console.error('Error removing from routine:', error);
+      return { success: false, error };
     }
   }
 }

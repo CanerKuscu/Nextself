@@ -2,27 +2,43 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../hooks/useTranslation';
+import { DailyMission } from '../../services/missionService';
+
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface DailyMissionsCardProps {
-  missions: any[];
-  onMissionPress: (mission: any) => void;
+  missions: DailyMission[];
+  onMissionPress: (mission: DailyMission) => void;
 }
+
+const CATEGORY_META: Record<string, { icon: string; color: string; gradient: string[] }> = {
+  workout: { icon: 'barbell', color: '#FF6B6B', gradient: ['#FF6B6B', '#FF4757'] },
+  nutrition: { icon: 'restaurant', color: '#58CC02', gradient: ['#58CC02', '#46A302'] },
+  health: { icon: 'heart', color: '#1CB0F6', gradient: ['#1CB0F6', '#0099DD'] },
+  social: { icon: 'people', color: '#CE82FF', gradient: ['#CE82FF', '#A855F7'] },
+  streak: { icon: 'flame', color: '#FF9600', gradient: ['#FF9600', '#FF6B00'] },
+  mindfulness: { icon: 'leaf', color: '#7C3AED', gradient: ['#7C3AED', '#6D28D9'] },
+  hydration: { icon: 'water', color: '#06B6D4', gradient: ['#06B6D4', '#0891B2'] },
+  supplements: { icon: 'flask', color: '#F59E0B', gradient: ['#F59E0B', '#D97706'] },
+};
 
 const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardProps) => {
   const { colors, isDark } = useTheme();
+  const { isTurkish, t } = useTranslation();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
 
   if (!missions || missions.length === 0) {
     return null;
   }
 
-  const completedCount = missions.filter(m => m.completed).length;
+  const completedCount = missions.filter(m => m.isCompleted).length;
   const progress = (completedCount / missions.length) * 100;
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Daily Missions</Text>
+        <Text style={styles.cardTitle}>{t('daily_missions')}</Text>
         <View style={styles.progressBadge}>
           <Text style={styles.progressText}>{completedCount}/{missions.length}</Text>
         </View>
@@ -38,65 +54,63 @@ const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardP
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.missionsScroll}
       >
-        {missions.map((mission) => (
-          <TouchableOpacity
-            key={mission.id}
-            style={[
-              styles.missionItem,
-              mission.completed && styles.completedMission
-            ]}
-            onPress={() => onMissionPress(mission)}
-            disabled={mission.completed}
-          >
-            <View style={styles.missionHeader}>
-              <View style={[
-                styles.missionIcon,
-                mission.completed && styles.completedIcon
-              ]}>
-                <Ionicons
-                  name={getMissionIcon(mission.type)}
-                  size={16}
-                  color={mission.completed ? '#FFFFFF' : colors.primary}
-                />
+        {missions.map((mission) => {
+          const meta = CATEGORY_META[mission.category] || CATEGORY_META.workout;
+          return (
+            <TouchableOpacity
+              key={mission.id}
+              style={[
+                styles.missionItem,
+                mission.isCompleted && styles.completedMission
+              ]}
+              onPress={() => onMissionPress(mission)}
+              disabled={mission.isCompleted}
+            >
+              <View style={styles.missionHeader}>
+                <LinearGradient
+                  colors={meta.gradient as any}
+                  style={[
+                    styles.missionIcon,
+                    mission.isCompleted && styles.completedIcon
+                  ]}
+                >
+                  <Ionicons
+                    name={meta.icon as any}
+                    size={16}
+                    color="#FFFFFF"
+                  />
+                </LinearGradient>
+                <Text style={[
+                  styles.missionPoints,
+                  mission.isCompleted && styles.completedPoints
+                ]}>
+                  +{mission.pointReward}
+                </Text>
               </View>
+
               <Text style={[
-                styles.missionPoints,
-                mission.completed && styles.completedPoints
-              ]}>
-                +{mission.points}
+                styles.missionTitle,
+                mission.isCompleted && styles.completedTitle
+              ]} numberOfLines={2}>
+                {isTurkish ? (mission.titleTr || mission.title) : mission.title}
               </Text>
-            </View>
 
-            <Text style={[
-              styles.missionTitle,
-              mission.completed && styles.completedTitle
-            ]} numberOfLines={2}>
-              {mission.title}
-            </Text>
-
-            {mission.completed && (
-              <View style={styles.completedBadge}>
-                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                <Text style={styles.completedBadgeText}>Done</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
+              {mission.isCompleted && (
+                <View style={styles.completedBadge}>
+                  <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                  <Text style={styles.completedBadgeText}>{t('done')}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
 });
 
-function getMissionIcon(type: string): 'fitness' | 'nutrition' | 'walk' | 'water' | 'moon' | 'star' {
-  switch (type?.toLowerCase()) {
-    case 'workout': return 'fitness';
-    case 'nutrition': return 'nutrition';
-    case 'steps': return 'walk';
-    case 'water': return 'water';
-    case 'sleep': return 'moon';
-    default: return 'star';
-  }
-}
+// Removed getMissionIcon function as it's replaced by CATEGORY_META
+
 
 const getStyles = (colors: any) => StyleSheet.create({
   card: {

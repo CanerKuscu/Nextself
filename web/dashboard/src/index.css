@@ -234,7 +234,7 @@
         @apply bg-gradient-to-r from-primary-500 to-secondary-500;
     }
 
-    .bg-gradient-biosync {
+    .bg-gradient-nextself {
         @apply bg-gradient-to-br from-emerald-400 via-cyan-500 to-violet-500;
     }
 

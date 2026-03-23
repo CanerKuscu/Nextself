@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAlert } from '../components/CustomAlert';
+import { safeGoBack } from '../utils/navigation';
 
 export default function QRInviteScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const { t } = useLanguage();
     const { showAlert, AlertComponent } = useAlert();
 
     const [agreedPrice, setAgreedPrice] = useState('');
     const [durationMonths, setDurationMonths] = useState<number>(1);
+    const [serviceType, setServiceType] = useState<'online' | 'face_to_face' | 'hybrid'>('online');
     const [loading, setLoading] = useState(false);
     const [qrData, setQrData] = useState<string | null>(null);
 
@@ -33,6 +36,7 @@ export default function QRInviteScreen() {
                 ptId: user.id,
                 price: Number(agreedPrice),
                 duration: durationMonths,
+                serviceType: serviceType,
                 timestamp: Date.now()
             };
 
@@ -45,6 +49,15 @@ export default function QRInviteScreen() {
         }
     };
 
+    const getServiceTypeLabel = (type: string) => {
+        switch(type) {
+            case 'online': return 'Uzaktan (Online)';
+            case 'face_to_face': return 'Yüz Yüze';
+            case 'hybrid': return 'Hibrit';
+            default: return type;
+        }
+    };
+
     return (
         <View style={styles.container}>
             <AlertComponent />
@@ -53,8 +66,25 @@ export default function QRInviteScreen() {
             {!qrData ? (
                 <>
                     <Text style={styles.description}>
-                        Müşteriniz ile anlaştığınız tutar ve süreyi girerek bir davet QR kodu oluşturun. Müşteriniz bu kodu kendi uygulamasından okutarak teklifi ve veri paylaşım onaylarını görecektir.
+                        Müşteriniz ile anlaştığınız tutar, süre ve hizmet tipini girerek bir davet QR kodu oluşturun.
                     </Text>
+
+                    <View style={styles.inputContainer}>
+                        <Text style={styles.label}>Hizmet Tipi</Text>
+                        <View style={styles.durationContainer}>
+                            {(['online', 'face_to_face', 'hybrid'] as const).map(type => (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.durationButton, serviceType === type && styles.durationButtonActive]}
+                                    onPress={() => setServiceType(type)}
+                                >
+                                    <Text style={[styles.durationText, serviceType === type && styles.durationTextActive]}>
+                                        {type === 'online' ? 'Uzaktan' : type === 'face_to_face' ? 'Yüz Yüze' : 'Hibrit'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
 
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Anlaşılan Toplam Tutar (TL)</Text>
@@ -90,7 +120,7 @@ export default function QRInviteScreen() {
                 </>
             ) : (
                 <View style={styles.qrContainer}>
-                    <Text style={styles.qrInstruction}>Müşterinizden BioSync uygulamasını açarak "QR Okut" bölümünden aşağıdaki kodu okutmasını isteyin.</Text>
+                    <Text style={styles.qrInstruction}>Müşterinizden NextSelf uygulamasını açarak "QR Okut" bölümünden aşağıdaki kodu okutmasını isteyin.</Text>
 
                     <View style={styles.qrWrapper}>
                         <QRCode
@@ -102,11 +132,12 @@ export default function QRInviteScreen() {
                     </View>
 
                     <View style={styles.summaryContainer}>
+                        <Text style={styles.summaryText}>Hizmet: {getServiceTypeLabel(serviceType)}</Text>
                         <Text style={styles.summaryText}>Tutar: {agreedPrice} TL</Text>
                         <Text style={styles.summaryText}>Süre: {durationMonths} Ay</Text>
                     </View>
 
-                    <TouchableOpacity style={[styles.button, styles.outlineButton]} onPress={() => navigation.goBack()}>
+                    <TouchableOpacity style={[styles.button, styles.outlineButton]} onPress={() => safeGoBack(navigation, 'ProfessionalHome')}>
                         <Text style={[styles.buttonText, styles.outlineButtonText]}>Kapat ve Geri Dön</Text>
                     </TouchableOpacity>
                 </View>

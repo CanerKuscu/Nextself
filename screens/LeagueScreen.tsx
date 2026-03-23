@@ -8,17 +8,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LeagueService, LEAGUE_TIERS, LeagueUser, LeagueGroupData, UserLeagueData } from '../services/leagueService';
 import { useTranslation } from '../hooks/useTranslation';
-import { SupabaseService } from '../services/supabase';
+import { SupabaseService } from '@nextself/shared';
 import GlassCard from '../components/GlassCard';
 import LeagueTierIcon from '../components/LeagueTierIcon';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { safeGoBack } from '../utils/navigation';
 
 const { width } = Dimensions.get('window');
 
 const LeagueScreen = ({ navigation }: any) => {
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
 
     const { isTurkish } = useTranslation();
     const insets = useSafeAreaInsets();
@@ -56,7 +57,7 @@ const LeagueScreen = ({ navigation }: any) => {
         setRefreshing(false);
     }, [loadData]);
 
-    const tierInfo = userLeague ? LeagueService.getInstance().getTierInfo(userLeague.current_tier) : LEAGUE_TIERS[0];
+    const tierInfo = userLeague ? LeagueService.getInstance().getTierInfo(userLeague.currentTier) : LEAGUE_TIERS[0];
     const timeRemaining = LeagueService.getInstance().getTimeRemaining();
 
     const getZoneColor = (zone: string) => {
@@ -93,109 +94,72 @@ const LeagueScreen = ({ navigation }: any) => {
     return (
         <View style={[styles.container, { paddingBottom: insets.bottom, backgroundColor: colors.background }]}>
             {/* Header */}
-            <LinearGradient colors={[tierInfo.color, tierInfo.color + 'CC']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <LinearGradient colors={[tierInfo.color, tierInfo.color + '99', colors.background]} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                <TouchableOpacity onPress={() => safeGoBack(navigation, 'Home')} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Haftalık Lig' : 'Weekly League'}</Text>
-                <View style={{ width: 40 }} />
+                <View style={{ width: 44 }} />
             </LinearGradient>
 
             <ScrollView
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tierInfo.color} />}
             >
-                {/* Current League Badge */}
-                <GlassCard style={styles.leagueCard}>
-                    <LeagueTierIcon tier={tierInfo.tier} size={56} />
-                    <Text style={styles.leagueName}>{isTurkish ? tierInfo.nameTr : tierInfo.name}</Text>
-                    <Text style={styles.leagueSub}>
-                        {isTurkish ? `Hafta ${userLeague?.weeks_in_current_league || 1}` : `Week ${userLeague?.weeks_in_current_league || 1}`}
-                    </Text>
-
-                    {/* XP Display */}
-                    <View style={styles.xpRow}>
-                        <View style={styles.xpItem}>
-                            <Text style={styles.xpValue}>{userLeague?.weekly_xp || 0}</Text>
-                            <Text style={styles.xpLabel}>{isTurkish ? 'Haftalık XP' : 'Weekly XP'}</Text>
-                        </View>
-                        <View style={[styles.xpDivider, { backgroundColor: tierInfo.color }]} />
-                        <View style={styles.xpItem}>
-                            <Text style={styles.xpValue}>{userLeague?.total_xp || 0}</Text>
-                            <Text style={styles.xpLabel}>{isTurkish ? 'Toplam XP' : 'Total XP'}</Text>
-                        </View>
-                        <View style={[styles.xpDivider, { backgroundColor: tierInfo.color }]} />
-                        <View style={styles.xpItem}>
-                            <Text style={styles.xpValue}>#{userLeague?.rank_in_group || '-'}</Text>
-                            <Text style={styles.xpLabel}>{isTurkish ? 'Sıralama' : 'Rank'}</Text>
-                        </View>
+                {/* Header Banner */}
+                <View style={[styles.bannerContainer, { borderColor: tierInfo.color + '40' }]}>
+                    <View style={[styles.bannerIconWrap, { backgroundColor: tierInfo.color + '15' }]}>
+                        <LeagueTierIcon tier={tierInfo.tier} size={60} />
                     </View>
-
-                    {/* Time Remaining */}
-                    <View style={styles.timerRow}>
-                        <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                        <Text style={styles.timerText}>
-                            {isTurkish
-                                ? `${timeRemaining.days}g ${timeRemaining.hours}s ${timeRemaining.minutes}dk kaldı`
-                                : `${timeRemaining.days}d ${timeRemaining.hours}h ${timeRemaining.minutes}m remaining`}
-                        </Text>
-                    </View>
-                </GlassCard>
-
-                {/* League Tiers Overview */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Lig Seviyeleri' : 'League Tiers'}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tiersScroll} contentContainerStyle={styles.tiersContainer}>
-                    {LEAGUE_TIERS.map((tier) => (
-                        <View
-                            key={tier.tier}
-                            style={[
-                                styles.tierBadge,
-                                { borderColor: tier.color },
-                                userLeague?.current_tier === tier.tier && { backgroundColor: tier.color + '20', borderWidth: 2 },
-                            ]}
-                        >
-                            <LeagueTierIcon tier={tier.tier} size={28} />
-                            <Text style={[styles.tierName, userLeague?.current_tier === tier.tier && { fontWeight: 'bold', color: tier.color }]}>
-                                {isTurkish ? tier.nameTr : tier.name}
+                    <View style={styles.bannerTextWrap}>
+                        <Text style={styles.bannerTitle}>{isTurkish ? tierInfo.nameTr : tierInfo.name}</Text>
+                        <View style={styles.bannerSubWrap}>
+                            <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                            <Text style={styles.bannerSubText}>
+                                {isTurkish
+                                    ? `${timeRemaining.days}g ${timeRemaining.hours}s ${timeRemaining.minutes}dk kaldı`
+                                    : `${timeRemaining.days}d ${timeRemaining.hours}h ${timeRemaining.minutes}m remaining`}
                             </Text>
                         </View>
-                    ))}
-                </ScrollView>
+                        <View style={styles.bannerSubWrap}>
+                            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                            <Text style={styles.bannerSubText}>
+                                {isTurkish ? `Hafta ${userLeague?.weeksInCurrentLeague || 1}` : `Week ${userLeague?.weeksInCurrentLeague || 1}`}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
 
                 {/* Leaderboard */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Liderlik Tablosu' : 'Leaderboard'}</Text>
-                <Text style={styles.sectionSub}>
-                    {isTurkish ? '30 kişilik grubunuz - Haftalık sıralama' : 'Your 30-person group - Weekly ranking'}
-                </Text>
-
                 {leaderboard && leaderboard.members.length > 0 ? (
                     <View style={styles.leaderboardContainer}>
                         {/* Zone Legend */}
                         <View style={styles.zoneLegend}>
                             <View style={styles.zoneItem}>
                                 <View style={[styles.zoneDot, { backgroundColor: '#58CC02' }]} />
-                                <Text style={styles.zoneText}>{isTurkish ? 'Terfi Bölgesi' : 'Promotion Zone'}</Text>
+                                <Text style={styles.zoneText}>{isTurkish ? 'Terfi' : 'Promotion'}</Text>
                             </View>
                             <View style={styles.zoneItem}>
                                 <View style={[styles.zoneDot, { backgroundColor: colors.textTertiary }]} />
-                                <Text style={styles.zoneText}>{isTurkish ? 'Güvenli Bölge' : 'Safe Zone'}</Text>
+                                <Text style={styles.zoneText}>{isTurkish ? 'Güvenli' : 'Safe'}</Text>
                             </View>
                             <View style={styles.zoneItem}>
                                 <View style={[styles.zoneDot, { backgroundColor: '#FF4B4B' }]} />
-                                <Text style={styles.zoneText}>{isTurkish ? 'Düşme Bölgesi' : 'Demotion Zone'}</Text>
+                                <Text style={styles.zoneText}>{isTurkish ? 'Düşme' : 'Demotion'}</Text>
                             </View>
                         </View>
 
                         {leaderboard.members.map((member, index) => {
                             const rankDisplay = getRankDisplay(member.rank);
-                            const isCurrentUser = member.user_id === currentUserId;
+                            const isCurrentUser = member.userId === currentUserId;
                             return (
                                 <View
-                                    key={member.user_id}
+                                    key={member.userId}
                                     style={[
                                         styles.memberRow,
                                         isCurrentUser && styles.currentUserRow,
+                                        member.rank <= 3 && styles.topMemberRow,
                                         { borderLeftColor: getZoneColor(member.zone), borderLeftWidth: 3 },
                                     ]}
                                 >
@@ -216,7 +180,7 @@ const LeagueScreen = ({ navigation }: any) => {
                                     {/* Info */}
                                     <View style={styles.memberInfo}>
                                         <Text style={[styles.memberName, isCurrentUser && styles.currentUserName]}>
-                                            {member.full_name || member.username}{isCurrentUser ? (isTurkish ? ' (Sen)' : ' (You)') : ''}
+                                            {member.fullName || member.username}{isCurrentUser ? (isTurkish ? ' (Sen)' : ' (You)') : ''}
                                         </Text>
                                         <View style={[styles.zoneBadge, { backgroundColor: getZoneColor(member.zone) + '20' }]}>
                                             <Text style={[styles.zoneBadgeText, { color: getZoneColor(member.zone) }]}>
@@ -228,7 +192,7 @@ const LeagueScreen = ({ navigation }: any) => {
                                     {/* XP */}
                                     <View style={styles.memberXP}>
                                         <Text style={[styles.xpAmount, isCurrentUser && { color: colors.primary }]}>
-                                            {member.weekly_xp}
+                                            {member.weeklyXp}
                                         </Text>
                                         <Text style={styles.xpUnit}>XP</Text>
                                     </View>
@@ -276,54 +240,44 @@ const LeagueScreen = ({ navigation }: any) => {
 
 const getStyles = (colors: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.xl, paddingHorizontal: SPACING.lg },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center' },
-    content: { padding: SPACING.lg, paddingBottom: 100 },
-    leagueCard: { padding: SPACING.xl, alignItems: 'center', marginBottom: SPACING.lg },
-    leagueIcon: { marginBottom: SPACING.sm },
-    leagueName: { ...TYPOGRAPHY.h2, color: colors.text },
-    leagueSub: { ...TYPOGRAPHY.caption, color: colors.textSecondary, marginBottom: SPACING.lg },
-    xpRow: { flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-around' },
-    xpItem: { alignItems: 'center' },
-    xpValue: { ...TYPOGRAPHY.h3, color: colors.text },
-    xpLabel: { ...TYPOGRAPHY.caption, color: colors.textSecondary, marginTop: 2 },
-    xpDivider: { width: 1, height: 30 },
-    timerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: SPACING.lg, backgroundColor: colors.background, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.pill },
-    timerText: { ...TYPOGRAPHY.caption, color: colors.textSecondary },
-    sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginBottom: SPACING.sm, marginTop: SPACING.lg },
-    sectionSub: { ...TYPOGRAPHY.caption, color: colors.textSecondary, marginBottom: SPACING.md },
-    tiersScroll: { marginBottom: SPACING.lg },
-    tiersContainer: { gap: SPACING.sm, paddingRight: SPACING.lg },
-    tierBadge: { alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: colors.borderLight, minWidth: 70 },
-    tierIcon: { marginBottom: 4 },
-    tierName: { ...TYPOGRAPHY.small, color: colors.textSecondary },
-    leaderboardContainer: { marginBottom: SPACING.lg },
-    zoneLegend: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: SPACING.md, backgroundColor: colors.surface, padding: SPACING.sm, borderRadius: BORDER_RADIUS.md },
-    zoneItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    zoneDot: { width: 8, height: 8, borderRadius: 4 },
-    zoneText: { ...TYPOGRAPHY.small, color: colors.textSecondary },
-    memberRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, padding: SPACING.md, marginBottom: 2, borderRadius: BORDER_RADIUS.sm, gap: SPACING.sm },
-    currentUserRow: { backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary + '30' },
-    rankContainer: { width: 32, alignItems: 'center' },
-
-    rankNumber: { ...TYPOGRAPHY.bodyBold, color: colors.textSecondary },
-    memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
-    memberInfo: { flex: 1 },
-    memberName: { ...TYPOGRAPHY.body, color: colors.text },
-    currentUserName: { ...TYPOGRAPHY.bodyBold, color: colors.primary },
-    zoneBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 2 },
-    zoneBadgeText: { fontSize: 10, fontWeight: '600' },
-    memberXP: { alignItems: 'flex-end' },
-    xpAmount: { ...TYPOGRAPHY.bodyBold, color: colors.text },
-    xpUnit: { ...TYPOGRAPHY.small, color: colors.textTertiary },
-    emptyCard: { padding: SPACING.xl, alignItems: 'center', gap: SPACING.md },
-    emptyText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' },
-    infoCard: { padding: SPACING.lg, marginBottom: SPACING.xl },
-    infoTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginBottom: SPACING.md },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
-    infoIconWrap: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    infoText: { ...TYPOGRAPHY.body, color: colors.textSecondary, flex: 1 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.xl, paddingHorizontal: SPACING.lg, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10, zIndex: 10 },
+    backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 22 },
+    headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center', fontWeight: '800', letterSpacing: 0.5 },
+    content: { padding: SPACING.lg, paddingBottom: 120 },
+    bannerContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, padding: SPACING.lg, borderRadius: BORDER_RADIUS.xl, borderWidth: 1, marginBottom: SPACING.xl, marginTop: -SPACING.xl, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+    bannerIconWrap: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.lg },
+    bannerTextWrap: { flex: 1, justifyContent: 'center' },
+    bannerTitle: { fontSize: 24, fontWeight: '900', color: colors.text, marginBottom: 8, letterSpacing: -0.5 },
+    bannerSubWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+    bannerSubText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: SPACING.xs, marginTop: SPACING.xl, letterSpacing: -0.5 },
+    sectionSub: { fontSize: 13, color: colors.textTertiary, marginBottom: SPACING.lg },
+    leaderboardContainer: { marginBottom: SPACING.xxl, backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.xxl, padding: SPACING.md, borderWidth: 1, borderColor: colors.borderLight, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.03, shadowRadius: 15, elevation: 4 },
+    zoneLegend: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: SPACING.lg, backgroundColor: 'transparent', padding: SPACING.sm },
+    zoneItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    zoneDot: { width: 10, height: 10, borderRadius: 5 },
+    zoneText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    memberRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: SPACING.lg, marginBottom: SPACING.sm, borderRadius: BORDER_RADIUS.xl, gap: SPACING.md },
+    topMemberRow: { backgroundColor: colors.primarySoft, borderWidth: 0 },
+    currentUserRow: { backgroundColor: colors.primarySoft, borderWidth: 2, borderColor: colors.primary + '80', transform: [{scale: 1.02}], shadowColor: colors.primary, shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
+    rankContainer: { width: 40, alignItems: 'center', justifyContent: 'center' },
+    rankNumber: { fontSize: 18, fontWeight: '800', color: colors.textSecondary },
+    memberAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.borderLight },
+    memberInfo: { flex: 1, justifyContent: 'center' },
+    memberName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
+    currentUserName: { color: colors.primary, fontWeight: '800' },
+    zoneBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' },
+    zoneBadgeText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+    memberXP: { alignItems: 'flex-end', justifyContent: 'center' },
+    xpAmount: { fontSize: 18, fontWeight: '800', color: colors.text },
+    xpUnit: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, marginTop: 2 },
+    emptyCard: { padding: SPACING.xxl, alignItems: 'center', gap: SPACING.lg, borderRadius: BORDER_RADIUS.xxl },
+    emptyText: { fontSize: 15, fontWeight: '500', color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+    infoCard: { padding: SPACING.xl, marginBottom: SPACING.xl, borderRadius: BORDER_RADIUS.xxl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight },
+    infoTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: SPACING.lg },
+    infoRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.md },
+    infoIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    infoText: { fontSize: 14, fontWeight: '500', color: colors.textSecondary, flex: 1, lineHeight: 20 },
 });
 
 export default LeagueScreen;

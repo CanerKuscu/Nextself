@@ -4,7 +4,8 @@
 // Set environment variables for tests
 process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-key';
-process.env.EXPO_PUBLIC_ENCRYPTION_KEY = 'test-encryption-key-32-bytes-long';
+// 32-char test key for AES-256 in tests
+process.env.EXPO_PUBLIC_ENCRYPTION_KEY = '01234567890123456789012345678901';
 process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY = 'test-deepseek-key';
 
 // Mock AsyncStorage

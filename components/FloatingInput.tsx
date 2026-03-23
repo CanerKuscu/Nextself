@@ -11,6 +11,7 @@ import {
     TextInputFocusEventData,
 } from 'react-native';
 import { COLORS, TYPOGRAPHY, BORDER_RADIUS, SPACING } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface FloatingInputProps extends TextInputProps {
     label: string;
@@ -31,6 +32,8 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
     onBlur,
     ...props
 }) => {
+    const { colors } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
     const [isFocused, setIsFocused] = useState(false);
     const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -68,7 +71,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
     // Memoize interpolated values to prevent recalculation on every render
     const labelTop = useMemo(() => labelAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [17, 6],
+        outputRange: [18, 6],
     }), [labelAnim]);
 
     const labelSize = useMemo(() => labelAnim.interpolate({
@@ -95,10 +98,10 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                                 top: labelTop,
                                 fontSize: labelSize,
                                 color: isFocused
-                                    ? COLORS.primary
+                                    ? colors.primary
                                     : error
-                                        ? COLORS.error
-                                        : COLORS.textTertiary,
+                                        ? colors.error
+                                        : colors.textTertiary,
                             },
                         ]}
                     >
@@ -112,9 +115,10 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                         style={[
                             styles.input,
                             icon ? styles.inputWithIcon : null,
+                            { color: colors.text },
                             props.style,
                         ]}
-                        placeholderTextColor={COLORS.textTertiary}
+                        placeholderTextColor={colors.textTertiary}
                     />
                 </View>
                 {rightIcon && <View style={styles.iconRight}>{rightIcon}</View>}
@@ -124,25 +128,25 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
-        marginBottom: SPACING.lg,
+        marginBottom: SPACING.md,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.surfaceSecondary,
+        backgroundColor: colors.surfaceSecondary,
         borderRadius: BORDER_RADIUS.md,
         borderWidth: 1.5,
-        borderColor: COLORS.border,
+        borderColor: colors.border,
         minHeight: 56,
     },
     focused: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.surface,
+        borderColor: colors.primary,
+        backgroundColor: colors.surface,
     },
     errorBorder: {
-        borderColor: COLORS.error,
+        borderColor: colors.error,
     },
     inputWrapper: {
         flex: 1,
@@ -157,15 +161,15 @@ const styles = StyleSheet.create({
     },
     input: {
         ...TYPOGRAPHY.body,
-        color: COLORS.text,
         paddingHorizontal: SPACING.md,
-        paddingTop: 20,
-        paddingBottom: 8,
-        height: 56,
+        paddingVertical: 12,
+        minHeight: 56,
+        textAlignVertical: 'center',
     },
     inputWithIcon: {
         paddingLeft: 0,
     },
+    // 8px grid aligned icons
     iconLeft: {
         paddingLeft: SPACING.md,
         paddingRight: SPACING.xs,
@@ -176,7 +180,7 @@ const styles = StyleSheet.create({
     },
     errorText: {
         ...TYPOGRAPHY.small,
-        color: COLORS.error,
+        color: colors.error,
         marginTop: SPACING.xs,
         paddingLeft: SPACING.md,
     },

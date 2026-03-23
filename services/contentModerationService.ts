@@ -1,6 +1,6 @@
-import { SupabaseService } from './supabase';
+import { SupabaseService } from '@nextself/shared';
 import * as FileSystem from 'expo-file-system';
-import { ValidationUtils } from '../utils/validation';
+import { ValidationUtils } from '@nextself/shared';
 
 // ─── Types ───────────────────────────────────────────────────
 export interface BanStatus {
@@ -73,7 +73,7 @@ export class ContentModerationService {
                 if (expiresAt <= new Date()) {
                     // Auto-unban: clear the flag (fire-and-forget)
                     supabase
-                        .from('profiles')
+                        .from('users')
                         .update({ is_banned: false, ban_reason: null, ban_expires_at: null })
                         .eq('id', userId)
                         .then(() => { });
@@ -248,7 +248,7 @@ export class ContentModerationService {
         userId: string,
         violationType: string,
         details?: string,
-    ): Promise<{ banned: boolean; message: string }> {
+    ): Promise<{ banned: boolean; message: string; violationCount: number }> {
         try {
             // Sanitize inputs to prevent SQL injection
             const sanitizedViolationType = ValidationUtils.sanitizeSQL(violationType);
@@ -291,8 +291,13 @@ export class ContentModerationService {
                 message = `Account suspended for ${TEMP_BAN_DURATION_DAYS} days`;
             }
 
+            // Reset avatar_url on NSFW profile photo violations
+            if (violationType.includes('profile_photo') || violationType.includes('nsfw')) {
+                updateData.avatar_url = null;
+            }
+
             await supabase
-                .from('profiles')
+                .from('users')
                 .update(updateData)
                 .eq('id', userId);
 
@@ -306,9 +311,36 @@ export class ContentModerationService {
                 });
             } catch { /* violation log is best-effort */ }
 
-            return { banned, message };
+            // Send in-app notification about the violation
+            try {
+                const remaining = MAX_VIOLATIONS_BEFORE_BAN - currentCount;
+                let notifTitle = 'Content Violation Warning';
+                let notifMessage = '';
+
+                if (banned) {
+                    notifTitle = 'Account Suspended';
+                    notifMessage = currentCount >= MAX_VIOLATIONS_BEFORE_BAN * 2
+                        ? 'Your account has been permanently banned due to repeated violations of community guidelines.'
+                        : `Your account has been suspended for ${TEMP_BAN_DURATION_DAYS} days due to content violations.`;
+                } else if (remaining <= 1) {
+                    notifMessage = `Warning: You have ${currentCount} violation(s). One more violation will result in account suspension.`;
+                } else {
+                    notifMessage = `Your content was removed for violating community guidelines. Violation ${currentCount}/${MAX_VIOLATIONS_BEFORE_BAN}.`;
+                }
+
+                await supabase.from('notifications').insert({
+                    user_id: userId,
+                    type: 'content_violation',
+                    title: notifTitle,
+                    message: notifMessage,
+                    data: { violation_type: sanitizedViolationType, count: currentCount, banned },
+                    is_read: false,
+                });
+            } catch { /* notification is best-effort */ }
+
+            return { banned, message, violationCount: currentCount };
         } catch {
-            return { banned: false, message: 'Failed to record violation' };
+            return { banned: false, message: 'Failed to record violation', violationCount: 0 };
         }
     }
 
