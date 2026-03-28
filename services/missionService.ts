@@ -95,21 +95,21 @@ export class MissionService {
     // Helper to normalize category to match Enum
     private normalizeCategory(category: string): string {
         const VALID_CATEGORIES = [
-            'workout', 'nutrition', 'wellness', 'social', 
-            'health', 'hydration', 'mindfulness', 'sleep', 
+            'workout', 'nutrition', 'wellness', 'social',
+            'health', 'hydration', 'mindfulness', 'sleep',
             'steps', 'streak', 'supplements'
         ];
-        
+
         const lower = category?.toLowerCase() || 'workout';
         if (VALID_CATEGORIES.includes(lower)) return lower;
-        
+
         // Fallback mappings
         if (lower.includes('water')) return 'hydration';
         if (lower.includes('food') || lower.includes('diet')) return 'nutrition';
         if (lower.includes('run') || lower.includes('walk') || lower.includes('gym')) return 'workout';
         if (lower.includes('meditat')) return 'mindfulness';
         if (lower.includes('friend')) return 'social';
-        
+
         return 'workout'; // Default fallback
     }
 
@@ -248,15 +248,15 @@ export class MissionService {
                 .order('created_at', { ascending: true });
 
             if (error) {
-                 LogManager.getInstance().error('Error fetching daily missions:', error);
-                 throw error;
+                LogManager.getInstance().error('Error fetching daily missions:', error);
+                throw error;
             }
 
             if (!missions || missions.length === 0) {
                 LogManager.getInstance().info('No daily missions found, generating...');
                 return await this.generateDailyMissions(user.id, today);
             }
-            
+
             LogManager.getInstance().info(`Found ${missions.length} existing daily missions`);
             return missions.map(this.mapDailyMission);
         } catch (err) {
@@ -335,7 +335,7 @@ export class MissionService {
     public async claimMissionReward(missionId: string, type: 'weekly' | 'daily'): Promise<{ xp: number, points: number }> {
         const supabase = SupabaseService.getInstance().getClient();
         const table = type === 'weekly' ? 'weekly_missions' : 'daily_missions';
-        
+
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('No user logged in');
@@ -346,34 +346,35 @@ export class MissionService {
                 .select('*')
                 .eq('id', missionId)
                 .single();
-                
-            if (error || !mission) throw new Error('Mission not found');
-            
+
+            if (error) throw error;
+            if (!mission) throw new Error('Mission not found');
+
             // 2. Check if already claimed (using completed_at as indicator)
             if (mission.completed_at) {
                 LogManager.getInstance().info(`Mission ${missionId} already claimed`);
                 return { xp: 0, points: 0 };
             }
-            
+
             // 3. Check if completed
             if (!mission.is_completed && mission.current_progress < mission.target_value) {
                 throw new Error('Mission not completed yet');
             }
-            
+
             const xp = mission.xp_reward || 0;
             const points = mission.points_reward || mission.point_reward || 0;
-            
+
             // 4. Distribute rewards via RPC (Secure)
             if (xp > 0) {
-                const { error: xpError } = await supabase.rpc('add_xp', { 
-                    user_id_param: user.id, 
-                    amount_param: xp, 
-                    source_param: 'mission', 
+                const { error: xpError } = await supabase.rpc('add_xp', {
+                    user_id_param: user.id,
+                    amount_param: xp,
+                    source_param: 'mission',
                     description_param: `Completed ${type} mission: ${mission.title}`
                 });
                 if (xpError) LogManager.getInstance().error('Error adding XP:', xpError);
             }
-            
+
             if (points > 0) {
                 const { error: pointsError } = await supabase.rpc('add_user_currency', {
                     p_user_id: user.id,
@@ -382,20 +383,20 @@ export class MissionService {
                 });
                 if (pointsError) LogManager.getInstance().error('Error adding points:', pointsError);
             }
-            
+
             // 5. Update mission status to 'completed' and set completed_at
             // Note: If status enum doesn't support 'claimed', we use 'completed' and rely on completed_at
             const { error: updateError } = await supabase
                 .from(table)
-                .update({ 
-                    status: 'completed', 
+                .update({
+                    status: 'completed',
                     is_completed: true,
-                    completed_at: new Date().toISOString() 
+                    completed_at: new Date().toISOString()
                 })
                 .eq('id', missionId);
 
             if (updateError) throw updateError;
-                
+
             return { xp, points };
         } catch (err) {
             LogManager.getInstance().error('Claim reward error:', err);
@@ -405,7 +406,7 @@ export class MissionService {
 
     private async ensureUserRecord(userId: string): Promise<boolean> {
         const supabase = SupabaseService.getInstance().getClient();
-        
+
         // 1. Check if user exists in public.users
         const { data: existingUser } = await supabase
             .from('users')
@@ -484,9 +485,9 @@ export class MissionService {
                 .eq('id', userId)
                 .single();
             // ... (rest of context gathering logic same as before)
-            
+
             // Re-adding this part but ensuring we catch errors properly
-             const { data: leagueData } = await supabase
+            const { data: leagueData } = await supabase
                 .from('user_leagues')
                 .select('current_tier, total_xp')
                 .eq('user_id', userId)
@@ -509,7 +510,7 @@ export class MissionService {
                 .eq('user_id', userId)
                 .eq('date', today)
                 .single();
-            
+
             // Get Assigned Supplements
             const { data: assignedSupplements } = await supabase
                 .from('assigned_supplements')
@@ -579,16 +580,16 @@ export class MissionService {
                             })
                             .select()
                             .single();
-                        
+
                         if (insertError) {
-                             LogManager.getInstance().error('Error inserting generated mission:', insertError);
+                            LogManager.getInstance().error('Error inserting generated mission:', insertError);
                         } else if (inserted) {
-                             missions.push(this.mapWeeklyMission(inserted));
+                            missions.push(this.mapWeeklyMission(inserted));
                         }
                     }
                 }
             } else {
-                 LogManager.getInstance().warn('No JSON array found in AI response');
+                LogManager.getInstance().warn('No JSON array found in AI response');
             }
         } catch (err) {
             LogManager.getInstance().error('AI weekly mission generation failed:', err);
@@ -618,13 +619,13 @@ export class MissionService {
         // Gather user context for daily personalization
         let userInfo = '';
         try {
-             // ... existing context gathering
-             const { data: profile } = await supabase
+            // ... existing context gathering
+            const { data: profile } = await supabase
                 .from('profiles')
                 .select('height, weight, gender, fitness_goal')
                 .eq('id', userId)
                 .single();
-            
+
             // Get Assigned Supplements
             const { data: assignedSupplements } = await supabase
                 .from('assigned_supplements')
@@ -649,7 +650,7 @@ export class MissionService {
         try {
             LogManager.getInstance().info('Calling DeepSeek for daily missions...');
             const deepseek = DeepSeekService.getInstance();
-            
+
             // Send structured data to Edge Function
             const response = await deepseek.generateContent('missions', {
                 mode: 'daily',
@@ -681,7 +682,7 @@ export class MissionService {
                             })
                             .select()
                             .single();
-                        
+
                         if (insertError) {
                             LogManager.getInstance().error('Error inserting daily mission:', insertError);
                         } else if (inserted) {
@@ -690,7 +691,7 @@ export class MissionService {
                     }
                 }
             } else {
-                 LogManager.getInstance().warn('No JSON array found in daily AI response');
+                LogManager.getInstance().warn('No JSON array found in daily AI response');
             }
         } catch (err) {
             LogManager.getInstance().error('AI daily mission generation failed:', err);
@@ -788,7 +789,7 @@ export class MissionService {
 
         return missions;
     }
-    
+
     // ... helper methods ...
     private getCurrentWeekDates() {
         const now = new Date();

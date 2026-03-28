@@ -1,0 +1,75 @@
+name: Detox E2E (Android)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  e2e-android:
+    name: E2E (Android Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ADB_INSTALL_TIMEOUT: 20M
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }}
+
+      - name: Setup Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: true
+          emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect
+
+      - name: Check for prebuilt APKs
+        id: check_apks
+        run: |
+          if [ -f "e2e/apks/app-debug.apk" ] && [ -f "e2e/apks/app-debug-androidTest.apk" ]; then
+            echo "prebuilts=true" >> $GITHUB_OUTPUT
+          else
+            echo "prebuilts=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install prebuilt APKs (if present)
+        if: steps.check_apks.outputs.prebuilts == 'true'
+        run: |
+          adb devices
+          adb install -r e2e/apks/app-debug.apk
+          adb install -r e2e/apks/app-debug-androidTest.apk
+
+      - name: Build APKs (when no prebuilt available)
+        if: steps.check_apks.outputs.prebuilts == 'false'
+        run: npx detox build -c android.emu.debug
+
+      - name: Run Detox tests
+        run: npx detox test -c android.emu.debug --headless
+        env:
+          ADB_INSTALL_TIMEOUT: 30M

@@ -159,3 +159,15 @@ jest.mock('crypto-js', () => {
 }, { virtual: true });
 
 // Clear all mocks after each test - removed as afterEach is not available in global scope
+
+// Mock react-native-quick-crypto to use Node's builtin crypto in Jest environment
+jest.mock('react-native-quick-crypto', () => {
+    const crypto = require('crypto');
+    return {
+        randomBytes: (len) => crypto.randomBytes(len),
+        createHash: (alg) => crypto.createHash(alg),
+        createHmac: (alg, key) => crypto.createHmac(alg, key),
+        createCipheriv: (alg, key, iv) => crypto.createCipheriv(alg, key, iv),
+        createDecipheriv: (alg, key, iv) => crypto.createDecipheriv(alg, key, iv),
+    };
+}, { virtual: true });

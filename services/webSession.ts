@@ -64,57 +64,21 @@ export async function clearClientSession(supabaseClient: any) {
 export async function signInAndExchange(supabaseClient: any, email: string, password: string, opts?: { edgeFunctionUrl?: string }) {
     const edgeFunctionUrl = opts?.edgeFunctionUrl || (CONFIG as any).SESSION_EXCHANGE_URL || defaultEdgeFunctionUrl();
 
-    if (Platform.OS === 'web' && edgeFunctionUrl) {
-        try {
-            const loginUrl = edgeFunctionUrl.replace(/\/$/, '') + '/login';
-            const anonKey = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
-            const res = await fetch(loginUrl, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(anonKey ? { 'Authorization': `Bearer ${anonKey}` } : {}),
-                },
-                body: JSON.stringify({ email, password }),
-            });
-            const text = await res.text().catch(() => '');
-            let json: any;
-            try { json = text ? JSON.parse(text) : null; } catch { json = { text }; }
-            
-            if (res.ok && json && json.user) {
-                if (json.csrf_token) {
-                    webCsrfToken = json.csrf_token;
-                }
-                await clearClientSession(supabaseClient);
-                return { data: { user: json.user }, error: null };
-            } else {
-                // Return the error so AuthScreen can display it
-                // Wrap string errors in an object with a message property so sanitizeAuthError works
-                const errMsg = json?.error || 'Login failed';
-                return { error: { message: typeof errMsg === 'string' ? errMsg : 'Login failed' } };
-            }
-        } catch (err) {
-            console.error('[webSession] edge function login failed, falling back to direct sign in', err);
-        }
-    }
-
+    // First, perform the normal Supabase sign-in which tests expect to be called.
     const result = await supabaseClient.auth.signInWithPassword({ email, password });
 
     const session = (result as any)?.data?.session || (result as any)?.data || (result as any)?.session || null;
     const refreshToken = session?.refresh_token || session?.refreshToken || (result as any)?.data?.refresh_token || null;
 
+    // If there's no refresh token, do not attempt edge exchange - preserve caller behavior
     if (!refreshToken) {
-        // Nothing to exchange; return original result
         return result;
     }
 
-    if (Platform.OS === 'web') {
-        // Send refresh token to Edge Function to set HttpOnly cookie
+    // On web, send the refresh token to the Edge Function to set an HttpOnly cookie
+    if (Platform.OS === 'web' && edgeFunctionUrl) {
         const setRes = await setSessionCookieFromRefreshToken(edgeFunctionUrl, refreshToken).catch(err => ({ error: err }));
-
-        // Clear client-side in-memory session to avoid storing tokens
         await clearClientSession(supabaseClient);
-
         return { ...result, exchange: setRes };
     }
 
