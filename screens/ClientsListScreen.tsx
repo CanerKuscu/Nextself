@@ -159,7 +159,7 @@ const ClientsListScreen = ({ navigation }: any) => {
                     <Ionicons name="chevron-back" size={22} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>{isTurkish ? 'Üye Takibi' : 'Member Tracking'}</Text>
-                <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => navigation.navigate('QRInvite')}>
+                <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => navigation.navigate('SendProposal')}>
                     <Ionicons name="person-add-outline" size={20} color={colors.primary} />
                 </TouchableOpacity>
             </View>

@@ -20,6 +20,8 @@ const ClientDetailScreen = ({ navigation, route }: any) => {
     const [completed, setCompleted] = useState(0);
     const [total, setTotal] = useState(0);
     const [latestItems, setLatestItems] = useState<any[]>([]);
+    const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const [todayHealth, setTodayHealth] = useState({ steps: 0, activeCalories: 0 });
 
     const loadClient = useCallback(async () => {
         if (!clientId) {
@@ -64,6 +66,22 @@ const ClientDetailScreen = ({ navigation, route }: any) => {
                 setLatestItems(rows.slice(0, 5));
                 setTotal(rows.length);
                 setCompleted(rows.filter((item: any) => item.is_active === true).length);
+
+                const todayStr = new Date().toISOString().split('T')[0];
+                const { data: nlogs } = await service.getClient()
+                    .from('nutrition_logs')
+                    .select('calories, protein, carbs, fat')
+                    .eq('user_id', clientId)
+                    .eq('log_date', todayStr);
+                if (nlogs) {
+                    const total = nlogs.reduce((acc, log) => ({
+                        calories: acc.calories + (Number(log.calories) || 0),
+                        protein: acc.protein + (Number(log.protein) || 0),
+                        carbs: acc.carbs + (Number(log.carbs) || 0),
+                        fat: acc.fat + (Number(log.fat) || 0),
+                    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+                    setTodayMacros(total);
+                }
             } else {
                 const { data: workouts } = await service.getClient()
                     .from('assigned_workouts')
@@ -75,6 +93,22 @@ const ClientDetailScreen = ({ navigation, route }: any) => {
                 setLatestItems(rows.slice(0, 5));
                 setTotal(rows.length);
                 setCompleted(rows.filter((item: any) => item.is_completed === true).length);
+
+                const todayStr = new Date().toISOString().split('T')[0];
+                const { data: hdata } = await service.getClient()
+                    .from('health_data')
+                    .select('metric_type, metric_value')
+                    .eq('user_id', clientId)
+                    .eq('date', todayStr);
+                if (hdata) {
+                    let steps = 0;
+                    let activeCalories = 0;
+                    hdata.forEach((row: any) => {
+                        if (row.metric_type === 'steps') steps += Number(row.metric_value) || 0;
+                        if (row.metric_type === 'active_energy') activeCalories += Number(row.metric_value) || 0;
+                    });
+                    setTodayHealth({ steps, activeCalories });
+                }
             }
         } catch {
             setClient(null);
@@ -138,6 +172,49 @@ const ClientDetailScreen = ({ navigation, route }: any) => {
                         {client.weight ? `${client.weight} kg` : '-'} • {client.height ? `${client.height} cm` : '-'}
                     </Text>
                 </View>
+
+                {role === 'dietitian' ? (
+                    <View style={[styles.liveCard, { backgroundColor: colors.surface }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs, gap: SPACING.xs }}>
+                            <Ionicons name="restaurant-outline" size={18} color="#FF9600" />
+                            <Text style={[styles.liveTitle, { color: colors.text }]}>{isTurkish ? 'Bugün Tüketilen' : 'Consumed Today'}</Text>
+                        </View>
+                        <Text style={[styles.statValue, { color: colors.text, marginBottom: SPACING.sm }]}>
+                            {todayMacros.calories} <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kcal</Text>
+                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: SPACING.sm }}>
+                            <View>
+                                <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>Pro</Text>
+                                <Text style={[styles.macroValue, { color: '#FF6B6B' }]}>{todayMacros.protein}g</Text>
+                            </View>
+                            <View>
+                                <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>Karb</Text>
+                                <Text style={[styles.macroValue, { color: '#FF9600' }]}>{todayMacros.carbs}g</Text>
+                            </View>
+                            <View>
+                                <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>Yağ</Text>
+                                <Text style={[styles.macroValue, { color: '#1CB0F6' }]}>{todayMacros.fat}g</Text>
+                            </View>
+                        </View>
+                    </View>
+                ) : (
+                    <View style={[styles.liveCard, { backgroundColor: colors.surface }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs, gap: SPACING.xs }}>
+                            <Ionicons name="fitness-outline" size={18} color="#1CB0F6" />
+                            <Text style={[styles.liveTitle, { color: colors.text }]}>{isTurkish ? 'Bugünün Aktivitesi' : "Today's Activity"}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: SPACING.sm }}>
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Adım' : 'Steps'}</Text>
+                                <Text style={[styles.statValue, { color: '#1CB0F6' }]}>{todayHealth.steps}</Text>
+                            </View>
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Yakılan' : 'Burned'}</Text>
+                                <Text style={[styles.statValue, { color: '#FF9600' }]}>{todayHealth.activeCalories} kcal</Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
 
                 <View style={styles.statsRow}>
                     <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
@@ -293,6 +370,22 @@ const styles = StyleSheet.create({
     },
     logState: {
         ...TYPOGRAPHY.captionBold,
+    },
+    liveCard: {
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        ...SHADOWS.sm,
+    },
+    liveTitle: {
+        ...TYPOGRAPHY.bodyBold,
+    },
+    macroLabel: {
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
+    },
+    macroValue: {
+        ...TYPOGRAPHY.bodyBold,
+        textAlign: 'center',
     },
 });
 

@@ -93,6 +93,10 @@ export const CONFIG = {
   ANALYTICS_ENABLED: !__DEV__,
   ANALYTICS_API_KEY: process.env.EXPO_PUBLIC_ANALYTICS_API_KEY || '',
 
+  // AdMob
+  ADMOB_INTERSTITIAL_ID: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || '',
+  ADMOB_REWARDED_ID: process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID || '',
+
   // Sentry — DSN must be set via EXPO_PUBLIC_SENTRY_DSN environment variable
   SENTRY_DSN: (() => {
     const dsn = Constants.expoConfig?.extra?.sentryDsn || process.env.EXPO_PUBLIC_SENTRY_DSN;

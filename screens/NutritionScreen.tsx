@@ -17,6 +17,7 @@ import { useAlert } from '../components/CustomAlert';
 import FoodCategoryIcon from '../components/FoodCategoryIcon';
 import { useTheme } from '../contexts/ThemeContext';
 import SkeletonCard from '../components/SkeletonCard';
+import { RewardedAd, RewardedAdEventType, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
 const SCAN_STORAGE_KEY = 'nextself_daily_scans';
 
@@ -280,15 +281,19 @@ const NutritionScreen = ({ navigation }: any) => {
           fat: acc.fat + (Number(log.fat) || 0)
         }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-        dispatch({ type: 'SET_DAILY_MACROS', payload: {
-          ...total,
-          calorieGoal, proteinGoal, carbsGoal, fatGoal
-        } });
+        dispatch({
+          type: 'SET_DAILY_MACROS', payload: {
+            ...total,
+            calorieGoal, proteinGoal, carbsGoal, fatGoal
+          }
+        });
       } else {
-        dispatch({ type: 'SET_DAILY_MACROS', payload: {
-          calories: 0, protein: 0, carbs: 0, fat: 0,
-          calorieGoal, proteinGoal, carbsGoal, fatGoal
-        } });
+        dispatch({
+          type: 'SET_DAILY_MACROS', payload: {
+            calories: 0, protein: 0, carbs: 0, fat: 0,
+            calorieGoal, proteinGoal, carbsGoal, fatGoal
+          }
+        });
       }
     } catch (error) {
       console.error('Error loading daily macros:', error);
@@ -404,9 +409,32 @@ const NutritionScreen = ({ navigation }: any) => {
           { text: isTurkish ? 'İptal' : 'Cancel' },
           {
             text: isTurkish ? 'Reklam İzle' : 'Watch Ad', onPress: async () => {
-              // TODO: Integrate actual ad SDK (e.g., AdMob rewarded ad)
-              // After ad is watched, grant one extra scan by NOT incrementing & navigate
-              navigation.navigate('FoodScanner');
+              dispatch({ type: 'SET_LOADING', payload: true });
+              const adUnitId = __DEV__ ? TestIds.REWARDED : 'ca-app-pub-3940256099942544/5224354917'; // Using iOS test rewarded ad id as placeholder
+
+              const rewarded = RewardedAd.createForAdRequest(adUnitId, {
+                requestNonPersonalizedAdsOnly: true,
+              });
+
+              const unsubscribeLoaded = rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+                dispatch({ type: 'SET_LOADING', payload: false });
+                rewarded.show();
+              });
+
+              const unsubscribeEarned = rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, reward => {
+                // Grant reward: don't increment scan count, just let them scan again
+                navigation.navigate('FoodScanner');
+              });
+
+              // Clean up subscriptions when ad is closed or fails
+              const unsubscribeClosed = rewarded.addAdEventListener(AdEventType.CLOSED, () => {
+                dispatch({ type: 'SET_LOADING', payload: false });
+                unsubscribeLoaded();
+                unsubscribeEarned();
+                unsubscribeClosed();
+              });
+
+              rewarded.load();
             }
           },
         ],
@@ -478,18 +506,18 @@ const NutritionScreen = ({ navigation }: any) => {
   }, []);
 
   const openCreateProgramModal = useCallback((item: any) => {
-      const today = new Date();
-      const jsDay = today.getDay();
-      const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
-      updateProgramForm({
-        selectedMealDay: DAY_OPTIONS[dayIndex].key,
-        selectedMealType: 'breakfast',
-        mealTime: today,
-        notificationTime: today,
-        selectedFoodForProgram: item,
-      });
-      dispatch({ type: 'SET_SHOW_MODAL', payload: true });
-    }, [updateProgramForm]);
+    const today = new Date();
+    const jsDay = today.getDay();
+    const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
+    updateProgramForm({
+      selectedMealDay: DAY_OPTIONS[dayIndex].key,
+      selectedMealType: 'breakfast',
+      mealTime: today,
+      notificationTime: today,
+      selectedFoodForProgram: item,
+    });
+    dispatch({ type: 'SET_SHOW_MODAL', payload: true });
+  }, [updateProgramForm]);
 
   const closeCreateProgramModal = useCallback(() => {
     dispatch({ type: 'SET_SHOW_MODAL', payload: false });
@@ -712,19 +740,19 @@ const NutritionScreen = ({ navigation }: any) => {
             <View style={styles.searchBar}>
               <Ionicons name="search" size={18} color={colors.textTertiary} />
               <TextInput
-                  style={styles.searchInput}
-                  placeholder={isTurkish ? 'Yiyecek ara...' : 'Search food...'}
-                  placeholderTextColor={colors.textTertiary}
-                  value={searchQuery}
-                  onChangeText={(text) => dispatch({ type: 'SET_SEARCH_QUERY', payload: text })}
-                  returnKeyType="search"
-                  onSubmitEditing={handleSearch}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => dispatch({ type: 'SET_SEARCH_QUERY', payload: '' })} style={styles.clearSearchBtn}>
-                    <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
-                  </TouchableOpacity>
-                )}
+                style={styles.searchInput}
+                placeholder={isTurkish ? 'Yiyecek ara...' : 'Search food...'}
+                placeholderTextColor={colors.textTertiary}
+                value={searchQuery}
+                onChangeText={(text) => dispatch({ type: 'SET_SEARCH_QUERY', payload: text })}
+                returnKeyType="search"
+                onSubmitEditing={handleSearch}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => dispatch({ type: 'SET_SEARCH_QUERY', payload: '' })} style={styles.clearSearchBtn}>
+                  <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* ─── CATEGORY CHIPS ─── */}

@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SupabaseService } from '@nextself/shared';
+import { NotificationService } from '../services/notificationService';
 import { safeGoBack } from '../utils/navigation';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from '../hooks/useTranslation';
@@ -37,6 +38,7 @@ const ProfessionalProgramCreatorScreen = ({ navigation, route }: any) => {
     const [description, setDescription] = useState('');
     const [calorieTarget, setCalorieTarget] = useState('');
     const [weeklyTarget, setWeeklyTarget] = useState('');
+    const [reminderTime, setReminderTime] = useState(''); // e.g., '08:00'
     const [recent, setRecent] = useState<any[]>([]);
 
     const loadData = useCallback(async () => {
@@ -144,28 +146,57 @@ const ProfessionalProgramCreatorScreen = ({ navigation, route }: any) => {
             setSaving(true);
             const client = SupabaseService.getInstance().getClient();
             if (role === 'dietitian') {
-                await client.from('assigned_nutrition_plans').insert({
+                const { data, error } = await client.from('assigned_nutrition_plans').insert({
                     client_id: selectedClientId,
                     dietitian_id: professionalId,
                     title: title.trim(),
                     description: description.trim() || null,
                     daily_calories: calorieTarget ? Number(calorieTarget) : null,
                     is_active: true,
-                });
+                }).select('id').single();
+
+                if (data && reminderTime) {
+                    const [hour, min] = reminderTime.split(':').map(Number);
+                    if (!isNaN(hour) && !isNaN(min)) {
+                        await NotificationService.getInstance().scheduleSmartReminder(
+                            'nutrition',
+                            hour,
+                            min,
+                            `dietitian_reminder_${data.id}`,
+                            'Nutrition',
+                            { id: data.id }
+                        );
+                    }
+                }
             } else {
-                await client.from('assigned_workouts').insert({
+                const { data, error } = await client.from('assigned_workouts').insert({
                     client_id: selectedClientId,
                     pt_id: professionalId,
                     title: title.trim(),
                     description: description.trim() || null,
                     notes: weeklyTarget ? `${isTurkish ? 'Haftalık hedef: ' : 'Weekly target: '}${weeklyTarget}` : null,
                     is_completed: false,
-                });
+                }).select('id').single();
+
+                if (data && reminderTime) {
+                    const [hour, min] = reminderTime.split(':').map(Number);
+                    if (!isNaN(hour) && !isNaN(min)) {
+                        await NotificationService.getInstance().scheduleSmartReminder(
+                            'workout',
+                            hour,
+                            min,
+                            `pt_reminder_${data.id}`,
+                            'ActiveWorkout',
+                            { workoutId: data.id }
+                        );
+                    }
+                }
             }
             setTitle('');
             setDescription('');
             setCalorieTarget('');
             setWeeklyTarget('');
+            setReminderTime('');
             onSelectClient(selectedClientId);
         } finally {
             setSaving(false);
@@ -260,6 +291,17 @@ const ProfessionalProgramCreatorScreen = ({ navigation, route }: any) => {
                             />
                         </>
                     )}
+                    
+                    <Text style={[styles.label, { color: colors.text }]}>{isTurkish ? 'Hatırlatıcı Saati (İsteğe Bağlı)' : 'Reminder Time (Optional)'}</Text>
+                    <TextInput
+                        value={reminderTime}
+                        onChangeText={setReminderTime}
+                        style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]}
+                        placeholder="08:00"
+                        placeholderTextColor={colors.textTertiary}
+                        maxLength={5}
+                    />
+                    
                     <TouchableOpacity style={[styles.submit, { backgroundColor: colors.primary }]} onPress={submit} disabled={saving || !selectedClientId || !title.trim()}>
                         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{isTurkish ? 'Planı Ata' : 'Assign Plan'}</Text>}
                     </TouchableOpacity>

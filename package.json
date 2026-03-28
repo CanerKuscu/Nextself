@@ -1,6 +1,6 @@
 {
   "name": "nextself",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -66,10 +66,12 @@
     "react-native-chart-kit": "^6.12.0",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-get-random-values": "~1.11.0",
+    "react-native-google-mobile-ads": "^16.3.1",
     "react-native-health": "^1.19.0",
     "react-native-health-connect": "^3.5.0",
     "react-native-modal": "^13.0.1",
     "react-native-nitro-modules": "^0.29.8",
+    "react-native-purchases": "^9.15.0",
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-quick-crypto": "^1.0.18",
     "react-native-reanimated": "~4.1.1",
@@ -104,6 +106,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "autoprefixer": "^10.4.25",
     "babel-plugin-module-resolver": "^5.0.3",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "detox": "^20.50.1",
     "eslint": "^10.0.2",
     "expo-module-scripts": "^55.0.2",

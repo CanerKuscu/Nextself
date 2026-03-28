@@ -60,11 +60,17 @@ const SmartScaleScreen = lazy(() => import('../screens/SmartScaleScreen'));
 const ProgressReportScreen = lazy(() => import('../screens/ProgressReportScreen'));
 const ProfessionalBillingScreen = lazy(() => import('@screens/ProfessionalBillingScreen'));
 const ClientDetailScreen = lazy(() => import('../screens/ClientDetailScreen'));
-const QRInviteScreen = lazy(() => import('../screens/QRInviteScreen'));
+
 const ProfessionalDetailScreen = lazy(() => import('../screens/ProfessionalDetailScreen'));
+const PaywallScreen = lazy(() => import('../screens/PaywallScreen'));
+const HireProfessionalScreen = lazy(() => import('../screens/HireProfessionalScreen'));
+const SendProposalScreen = lazy(() => import('../screens/SendProposalScreen'));
+const ProposalInboxScreen = lazy(() => import('../screens/ProposalInboxScreen'));
+const DepositTopUpScreen = lazy(() => import('../screens/DepositTopUpScreen'));
 
 
 import { SupabaseService } from '@nextself/shared';
+import { AdService } from '../services/AdService';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
@@ -131,8 +137,13 @@ const SafeSmartScaleScreen = withCheck(SmartScaleScreen, 'SmartScaleScreen');
 const SafeProgressReportScreen = withCheck(ProgressReportScreen, 'ProgressReportScreen');
 const SafeProfessionalBillingScreen = withCheck(ProfessionalBillingScreen, 'ProfessionalBillingScreen');
 const SafeClientDetailScreen = withCheck(ClientDetailScreen, 'ClientDetailScreen');
-const SafeQRInviteScreen = withCheck(QRInviteScreen, 'QRInviteScreen');
+
 const SafeProfessionalDetailScreen = withCheck(ProfessionalDetailScreen, 'ProfessionalDetailScreen');
+const SafePaywallScreen = withCheck(PaywallScreen, 'PaywallScreen');
+const SafeHireProfessionalScreen = withCheck(HireProfessionalScreen, 'HireProfessionalScreen');
+const SafeSendProposalScreen = withCheck(SendProposalScreen, 'SendProposalScreen');
+const SafeProposalInboxScreen = withCheck(ProposalInboxScreen, 'ProposalInboxScreen');
+const SafeDepositTopUpScreen = withCheck(DepositTopUpScreen, 'DepositTopUpScreen');
 
 // ─── Navigation Type Definitions ───
 export type MainTabParamList = {
@@ -160,7 +171,10 @@ export type RootStackParamList = {
   ProfessionalHome: undefined;
   ClientsList: undefined;
   ClientDetail: { clientId?: string } | undefined;
-  QRInvite: undefined;
+
+  SendProposal: undefined;
+  ProposalInbox: undefined;
+  DepositTopUp: undefined;
   ProfessionalBilling: undefined;
   Profile: undefined;
   AI: undefined;
@@ -170,6 +184,7 @@ export type RootStackParamList = {
   Spotify: undefined;
   ProfessionalSearch: undefined;
   ProfessionalDetail: { professionalId?: string } | undefined;
+  HireProfessional: { professional: any } | undefined;
   Rating: undefined;
   Terms: undefined;
   ChatList: undefined;
@@ -197,6 +212,7 @@ export type RootStackParamList = {
   CourseDetail: { courseId?: string } | undefined;
   SmartScale: undefined;
   ProgressReport: undefined;
+  Paywall: undefined;
 };
 
 import type { ParamListBase, RouteProp } from '@react-navigation/native';
@@ -349,6 +365,7 @@ const AppNavigator = () => {
   useEffect(() => {
     let cancelled = false;
     const resolveInitialRoute = async () => {
+      AdService.getInstance(); // Prefetch interstitial ad
       if (authLoading) return;
       const currentUser = user ?? session?.user ?? null;
       if (!currentUser?.id) {
@@ -450,11 +467,10 @@ const AppNavigator = () => {
           component={isProfessional ? SafeClientDetailScreen : SafeHomeScreen}
           options={{ headerShown: false }}
         />
-        <Stack.Screen
-          name="QRInvite"
-          component={isProfessional ? SafeQRInviteScreen : SafeHomeScreen}
-          options={{ headerShown: false }}
-        />
+
+        <Stack.Screen name="SendProposal" component={isProfessional ? SafeSendProposalScreen : SafeHomeScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ProposalInbox" component={SafeProposalInboxScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DepositTopUp" component={isProfessional ? SafeDepositTopUpScreen : SafeHomeScreen} options={{ headerShown: false }} />
         <Stack.Screen 
           name="ProfessionalBilling" 
           component={isProfessional ? SafeProfessionalBillingScreen : SafeHomeScreen} 
@@ -469,6 +485,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Spotify" component={SafeSpotifyScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ProfessionalSearch" component={SafeProfessionalSearchScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ProfessionalDetail" component={SafeProfessionalDetailScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="HireProfessional" component={SafeHireProfessionalScreen} options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="Rating" component={SafeRatingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Terms" component={SafeTermsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ChatList" component={SafeChatListScreen} options={{ headerShown: false }} />
@@ -496,6 +513,7 @@ const AppNavigator = () => {
         <Stack.Screen name="CourseDetail" component={SafeCourseDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="SmartScale" component={SafeSmartScaleScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ProgressReport" component={SafeProgressReportScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Paywall" component={SafePaywallScreen} options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

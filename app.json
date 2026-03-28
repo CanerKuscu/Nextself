@@ -94,6 +94,13 @@
         {
           "cameraPermissionText": "Allow NextSelf to access your camera for on-device posture landmark extraction."
         }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-0000000000000000~0000000000",
+          "iosAppId": "ca-app-pub-0000000000000000~0000000000"
+        }
       ]
     ],
     "extra": {

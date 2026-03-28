@@ -30,6 +30,8 @@ import GamificationBar from '../components/HomeScreen/GamificationBar';
 import { usePendingSessions } from '../hooks/usePendingSessions';
 import { aiAutopilotService, AdaptivePlanResponse } from '../services/aiAutopilotService';
 import { useAuthStore } from '../store/authStoreSecure';
+import { SubscriptionService } from '../services/SubscriptionService';
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 let hasShownPremiumPopupSession = false;
 
@@ -73,6 +75,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [autopilotLoading, setAutopilotLoading] = useState(false);
   const [autopilotPlan, setAutopilotPlan] = useState<AdaptivePlanResponse | null>(null);
   const [autopilotError, setAutopilotError] = useState<string | null>(null);
+  const [isAdFree, setIsAdFree] = useState(true); // Default true while loading
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showAlert, AlertComponent } = useAlert();
@@ -261,7 +264,12 @@ const HomeScreen = ({ navigation }: any) => {
   }, [refresh]);
 
   useEffect(() => {
+    const checkProMode = async () => {
+      const isPro = await SubscriptionService.getInstance().checkUserStatus();
+      setIsAdFree(isPro);
+    };
     if (!loading) {
+      checkProMode();
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 500,
@@ -503,6 +511,16 @@ const HomeScreen = ({ navigation }: any) => {
           {/* ─── EXPLORE CARDS ─── */}
           <Text style={s.sectionTitle}>{t('explore')}</Text>
           <ExploreCards colors={colors} t={t} navigation={navigation} />
+
+          {!isAdFree && (
+            <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 10 }}>
+                <BannerAd
+                    unitId={TestIds.BANNER}
+                    size={BannerAdSize.BANNER}
+                    requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+                />
+            </View>
+          )}
 
           <View style={{ height: 100 }} />
         </Animated.View>

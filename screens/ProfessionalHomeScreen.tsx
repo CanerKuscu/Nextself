@@ -220,9 +220,9 @@ const ProfessionalHomeScreen = ({ navigation }: any) => {
                             <Ionicons name="card-outline" size={22} color={baseColor} />
                             <Text style={[styles.quickText, { color: colors.text }]}>{isTurkish ? 'Gelir Takibi' : 'Revenue'}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickItem} onPress={() => navigation.navigate('QRInvite')}>
-                            <Ionicons name="qr-code-outline" size={22} color={baseColor} />
-                            <Text style={[styles.quickText, { color: colors.text }]}>{isTurkish ? 'Üye Davet' : 'Invite'}</Text>
+                        <TouchableOpacity style={styles.quickItem} onPress={() => navigation.navigate('SendProposal')}>
+                            <Ionicons name="paper-plane-outline" size={22} color={baseColor} />
+                            <Text style={[styles.quickText, { color: colors.text }]}>{isTurkish ? 'Teklif Gönder' : 'Send Proposal'}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

@@ -90,7 +90,7 @@ export type RootStackParamList = {
   ProfessionalBilling: undefined;
   ClientsList: undefined;
   ClientDetail: { clientId?: string } | undefined;
-  QRInvite: undefined;
+
 
   // Store & Commerce
   Store: undefined;

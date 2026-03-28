@@ -62,23 +62,31 @@ const ProfessionalBillingScreen = () => {
         loadBilling();
     }, [loadBilling]);
 
+    const MINIMUM_COMMISSION = 300;
+
     const summary = useMemo(() => {
         let estimatedRevenue = 0;
         let expectedCommission = 0;
         let paidDeposit = 0;
+        let clientCount = 0;
         activeRelationships.forEach((item) => {
             const price = Number(item.agreed_price || 0);
             const feePercent = Number(item.platform_fee_percent || 10);
-            const deposit = Number(item.deposit_paid_amount || 0);
+            const deposit = Number(item.deposit_paid_amount || MINIMUM_COMMISSION);
+            const rawCommission = (price * feePercent) / 100;
+            // Enforce minimum 300 ₺ per client
+            const effectiveCommission = Math.max(rawCommission, MINIMUM_COMMISSION);
             estimatedRevenue += price;
-            expectedCommission += (price * feePercent) / 100;
+            expectedCommission += effectiveCommission;
             paidDeposit += deposit;
+            clientCount++;
         });
         return {
             estimatedRevenue,
             expectedCommission,
             paidDeposit,
             remainder: Math.max(expectedCommission - paidDeposit, 0),
+            clientCount,
         };
     }, [activeRelationships]);
 
@@ -103,20 +111,27 @@ const ProfessionalBillingScreen = () => {
             <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>{isTurkish ? 'Bu Ay Özet' : 'This Month Summary'}</Text>
                 <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Aktif Danışan' : 'Active Clients'}</Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.clientCount}</Text>
+                </View>
+                <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Tahmini Ciro' : 'Estimated Revenue'}</Text>
                     <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.estimatedRevenue.toFixed(2)} ₺</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Toplam Komisyon' : 'Total Commission'}</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Platform Komisyonu (%10, min 300₺)' : 'Platform Fee (10%, min 300₺)'}</Text>
                     <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.expectedCommission.toFixed(2)} ₺</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Ödenen Depozito' : 'Paid Deposit'}</Text>
-                    <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.paidDeposit.toFixed(2)} ₺</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Ödenen Depozito (Ön Ödeme)' : 'Paid Deposit (Upfront)'}</Text>
+                    <Text style={[styles.summaryValue, { color: '#16A34A' }]}>-{summary.paidDeposit.toFixed(2)} ₺</Text>
                 </View>
+                <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
                 <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Kalan Borç' : 'Outstanding'}</Text>
-                    <Text style={[styles.summaryValue, { color: '#DC2626' }]}>{summary.remainder.toFixed(2)} ₺</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.text, fontWeight: '700' }]}>{isTurkish ? 'Ay Sonu Kalan Borç' : 'End-of-Month Balance'}</Text>
+                    <Text style={[styles.summaryValue, { color: summary.remainder > 0 ? '#DC2626' : '#16A34A' }]}>
+                        {summary.remainder > 0 ? `${summary.remainder.toFixed(2)} ₺` : (isTurkish ? 'Borç yok ✓' : 'No balance ✓')}
+                    </Text>
                 </View>
             </View>
 
@@ -200,6 +215,10 @@ const styles = StyleSheet.create({
     },
     summaryValue: {
         ...TYPOGRAPHY.bodyBold,
+    },
+    divider: {
+        height: 1,
+        marginVertical: SPACING.xs,
     },
     list: {
         paddingHorizontal: SPACING.lg,

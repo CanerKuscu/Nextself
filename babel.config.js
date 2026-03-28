@@ -14,6 +14,10 @@ module.exports = function (api) {
     } catch (e) {
     }
 
+    if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'production') {
+        plugins.push('transform-remove-console');
+    }
+
     return {
         presets,
         plugins: [

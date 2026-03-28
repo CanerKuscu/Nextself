@@ -65,9 +65,9 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
     if (professionals.length === 0) return;
     setProfessionals(prev => [...prev].sort((a, b) => {
       if (sortBy === 'rating') {
-        const ratingDiff = (b.average_rating || 0) - (a.average_rating || 0);
-        if (ratingDiff !== 0) return ratingDiff;
-        return (b.total_reviews || 0) - (a.total_reviews || 0);
+        const scoreA = (a.average_rating || 0) * 2 + (a.total_clients || a.active_clients || 0) * 0.5 + (a.total_reviews || 0) * 0.3;
+        const scoreB = (b.average_rating || 0) * 2 + (b.total_clients || b.active_clients || 0) * 0.5 + (b.total_reviews || 0) * 0.3;
+        return scoreB - scoreA;
       }
       if (sortBy === 'city') {
         const cityA = a.city || '';
@@ -93,10 +93,9 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
       if (data) {
         const sorted = [...data].sort((a, b) => {
           if (sortBy === 'rating') {
-            // Primary: rating desc, secondary: review count desc
-            const ratingDiff = (b.average_rating || 0) - (a.average_rating || 0);
-            if (ratingDiff !== 0) return ratingDiff;
-            return (b.total_reviews || 0) - (a.total_reviews || 0);
+            const scoreA = (a.average_rating || 0) * 2 + (a.total_clients || a.active_clients || 0) * 0.5 + (a.total_reviews || 0) * 0.3;
+            const scoreB = (b.average_rating || 0) * 2 + (b.total_clients || b.active_clients || 0) * 0.5 + (b.total_reviews || 0) * 0.3;
+            return scoreB - scoreA;
           }
           if (sortBy === 'city') {
             const cityA = a.city || '';
@@ -319,12 +318,13 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
           <View style={styles.connectRow}>
-            <AnimatedButton
-              title={labels.connect}
+            <TouchableOpacity
+              style={[styles.messageBtn, { backgroundColor: colors.primary }]}
               onPress={() => handleConnect(item.user_id, item.id)}
-              size="medium"
-              style={styles.connectBtn}
-            />
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+              <Text style={styles.messageBtnText}>{isTurkish ? 'Mesaj At' : 'Message'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </AnimatedCard>
@@ -800,6 +800,20 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   connectBtn: {
     width: '100%',
+  },
+  messageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    paddingVertical: SPACING.sm + 4,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  messageBtnText: {
+    ...TYPOGRAPHY.bodyBold,
+    color: '#FFF',
+    fontSize: 14,
   },
   emptyIconContainer: {
     width: 80,

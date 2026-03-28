@@ -9,10 +9,12 @@ import { useAlert } from '../components/CustomAlert';
 import { DeepSeekService } from '../services/deepseek';
 import { SupabaseService } from '@nextself/shared';
 import { AgreementService } from '../services/agreementService';
+import { SubscriptionService } from '../services/SubscriptionService';
 import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigation';
+import PlatformStorage from '@nextself/shared';
 
 interface Message {
     id: string;
@@ -129,8 +131,36 @@ const AICoachScreen = ({ navigation }: any) => {
         });
     };
 
+    const checkSubscriptionLimit = async (): Promise<boolean> => {
+        const isPro = await SubscriptionService.getInstance().checkUserStatus();
+        if (isPro) return true;
+
+        const today = new Date().toDateString();
+        const storedStr = await PlatformStorage.getItem('nextself_ai_usage');
+        let usageData = { date: today, count: 0 };
+        if (storedStr) {
+            try {
+                const parsed = JSON.parse(storedStr);
+                if (parsed.date === today) usageData = parsed;
+            } catch (e) {}
+        }
+
+        if (usageData.count >= 3) {
+            navigation.navigate('Paywall');
+            return false;
+        }
+
+        usageData.count += 1;
+        await PlatformStorage.setItem('nextself_ai_usage', JSON.stringify(usageData));
+        return true;
+    };
+
     const sendMessage = async () => {
         if (!input.trim() && !selectedImage) return;
+
+        const canProceed = await checkSubscriptionLimit();
+        if (!canProceed) return;
+
         const rawInput = input.trim();
         const userMsg: Message = {
             id: Date.now().toString(),

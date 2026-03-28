@@ -14,6 +14,7 @@ import { HealthService } from '../services/healthService';
 import { COLORS, TYPOGRAPHY, SPACING, COMMON_STYLES, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigation';
+import { AdService } from '../services/AdService';
 
 export default function ActiveWorkoutScreen({ navigation, route }: any) {
     const { colors, isDark } = useTheme();
@@ -153,7 +154,13 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
                 message: isTurkish
                     ? `Süre: ${formatTime(elapsedTime)}\nYakılan: ${calories} kcal\nOrtalama Nabız: ${heartRate ?? '-'} BPM`
                     : `Duration: ${formatTime(elapsedTime)}\nBurned: ${calories} kcal\nAvg HR: ${heartRate ?? '-'} BPM`,
-                buttons: [{ text: isTurkish ? 'Harika!' : 'Awesome!', onPress: () => safeGoBack(navigation, 'Workout') }],
+                buttons: [{ 
+                    text: isTurkish ? 'Harika!' : 'Awesome!', 
+                    onPress: async () => {
+                        safeGoBack(navigation, 'Workout');
+                        await AdService.getInstance().showInterstitialIfAvailable();
+                    }
+                }],
             });
         } else {
             showAlert({

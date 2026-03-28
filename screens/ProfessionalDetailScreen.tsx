@@ -284,9 +284,14 @@ const ProfessionalDetailScreen = ({ navigation, route }: any) => {
                     )}
                 </View>
 
-                <TouchableOpacity style={[styles.connectBtn, { backgroundColor: colors.primary }]} onPress={() => navigation.navigate('Rating', { professionalId: profile.id })}>
-                    <Text style={styles.connectBtnText}>{tx.connect}</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: SPACING.md }}>
+                    <TouchableOpacity style={[styles.connectBtn, { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary }]} onPress={() => navigation.navigate('Rating', { professionalId: profile.id })}>
+                        <Text style={[styles.connectBtnText, { color: colors.primary }]}>★ {tx.reviews}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.connectBtn, { flex: 2, backgroundColor: colors.primary }]} onPress={() => navigation.navigate('HireProfessional', { professional: profile })}>
+                        <Text style={styles.connectBtnText}>{tx.connect} / Kirala</Text>
+                    </TouchableOpacity>
+                </View>
             </ScrollView>
         </View>
     );
