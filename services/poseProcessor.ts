@@ -254,12 +254,11 @@ const downsampleByFps = (samples: PoseSample[], targetFps: number): PoseSample[]
 };
 
 export const processRecordedVideo = (
-    videoUri: string,
+    _videoUri: string, // Kept for API compatibility
     exerciseName: string,
     rawSamples: PoseSample[],
     options?: PoseProcessingOptions,
 ): KinematicReport => {
-    const _videoUri = videoUri;
     const targetFps = clampFps(options?.targetFps);
     const minVisibility = Number.isFinite(options?.minVisibility) ? Number(options?.minVisibility) : 0.35;
     const smoothingWindow = clampWindow(options?.smoothingWindow);
@@ -273,13 +272,6 @@ export const processRecordedVideo = (
         };
     });
     const frames_data = smoothAngles(rawFrames, smoothingWindow);
-
-    if (!_videoUri) {
-        return {
-            exercise_name: exerciseName,
-            frames_data,
-        };
-    }
 
     return {
         exercise_name: exerciseName,

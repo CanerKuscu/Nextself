@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, ActivityIndicator, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,7 @@ import { safeGoBack } from '../utils/navigation';
 
 export default function AssignmentsScreen({ navigation, route }: any) {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { t, isTurkish, language } = useTranslation();
     const insets = useSafeAreaInsets();
@@ -85,7 +85,7 @@ export default function AssignmentsScreen({ navigation, route }: any) {
     const setupReminders = async (data: any[], type: 'supplement' | 'workout' | 'nutrition' = 'supplement') => {
         const notifService = NotificationService.getInstance();
         const hasPermission = await notifService.requestPermissions();
-        
+
         // Also try calendar sync
         const CalendarService = require('../services/calendarService').CalendarService;
         const calendarService = CalendarService.getInstance();
@@ -97,7 +97,7 @@ export default function AssignmentsScreen({ navigation, route }: any) {
             if (item.reminder_time) {
                 // Handle both array (text[]) and string formats
                 const times = Array.isArray(item.reminder_time) ? item.reminder_time : [item.reminder_time];
-                
+
                 for (const timeStr of times) {
                     if (typeof timeStr === 'string' && timeStr.includes(':')) {
                         const [h, m] = timeStr.split(':');
@@ -114,13 +114,13 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                                     { name: item.title || item.name || item.description }
                                 );
                             }
-                            
+
                             if (hasCalendarPermission) {
                                 // Create a calendar event for today at that time
                                 const startDate = new Date();
                                 startDate.setHours(parseInt(h), parseInt(m), 0, 0);
                                 const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 mins later
-                                
+
                                 await calendarService.syncEventToCalendar(
                                     `NextSelf: ${item.title || item.name || 'Reminder'}`,
                                     startDate,
@@ -136,7 +136,7 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                 const startDate = new Date(item.scheduled_date);
                 startDate.setHours(10, 0, 0, 0); // Default to 10 AM if no specific time
                 const endDate = new Date(startDate.getTime() + 60 * 60000); // 1 hour
-                
+
                 await calendarService.syncEventToCalendar(
                     `NextSelf Workout: ${item.title}`,
                     startDate,
@@ -205,7 +205,7 @@ export default function AssignmentsScreen({ navigation, route }: any) {
         <View style={[styles.container, { paddingBottom: insets.bottom }]}>
             <LinearGradient colors={GRADIENTS.primary as any} style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color={isDark ? colors.text : colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{t('my_assignments')}</Text>
                 <View style={{ width: 40 }} />
@@ -243,125 +243,129 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                     <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                    <View style={styles.summaryRow}>
-                        <View style={styles.summaryCard}>
-                            <Text style={styles.summaryValue}>{workouts.length}</Text>
-                            <Text style={styles.summaryLabel}>{t('total_workouts')}</Text>
+                <FlatList
+                    contentContainerStyle={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    data={activeTab === 'workout' ? workouts : activeTab === 'nutrition' ? nutrition : supplements}
+                    keyExtractor={(item) => String(item.id)}
+                    ListHeaderComponent={
+                        <View style={styles.summaryRow}>
+                            <View style={styles.summaryCard}>
+                                <Text style={styles.summaryValue}>{workouts.length}</Text>
+                                <Text style={styles.summaryLabel}>{t('total_workouts')}</Text>
+                            </View>
+                            <View style={styles.summaryCard}>
+                                <Text style={styles.summaryValue}>{workoutCompletionRate}%</Text>
+                                <Text style={styles.summaryLabel}>{t('completion_rate')}</Text>
+                            </View>
+                            <View style={styles.summaryCard}>
+                                <Text style={styles.summaryValue}>{activeNutritionPlans}</Text>
+                                <Text style={styles.summaryLabel}>{t('active_nutrition')}</Text>
+                            </View>
                         </View>
-                        <View style={styles.summaryCard}>
-                            <Text style={styles.summaryValue}>{workoutCompletionRate}%</Text>
-                            <Text style={styles.summaryLabel}>{t('completion_rate')}</Text>
-                        </View>
-                        <View style={styles.summaryCard}>
-                            <Text style={styles.summaryValue}>{activeNutritionPlans}</Text>
-                            <Text style={styles.summaryLabel}>{t('active_nutrition')}</Text>
-                        </View>
-                    </View>
-
-                    {activeTab === 'workout' ? (
-                        workouts.length > 0 ? workouts.map(item => (
-                            <GlassCard key={item.id} style={styles.card}>
-                                <View style={styles.cardHeader}>
-                                    <View>
-                                        <Text style={styles.cardTitle}>{item.title}</Text>
-                                        <Text style={styles.cardDate}>{formatDate(item.scheduled_date)}</Text>
+                    }
+                    ListEmptyComponent={
+                        <Text style={styles.emptyText}>{t(activeTab === 'workout' ? 'no_workouts_assigned' : activeTab === 'supplement' ? 'no_supplements_assigned' : 'no_nutrition_assigned')}</Text>
+                    }
+                    renderItem={({ item }) => {
+                        if (activeTab === 'workout') {
+                            return (
+                                <GlassCard key={item.id} style={styles.card}>
+                                    <View style={styles.cardHeader}>
+                                        <View>
+                                            <Text style={styles.cardTitle}>{item.title}</Text>
+                                            <Text style={styles.cardDate}>{formatDate(item.scheduled_date)}</Text>
+                                        </View>
+                                        {item.is_completed ? (
+                                            <View style={styles.badgeSuccess}>
+                                                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                                                <Text style={styles.badgeTextSuccess}>{t('completed')}</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={styles.badgePending}>
+                                                <Ionicons name="time-outline" size={14} color={colors.warning} />
+                                                <Text style={styles.badgeTextPending}>{t('pending')}</Text>
+                                            </View>
+                                        )}
                                     </View>
-                                    {item.is_completed ? (
-                                        <View style={styles.badgeSuccess}>
-                                            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                                            <Text style={styles.badgeTextSuccess}>{t('completed')}</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.badgePending}>
-                                            <Ionicons name="time-outline" size={14} color={colors.warning} />
-                                            <Text style={styles.badgeTextPending}>{t('pending')}</Text>
-                                        </View>
+                                    <Text style={styles.cardDesc}>{item.description || t('no_description')}</Text>
+                                    <View style={styles.proInfo}>
+                                        <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
+                                        <Text style={styles.proText}>
+                                            {item.pt?.first_name} {item.pt?.last_name}
+                                        </Text>
+                                    </View>
+                                    {!item.is_completed && (
+                                        <TouchableOpacity style={styles.completeBtn} onPress={() => openWorkoutFeedback(item)}>
+                                            <Text style={styles.completeBtnText}>{t('mark_complete')}</Text>
+                                        </TouchableOpacity>
                                     )}
-                                </View>
-                                <Text style={styles.cardDesc}>{item.description || t('no_description')}</Text>
-                                <View style={styles.proInfo}>
-                                    <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
-                                    <Text style={styles.proText}>
-                                        {item.pt?.first_name} {item.pt?.last_name}
-                                    </Text>
-                                </View>
-                                {!item.is_completed && (
-                                    <TouchableOpacity style={styles.completeBtn} onPress={() => openWorkoutFeedback(item)}>
-                                        <Text style={styles.completeBtnText}>{t('mark_complete')}</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </GlassCard>
-                        )) : (
-                            <Text style={styles.emptyText}>{t('no_workouts_assigned')}</Text>
-                        )
-                    ) : activeTab === 'nutrition' ? (
-                        nutrition.length > 0 ? nutrition.map(item => (
-                            <GlassCard key={item.id} style={styles.card}>
-                                <Text style={styles.cardTitle}>{item.title}</Text>
-                                <Text style={styles.cardDesc}>{formatDate(item.start_date)} - {formatDate(item.end_date)}</Text>
+                                </GlassCard>
+                            )
+                        } else if (activeTab === 'nutrition') {
+                            return (
+                                <GlassCard key={item.id} style={styles.card}>
+                                    <Text style={styles.cardTitle}>{item.title}</Text>
+                                    <Text style={styles.cardDesc}>{formatDate(item.start_date)} - {formatDate(item.end_date)}</Text>
 
-                                <View style={styles.macrosContainer}>
-                                    <View style={styles.macroBox}>
-                                        <Text style={styles.macroValue}>{item.target_calories || 0}</Text>
-                                        <Text style={styles.macroLabel}>{t('calories')}</Text>
-                                    </View>
-                                    <View style={styles.macroBox}>
-                                        <Text style={styles.macroValue}>{item.target_protein || 0}g</Text>
-                                        <Text style={styles.macroLabel}>{t('protein')}</Text>
-                                    </View>
-                                    <View style={styles.macroBox}>
-                                        <Text style={styles.macroValue}>{item.target_carbs || 0}g</Text>
-                                        <Text style={styles.macroLabel}>{t('carbs')}</Text>
-                                    </View>
-                                    <View style={styles.macroBox}>
-                                        <Text style={styles.macroValue}>{item.target_fats || 0}g</Text>
-                                        <Text style={styles.macroLabel}>{t('fat')}</Text>
-                                    </View>
-                                </View>
-
-                                {item.notes && <Text style={[styles.cardDesc, { marginTop: 8 }]}>{item.notes}</Text>}
-                                <View style={[styles.proInfo, { marginTop: 12 }]}>
-                                    <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
-                                    <Text style={styles.proText}>
-                                        {item.dietitian?.first_name} {item.dietitian?.last_name}
-                                    </Text>
-                                </View>
-                            </GlassCard>
-                        )) : (
-                            <Text style={styles.emptyText}>{t('no_nutrition_assigned')}</Text>
-                        )
-                    ) : (
-                        supplements.length > 0 ? supplements.map(item => (
-                            <GlassCard key={item.id} style={styles.card}>
-                                <View style={styles.cardHeader}>
-                                    <View>
-                                        <Text style={styles.cardTitle}>{item.title}</Text>
-                                        <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
-                                    </View>
-                                    {item.reminder_time && (
-                                        <View style={styles.badgePending}>
-                                            <Ionicons name="notifications-outline" size={14} color={colors.warning} />
-                                            <Text style={styles.badgeTextPending}>{item.reminder_time}</Text>
+                                    <View style={styles.macrosContainer}>
+                                        <View style={styles.macroBox}>
+                                            <Text style={styles.macroValue}>{item.target_calories || 0}</Text>
+                                            <Text style={styles.macroLabel}>{t('calories')}</Text>
                                         </View>
-                                    )}
-                                </View>
-                                <Text style={styles.cardDesc}>
-                                    {t('dosage')}: {item.dosage || '-'}
-                                </Text>
-                                {item.notes && <Text style={[styles.cardDesc, { marginTop: 4 }]}>{item.notes}</Text>}
-                                <View style={styles.proInfo}>
-                                    <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
-                                    <Text style={styles.proText}>
-                                        {item.dietitian?.first_name || item.pt?.first_name} {item.dietitian?.last_name || item.pt?.last_name}
+                                        <View style={styles.macroBox}>
+                                            <Text style={styles.macroValue}>{item.target_protein || 0}g</Text>
+                                            <Text style={styles.macroLabel}>{t('protein')}</Text>
+                                        </View>
+                                        <View style={styles.macroBox}>
+                                            <Text style={styles.macroValue}>{item.target_carbs || 0}g</Text>
+                                            <Text style={styles.macroLabel}>{t('carbs')}</Text>
+                                        </View>
+                                        <View style={styles.macroBox}>
+                                            <Text style={styles.macroValue}>{item.target_fats || 0}g</Text>
+                                            <Text style={styles.macroLabel}>{t('fat')}</Text>
+                                        </View>
+                                    </View>
+
+                                    {item.notes && <Text style={[styles.cardDesc, { marginTop: 8 }]}>{item.notes}</Text>}
+                                    <View style={[styles.proInfo, { marginTop: 12 }]}>
+                                        <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
+                                        <Text style={styles.proText}>
+                                            {item.dietitian?.first_name} {item.dietitian?.last_name}
+                                        </Text>
+                                    </View>
+                                </GlassCard>
+                            )
+                        } else {
+                            return (
+                                <GlassCard key={item.id} style={styles.card}>
+                                    <View style={styles.cardHeader}>
+                                        <View>
+                                            <Text style={styles.cardTitle}>{item.title}</Text>
+                                            <Text style={styles.cardDate}>{formatDate(item.created_at)}</Text>
+                                        </View>
+                                        {item.reminder_time && (
+                                            <View style={styles.badgePending}>
+                                                <Ionicons name="notifications-outline" size={14} color={colors.warning} />
+                                                <Text style={styles.badgeTextPending}>{item.reminder_time}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={styles.cardDesc}>
+                                        {t('dosage')}: {item.dosage || '-'}
                                     </Text>
-                                </View>
-                            </GlassCard>
-                        )) : (
-                            <Text style={styles.emptyText}>{t('no_supplements_assigned')}</Text>
-                        )
-                    )}
-                </ScrollView>
+                                    {item.notes && <Text style={[styles.cardDesc, { marginTop: 4 }]}>{item.notes}</Text>}
+                                    <View style={styles.proInfo}>
+                                        <Ionicons name="person-circle-outline" size={18} color={colors.textTertiary} />
+                                        <Text style={styles.proText}>
+                                            {item.dietitian?.first_name || item.pt?.first_name} {item.dietitian?.last_name || item.pt?.last_name}
+                                        </Text>
+                                    </View>
+                                </GlassCard>
+                            )
+                        }
+                    }}
+                />
             )}
 
             <Modal visible={feedbackVisible} transparent animationType="slide" onRequestClose={() => setFeedbackVisible(false)}>
@@ -389,8 +393,13 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                             ))}
                         </View>
 
-                        <ScrollView style={styles.feedbackExerciseList} showsVerticalScrollIndicator={false}>
-                            {exerciseFeedback.map((exercise, index) => (
+                        <FlatList
+                            style={styles.feedbackExerciseList}
+                            contentContainerStyle={{ paddingBottom: SPACING.md }}
+                            data={exerciseFeedback}
+                            keyExtractor={(item, idx) => `${item.name}_${idx}`}
+                            showsVerticalScrollIndicator={false}
+                            renderItem={({ item: exercise, index }) => (
                                 <View key={`${exercise.name}_${index}`} style={styles.exerciseFeedbackCard}>
                                     <Text style={styles.exerciseFeedbackName}>{exercise.name}</Text>
                                     <View style={styles.exerciseFieldsRow}>
@@ -432,8 +441,8 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                                         ))}
                                     </View>
                                 </View>
-                            ))}
-                        </ScrollView>
+                            )}
+                        />
 
                         <TextInput
                             value={feedbackNotes}
@@ -458,11 +467,11 @@ export default function AssignmentsScreen({ navigation, route }: any) {
     );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.xl, paddingHorizontal: SPACING.lg },
     backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center' },
+    headerTitle: { ...TYPOGRAPHY.h2, color: isDark ? colors.text : colors.textInverse, flex: 1, textAlign: 'center' },
     tabContainer: { flexDirection: 'row', backgroundColor: colors.surface, marginHorizontal: SPACING.lg, marginTop: -20, borderRadius: BORDER_RADIUS.lg, ...SHADOWS.sm },
     tab: { flex: 1, paddingVertical: SPACING.md, alignItems: 'center' },
     activeTab: { borderBottomWidth: 2, borderBottomColor: colors.primary },
@@ -516,5 +525,5 @@ const getStyles = (colors: any) => StyleSheet.create({
     feedbackCancelBtn: { flex: 1, borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: colors.borderLight, paddingVertical: 12, alignItems: 'center' },
     feedbackCancelText: { ...TYPOGRAPHY.bodyBold, color: colors.textSecondary },
     feedbackSaveBtn: { flex: 1, borderRadius: BORDER_RADIUS.md, backgroundColor: colors.primary, paddingVertical: 12, alignItems: 'center' },
-    feedbackSaveText: { ...TYPOGRAPHY.bodyBold, color: '#fff' },
+    feedbackSaveText: { ...TYPOGRAPHY.bodyBold, color: isDark ? colors.text : colors.textInverse },
 });

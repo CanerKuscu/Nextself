@@ -35,6 +35,11 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
     const [saving, setSaving] = useState(false);
     const workoutStartRef = React.useRef(new Date());
 
+    // Accurate Timer Refs
+    const accumulatedTimeRef = React.useRef(0);
+    const lastTickRef = React.useRef(Date.now());
+    const animRef = React.useRef<number | undefined>(undefined);
+
     // Heartbeat Animation
     const scale = useSharedValue(1);
 
@@ -55,20 +60,32 @@ export default function ActiveWorkoutScreen({ navigation, route }: any) {
             // Cleanup infinite animation on unmount
             cancelAnimation(scale);
         };
-    }, []);
+    }, [scale]);
 
     const animatedHeartStyle = useAnimatedStyle(() => {
         return { transform: [{ scale: scale.value }] };
     });
 
     useEffect(() => {
-        let interval: NodeJS.Timeout;
         if (!isPaused) {
-            interval = setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
+            lastTickRef.current = Date.now();
+            const tick = () => {
+                const now = Date.now();
+                const delta = Math.floor((now - lastTickRef.current) / 1000);
+                if (delta >= 1) {
+                    accumulatedTimeRef.current += delta;
+                    lastTickRef.current = now - ((now - lastTickRef.current) % 1000);
+                    setElapsedTime(accumulatedTimeRef.current);
+                }
+                animRef.current = requestAnimationFrame(tick);
+            };
+            animRef.current = requestAnimationFrame(tick);
+        } else {
+            if (animRef.current) cancelAnimationFrame(animRef.current);
         }
-        return () => clearInterval(interval);
+        return () => {
+            if (animRef.current) cancelAnimationFrame(animRef.current);
+        };
     }, [isPaused]);
 
     useEffect(() => {

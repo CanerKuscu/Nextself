@@ -5,6 +5,7 @@ import {
     Text,
     StyleSheet,
     Animated,
+    Pressable,
     ViewStyle,
     TextInputProps,
     NativeSyntheticEvent,
@@ -36,6 +37,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
     const styles = React.useMemo(() => getStyles(colors), [colors]);
     const [isFocused, setIsFocused] = useState(false);
     const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+    const inputRef = useRef<TextInput>(null);
 
     // Handle external value changes (e.g., autofill, programmatic updates)
     React.useEffect(() => {
@@ -79,9 +81,14 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
         outputRange: [16, 11],
     }), [labelAnim]);
 
+    const focusInput = useCallback(() => {
+        inputRef.current?.focus();
+    }, []);
+
     return (
         <View style={[styles.container]}>
-            <View
+            <Pressable
+                onPress={focusInput}
                 style={[
                     styles.inputContainer,
                     isFocused && styles.focused,
@@ -92,6 +99,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                 {icon && <View style={styles.iconLeft}>{icon}</View>}
                 <View style={styles.inputWrapper}>
                     <Animated.Text
+                        pointerEvents="none"
                         style={[
                             styles.label,
                             {
@@ -108,6 +116,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                         {label}
                     </Animated.Text>
                     <TextInput
+                        ref={inputRef}
                         {...props}
                         value={value}
                         onFocus={handleFocus}
@@ -122,7 +131,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
                     />
                 </View>
                 {rightIcon && <View style={styles.iconRight}>{rightIcon}</View>}
-            </View>
+            </Pressable>
             {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
     );

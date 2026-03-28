@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FiPlus, FiEdit3, FiTrash2, FiUsers, FiClock, FiMapPin, FiCalendar, FiDollarSign, FiStar, FiSearch, FiTrendingUp, FiMessageSquare, FiThumbsUp, FiAlertCircle } from 'react-icons/fi';
 import { MdFitnessCenter, MdRestaurant } from 'react-icons/md';
 import { db } from '../lib/supabase';
@@ -100,6 +100,8 @@ const FALLBACK_COURSES = [
         level: 'Advanced',
     },
 ];
+type CourseStatus = 'active' | 'completed' | 'draft';
+type CourseLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'All Levels';
 
 const Courses = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -161,18 +163,19 @@ const Courses = () => {
         }
     };
 
-    const handleDeleteCourse = async (courseId) => {
+    const handleDeleteCourse = async (courseId: number | string) => {
         if (!window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) { return; }
         try {
-            const { error: delErr } = await db.deleteCourse(courseId);
+            const normalizedCourseId = String(courseId);
+            const { error: delErr } = await db.deleteCourse(normalizedCourseId);
             if (delErr) { throw delErr; }
-            setCourses(prev => prev.filter(c => c.id !== courseId));
+            setCourses(prev => prev.filter(c => String(c.id) !== normalizedCourseId));
         } catch (err: any) {
             setError('Failed to delete course: ' + err.message);
         }
     };
 
-    const handleEditCourse = (course) => {
+    const handleEditCourse = (course: any) => {
         setEditingCourse(course);
         setNewCourse({
             title: course.title || '',
@@ -233,7 +236,7 @@ const Courses = () => {
         { label: 'Average Rating', value: (courses.reduce((sum, c) => sum + c.rating, 0) / courses.length).toFixed(1), icon: FiStar, color: 'bg-amber-500', change: 'Excellent' },
     ];
 
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (status: CourseStatus) => {
         const map = {
             active: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
             completed: 'bg-gray-100 text-gray-600 ring-1 ring-gray-400/20',
@@ -242,7 +245,7 @@ const Courses = () => {
         return map[status] || map.draft;
     };
 
-    const getLevelColor = (level) => {
+    const getLevelColor = (level: CourseLevel) => {
         const map = {
             'Beginner': 'bg-green-50 text-green-700',
             'Intermediate': 'bg-blue-50 text-blue-700',
@@ -338,7 +341,7 @@ const Courses = () => {
 
             {/* Course Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredCourses.map((course, index) => (
+                {filteredCourses.map((course) => (
                     <div key={course.id} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-500">
                         {/* Course Header Image/Gradient */}
                         <div className={`relative h-40 ${course.type === 'fitness'
@@ -346,10 +349,10 @@ const Courses = () => {
                             : 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500'}`}>
                             <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.3) 0%, transparent 50%)' }}></div>
                             <div className="absolute top-4 left-4 flex items-center gap-2">
-                                <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(course.status)}`}>
+                                <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(course.status as CourseStatus)}`}>
                                     {course.status.charAt(0).toUpperCase() + course.status.slice(1)}
                                 </span>
-                                <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getLevelColor(course.level)}`}>
+                                <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getLevelColor(course.level as CourseLevel)}`}>
                                     {course.level}
                                 </span>
                             </div>

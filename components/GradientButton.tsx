@@ -9,7 +9,8 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, TYPOGRAPHY, BORDER_RADIUS, SHADOWS, SPACING, ANIMATION } from '../config/theme';
+import { GRADIENTS, TYPOGRAPHY, BORDER_RADIUS, SHADOWS, SPACING, ANIMATION } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface GradientButtonProps {
     title: string;
@@ -22,6 +23,8 @@ interface GradientButtonProps {
     icon?: React.ReactNode;
     size?: 'sm' | 'md' | 'lg';
     variant?: 'filled' | 'outline';
+    accessible?: boolean;
+    accessibilityLabel?: string;
 }
 
 const GradientButton: React.FC<GradientButtonProps> = ({
@@ -35,7 +38,10 @@ const GradientButton: React.FC<GradientButtonProps> = ({
     icon,
     size = 'md',
     variant = 'filled',
+    accessible = true,
+    accessibilityLabel,
 }) => {
+    const { colors } = useTheme();
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
     // glowAnim removed — was running an infinite JS-thread animation loop
@@ -80,18 +86,21 @@ const GradientButton: React.FC<GradientButtonProps> = ({
                     onPressOut={handlePressOut}
                     disabled={disabled || loading}
                     activeOpacity={0.8}
+                    accessible={accessible}
+                    accessibilityLabel={accessibilityLabel || title}
                     style={[
                         styles.outlineButton,
+                        { borderColor: colors.primary },
                         sizeStyles[size],
                         disabled && styles.disabled,
                     ]}
                 >
                     {loading ? (
-                        <ActivityIndicator size="small" color={COLORS.primary} />
+                        <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                         <>
                             {icon && <>{icon}</>}
-                            <Text style={[styles.outlineText, textSizes[size], textStyle]}>
+                            <Text style={[styles.outlineText, { color: colors.primary }, textSizes[size], textStyle]}>
                                 {title}
                             </Text>
                         </>
@@ -109,6 +118,8 @@ const GradientButton: React.FC<GradientButtonProps> = ({
                 onPressOut={handlePressOut}
                 disabled={disabled || loading}
                 activeOpacity={0.8}
+                accessible={accessible}
+                accessibilityLabel={accessibilityLabel || title}
             >
                 <LinearGradient
                     colors={gradient as any}
@@ -121,11 +132,11 @@ const GradientButton: React.FC<GradientButtonProps> = ({
                     ]}
                 >
                     {loading ? (
-                        <ActivityIndicator size="small" color={COLORS.textInverse} />
+                        <ActivityIndicator size="small" color={colors.textInverse} />
                     ) : (
                         <>
                             {icon && <>{icon}</>}
-                            <Text style={[styles.text, textSizes[size], textStyle]}>
+                            <Text style={[styles.text, { color: colors.textInverse }, textSizes[size], textStyle]}>
                                 {title}
                             </Text>
                         </>
@@ -147,7 +158,6 @@ const styles = StyleSheet.create({
     },
     text: {
         ...TYPOGRAPHY.button,
-        color: COLORS.textInverse,
     },
     outlineButton: {
         borderRadius: BORDER_RADIUS.lg,
@@ -156,12 +166,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: SPACING.xs,
         borderWidth: 2,
-        borderColor: COLORS.primary,
         backgroundColor: 'transparent',
     },
     outlineText: {
         ...TYPOGRAPHY.button,
-        color: COLORS.primary,
     },
     disabled: {
         opacity: 0.5,

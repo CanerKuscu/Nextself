@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -49,16 +49,16 @@ const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardP
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
-      <ScrollView
+      <FlatList
+        data={missions}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.missionsScroll}
-      >
-        {missions.map((mission) => {
+        keyExtractor={(item) => String(item.id)}
+        renderItem={({ item: mission }) => {
           const meta = CATEGORY_META[mission.category] || CATEGORY_META.workout;
           return (
             <TouchableOpacity
-              key={mission.id}
               style={[
                 styles.missionItem,
                 mission.isCompleted && styles.completedMission
@@ -77,7 +77,7 @@ const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardP
                   <Ionicons
                     name={meta.icon as any}
                     size={16}
-                    color="#FFFFFF"
+                    color={isDark ? colors.text : colors.textInverse}
                   />
                 </LinearGradient>
                 <Text style={[
@@ -97,14 +97,14 @@ const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardP
 
               {mission.isCompleted && (
                 <View style={styles.completedBadge}>
-                  <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                  <Text style={styles.completedBadgeText}>{t('done')}</Text>
+                  <Ionicons name="checkmark" size={12} color={isDark ? colors.text : colors.textInverse} />
+                  <Text style={[styles.completedBadgeText, { color: isDark ? colors.text : colors.textInverse }]}>{t('done')}</Text>
                 </View>
               )}
             </TouchableOpacity>
           );
-        })}
-      </ScrollView>
+        }}
+      />
     </View>
   );
 });
@@ -114,7 +114,7 @@ const DailyMissionsCard = memo(({ missions, onMissionPress }: DailyMissionsCardP
 
 const getStyles = (colors: any) => StyleSheet.create({
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.cardGlass,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -162,7 +162,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 12,
   },
   missionItem: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 12,
     width: 140,
@@ -175,8 +175,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     opacity: 1,
   },
   completedMission: {
-    opacity: 0.7,
-    backgroundColor: colors.background + '80',
+    opacity: 0.9,
+    backgroundColor: colors.surfaceElevated,
   },
   missionHeader: {
     flexDirection: 'row',
@@ -228,7 +228,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   completedBadgeText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '500',
   },
 });

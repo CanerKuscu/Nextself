@@ -124,7 +124,7 @@ export const DARK_COLORS = {
   overlayLight: 'rgba(0, 0, 0, 0.3)',
 } as const;
 
-export const GRADIENTS: { [key: string]: string[] } = {
+export const GRADIENTS: { [key: string]: readonly [string, string] } = {
   primary: ['#58CC02', '#46A302'],
   secondary: ['#CE82FF', '#A855F7'],
   accent: ['#1CB0F6', '#0D8ECF'],

@@ -12,7 +12,7 @@ import { useAlert } from '../components/CustomAlert';
 import { useTranslation } from '../hooks/useTranslation';
 import { HealthService, HealthData, HealthInsight, HealthStreamPayload } from '../services/healthService';
 import { NotificationService } from '../services/notificationService';
-import * as Sentry from '@sentry/react-native';
+import { Observability } from '../utils/observability';
 import { WaterTrackingService, WaterConfig } from '../services/waterTrackingService';
 import { SupabaseService } from '@nextself/shared';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, COMMON_STYLES } from '../config/theme';
@@ -104,7 +104,7 @@ const HealthScreen = ({ navigation }: any) => {
       setLatestWeight(weightRecord?.weight ?? null);
       setInsights(healthService.generateHealthInsights(hData, gender));
       await NotificationService.getInstance().checkSmartReminders(hData, language);
-    } catch (err) { Sentry.captureException(err); }
+    } catch (err) { Observability.captureException(err); }
     finally { setLoading(false); Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }
   };
 

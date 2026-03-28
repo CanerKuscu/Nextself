@@ -14,6 +14,7 @@ import { COLORS, COMMON_STYLES } from '../config/theme';
 import PremiumFeaturesModal from '../components/PremiumFeaturesModal';
 import { useTheme } from '../contexts/ThemeContext';
 import ScreenContainer from '../components/ScreenContainer';
+import SkeletonCard from '../components/SkeletonCard';
 import { useHomeData } from '../hooks/useHomeData';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { HealthService } from '../services/healthService';
@@ -23,146 +24,66 @@ import HealthInsightCard from '../components/HomeScreen/HealthInsightCard';
 import TodayWorkoutsCard from '../components/HomeScreen/TodayWorkoutsCard';
 import DailyMissionsCard from '../components/HomeScreen/DailyMissionsCard';
 import DailyProgramChecklist, { DailyItem } from '../components/HomeScreen/DailyProgramChecklist';
+import ExploreCards from '../components/HomeScreen/ExploreCards';
+import QuickActions from '../components/HomeScreen/QuickActions';
+import GamificationBar from '../components/HomeScreen/GamificationBar';
+import { usePendingSessions } from '../hooks/usePendingSessions';
+import { aiAutopilotService, AdaptivePlanResponse } from '../services/aiAutopilotService';
+import { useAuthStore } from '../store/authStoreSecure';
 
 let hasShownPremiumPopupSession = false;
+
+/**
+ * Resets the premium popup flag so it shows again for a new user session.
+ * Should be called on sign-out to prevent state leakage between users.
+ */
+export const resetPremiumPopupFlag = () => {
+  hasShownPremiumPopupSession = false;
+};
+
 const HEALTH_CONNECT_STARTUP_PROMPT_KEY = 'NextSelf_health_connect_startup_prompt_v1';
 
 const HomeScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
   const s = React.useMemo(() => getStyles(colors), [colors]);
   const { t, isTurkish, language } = useTranslation();
-  
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+
   // Use custom hook for data fetching
-  const { 
-    profile, 
-    streakData, 
-    healthInsights, 
-    todaysWorkouts, 
-    leagueData, 
-    currency, 
-    dailyMissions, 
-    dailyProgram, 
-    loading, 
-    refreshing, 
-    loadData,
+  const {
+    data: {
+      profile,
+      streakData,
+      healthInsights,
+      todaysWorkouts,
+      leagueData,
+      currency,
+      dailyMissions,
+      dailyProgram
+    },
+    loading,
+    refreshing,
+    refresh,
     isOfflineData
   } = useHomeData(language);
 
   const { width } = useWindowDimensions();
   const CARD_W = (width - 40 - 14) / 2;
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [autopilotLoading, setAutopilotLoading] = useState(false);
+  const [autopilotPlan, setAutopilotPlan] = useState<AdaptivePlanResponse | null>(null);
+  const [autopilotError, setAutopilotError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showAlert, AlertComponent } = useAlert();
 
-  // Initial load
+  usePendingSessions(showAlert, isTurkish);
+
   useEffect(() => {
-    loadData();
-    checkForPendingSessions();
-  }, [loadData]);
-
-  const checkForPendingSessions = async () => {
-    try {
-      const supabase = SupabaseService.getInstance().getClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // 1. Get active relationships
-      const { data: relationships } = await supabase
-        .from('client_relationships')
-        .select(`
-          id, 
-          professional_profiles:professional_id(first_name, last_name),
-          trainer_profiles:trainer_id(first_name, last_name),
-          dietitian_profiles:dietitian_id(first_name, last_name)
-        `)
-        .eq('client_id', user.id)
-        .eq('status', 'active');
-
-      if (!relationships || relationships.length === 0) return;
-
-      const relIds = relationships.map((r: any) => r.id);
-
-      // 2. Check for pending session requests
-      const { data: sessions } = await supabase
-        .from('session_checkins')
-        .select('*')
-        .in('client_relationship_id', relIds)
-        .eq('is_verified', false)
-        .ilike('qr_token', 'REQ-%') // Case insensitive like
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (sessions && sessions.length > 0) {
-        const session = sessions[0];
-        const rel = relationships.find((r: any) => r.id === session.client_relationship_id);
-        
-        // Extract name from any possible relation
-        // @ts-ignore
-        const profArray = rel?.professional_profiles || rel?.trainer_profiles || rel?.dietitian_profiles;
-        const prof = Array.isArray(profArray) ? profArray[0] : profArray;
-        const profName = prof ? `${prof.first_name} ${prof.last_name || ''}` : (isTurkish ? 'Eğitmeniniz' : 'Your Trainer');
-
-        showAlert({
-          title: isTurkish ? 'Oturum İsteği' : 'Session Request',
-          message: isTurkish
-            ? `${profName} bir oturum başlatmak istiyor. Onaylıyor musunuz?`
-            : `${profName} wants to start a session. Do you approve?`,
-          type: 'confirm',
-          icon: 'timer-outline',
-          buttons: [
-            {
-              text: isTurkish ? 'Reddet' : 'Deny',
-              style: 'destructive',
-              onPress: () => handleDenySession(session.id)
-            },
-            {
-              text: isTurkish ? 'Onayla' : 'Approve',
-              onPress: () => handleApproveSession(session.id)
-            }
-          ]
-        });
-      }
-    } catch (err) {
-      console.error('Check pending sessions error:', err);
+    if (!authUserId) {
+      resetPremiumPopupFlag();
     }
-  };
-
-  const handleApproveSession = async (sessionId: string) => {
-    try {
-      const { error } = await SupabaseService.getInstance().getClient()
-        .from('session_checkins')
-        .update({
-          is_verified: true,
-          checkin_time: new Date().toISOString()
-        })
-        .eq('id', sessionId);
-
-      if (error) throw error;
-
-      showAlert({
-        title: isTurkish ? 'Başarılı' : 'Success',
-        message: isTurkish ? 'Oturum başarıyla onaylandı!' : 'Session approved successfully!',
-        type: 'success'
-      });
-    } catch (err) {
-      console.error(err);
-      showAlert({ title: isTurkish ? 'Hata' : 'Error', message: 'Failed to approve session', type: 'error' });
-    }
-  };
-
-  const handleDenySession = async (sessionId: string) => {
-    try {
-      const { error } = await SupabaseService.getInstance().getClient()
-        .from('session_checkins')
-        .delete()
-        .eq('id', sessionId);
-
-      if (error) throw error;
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  }, [authUserId]);
 
   const showHealthConnectPrompt = useCallback(async () => {
     try {
@@ -184,7 +105,7 @@ const HomeScreen = ({ navigation }: any) => {
             message: isTurkish ? 'Apple Health bağlantısı otomatik olarak kuruldu.' : 'Apple Health was connected automatically.',
             buttons: [{ text: 'OK' }]
           });
-          loadData(true);
+          refresh();
           return;
         }
       } else if (Platform.OS === 'android') {
@@ -197,7 +118,7 @@ const HomeScreen = ({ navigation }: any) => {
             message: isTurkish ? 'Google Health Connect bağlantısı otomatik olarak kuruldu.' : 'Google Health Connect was connected automatically.',
             buttons: [{ text: 'OK' }]
           });
-          loadData(true);
+          refresh();
           return;
         }
       }
@@ -214,7 +135,7 @@ const HomeScreen = ({ navigation }: any) => {
             message: isTurkish ? 'Sağlık bağlantısı kuruldu.' : 'Health connection established.',
             buttons: [{ text: 'OK' }]
           });
-          loadData(true);
+          refresh();
         } else {
           showAlert({
             type: 'error',
@@ -234,7 +155,7 @@ const HomeScreen = ({ navigation }: any) => {
             message: isTurkish ? 'Sağlık bağlantısı kuruldu.' : 'Health connection established.',
             buttons: [{ text: 'OK' }]
           });
-          loadData(true);
+          refresh();
           return;
         }
 
@@ -307,7 +228,7 @@ const HomeScreen = ({ navigation }: any) => {
     } catch (err) {
       console.warn('Health startup prompt error:', err);
     }
-  }, [isTurkish, showAlert, loadData]);
+  }, [isTurkish, showAlert]);
 
   // Check premium status and show popup on first app launch only (per session)
   useEffect(() => {
@@ -336,8 +257,8 @@ const HomeScreen = ({ navigation }: any) => {
   }, [loading, profile, showHealthConnectPrompt]);
 
   const onRefresh = useCallback(() => {
-    loadData(true);
-  }, [loadData]);
+    refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (!loading) {
@@ -350,6 +271,30 @@ const HomeScreen = ({ navigation }: any) => {
   }, [loading, fadeAnim]);
 
   const handleClosePremiumModal = () => setShowPremiumModal(false);
+
+  const handleGenerateAutopilotPlan = useCallback(async () => {
+    const userId = profile?.id;
+    if (!userId) {
+      setAutopilotError(isTurkish ? 'Kullanıcı bilgisi bulunamadı.' : 'User information is unavailable.');
+      return;
+    }
+    setAutopilotLoading(true);
+    setAutopilotError(null);
+    try {
+      const plan = await aiAutopilotService.generateAdaptivePlan(String(userId));
+      setAutopilotPlan(plan);
+    } catch (error) {
+      setAutopilotError(isTurkish ? 'Plan oluşturulamadı. Lütfen tekrar deneyin.' : 'Failed to generate plan. Please try again.');
+      showAlert({
+        type: 'error',
+        title: isTurkish ? 'AI Plan Hatası' : 'AI Plan Error',
+        message: isTurkish ? 'AI haftalık planı şu anda üretilemedi.' : 'Unable to generate the AI weekly plan right now.',
+        buttons: [{ text: 'OK' }],
+      });
+    } finally {
+      setAutopilotLoading(false);
+    }
+  }, [profile?.id, isTurkish, showAlert]);
 
   const handleToggleItem = (id: string, type: 'workout' | 'meal' | 'supplement', currentStatus: boolean) => {
     if (currentStatus) return;
@@ -364,7 +309,30 @@ const HomeScreen = ({ navigation }: any) => {
   };
 
   if (loading && !isOfflineData) {
-    return (<View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}><ActivityIndicator size="large" color={colors.primary} /></View>);
+    return (
+      <ScreenContainer edges={['top', 'left', 'right']}>
+        <View style={[s.scroll, { marginTop: 12, paddingTop: 20 }]}>
+          <View style={[s.header, { marginBottom: 30 }]}>
+            <View>
+              <SkeletonCard style={{ width: 100, height: 16, marginBottom: 8 }} />
+              <SkeletonCard style={{ width: 160, height: 28 }} />
+            </View>
+            <View style={s.headerRight}>
+              <SkeletonCard style={{ width: 44, height: 44, borderRadius: 22 }} />
+            </View>
+          </View>
+          <SkeletonCard style={{ height: 80, borderRadius: 18, marginBottom: 20 }} />
+          <SkeletonCard style={{ height: 120, borderRadius: 18, marginBottom: 20 }} />
+          <SkeletonCard style={{ height: 180, borderRadius: 24, marginBottom: 28 }} />
+          <SkeletonCard style={{ width: 150, height: 24, marginBottom: 14 }} />
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <SkeletonCard style={{ width: 72, height: 90, borderRadius: 18 }} />
+            <SkeletonCard style={{ width: 72, height: 90, borderRadius: 18 }} />
+            <SkeletonCard style={{ width: 72, height: 90, borderRadius: 18 }} />
+          </View>
+        </View>
+      </ScreenContainer>
+    );
   }
 
   const name = profile?.full_name || profile?.first_name || profile?.username || t('athlete');
@@ -389,41 +357,38 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
             <View style={s.headerRight}>
               {/* Coins */}
-              <TouchableOpacity style={s.coinBadge} onPress={() => navigation.navigate('Store')}>
-                <Ionicons name="cash-outline" size={16} color="#FFB800" />
+              <TouchableOpacity
+                style={s.coinBadge}
+                onPress={() => navigation.navigate('Store')}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={isTurkish ? `Mağazayı aç. ${currency?.points || 0} puanın var.` : `Open store. You have ${currency?.points || 0} points.`}
+              >
+                <Ionicons name="cash-outline" size={16} color={colors.warning} />
                 <Text style={s.coinNum}>{currency?.points || 0}</Text>
               </TouchableOpacity>
               <View style={s.streakBadge}>
-                <Ionicons name="flame" size={18} color="#FF9600" />
+                <Ionicons name="flame" size={18} color={colors.warning} />
                 <Text style={s.streakNum}>{streak}</Text>
               </View>
-              <TouchableOpacity style={s.avatarBtn} onPress={() => navigation.navigate('Profile')}>
+              <TouchableOpacity
+                style={s.avatarBtn}
+                onPress={() => navigation.navigate('Profile')}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={isTurkish ? 'Profil ekranını aç' : 'Open profile screen'}
+              >
                 {profile?.avatar_url ? (
                   <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" cachePolicy="memory-disk" transition={500} />
                 ) : (
-                  <Ionicons name="person" size={20} color="#58CC02" />
+                  <Ionicons name="person" size={20} color={colors.primary} />
                 )}
               </TouchableOpacity>
             </View>
           </View>
 
           {/* ─── GAMIFICATION BAR (League + XP) ─── */}
-          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('League')} style={s.gamifBar}>
-            <View style={s.gamifLeft}>
-              <Text style={{ fontSize: 22 }}>{tierInfo.icon}</Text>
-              <View style={{ marginLeft: 10 }}>
-                <Text style={s.gamifLeague}>{t(`tier_${tierInfo.name.toLowerCase()}` as any)}</Text>
-                <Text style={s.gamifRank}>{t('league')}</Text>
-              </View>
-            </View>
-            <View style={s.gamifRight}>
-              <View style={s.xpBarOuter}>
-                <View style={[s.xpBarInner, { width: `${Math.min((leagueData?.weeklyXp || 0) / 500 * 100, 100)}%` }]} />
-              </View>
-              <Text style={s.xpText}>{leagueData?.weeklyXp || 0} XP</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
+          <GamificationBar colors={colors} t={t} navigation={navigation} tierInfo={tierInfo} leagueData={leagueData} />
 
           {/* ─── DAILY PROGRAM CHECKLIST ─── */}
           <DailyProgramChecklist
@@ -439,8 +404,14 @@ const HomeScreen = ({ navigation }: any) => {
 
           {/* ─── TODAY'S WORKOUT ─── */}
           {todaysWorkouts && todaysWorkouts.length > 0 ? (
-            <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('ActiveWorkout', { workoutId: todaysWorkouts[0].id })}>
-              <LinearGradient colors={['#667eea', '#764ba2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('ActiveWorkout', { workoutId: todaysWorkouts[0].id })}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={isTurkish ? `Bugünün antrenmanını başlat: ${todaysWorkouts[0].name || t('workout')}` : `Start today's workout: ${todaysWorkouts[0].name || t('workout')}`}
+            >
+              <LinearGradient colors={[colors.accent, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
                 <View style={s.heroTag}>
                   <Text style={s.heroTagText}>{t('todays_workout_caps')}</Text>
                 </View>
@@ -448,7 +419,7 @@ const HomeScreen = ({ navigation }: any) => {
                 <Text style={s.heroMeta}>{t('todays_workout_subtitle')}</Text>
                 <View style={s.heroBottom}>
                   <View style={s.heroBtn}>
-                    <Ionicons name="play" size={16} color={colors.background} />
+                    <Ionicons name="play" size={16} color={colors.surface} />
                     <Text style={s.heroBtnText}>{t('start')}</Text>
                   </View>
                 </View>
@@ -460,8 +431,62 @@ const HomeScreen = ({ navigation }: any) => {
           <HealthInsightCard
             insights={healthInsights}
             refreshing={refreshing}
-            onRefresh={loadData}
+            onRefresh={refresh}
           />
+
+          <View style={s.autopilotCard}>
+            <View style={s.autopilotHeader}>
+              <View>
+                <Text style={s.autopilotTitle}>AI Weekly Autopilot</Text>
+                <Text style={s.autopilotSubtitle}>
+                  {isTurkish ? 'Haftalık planını performansına göre optimize et.' : 'Optimize your next week based on your latest progress.'}
+                </Text>
+              </View>
+              <Ionicons name="sparkles" size={20} color={colors.primary} />
+            </View>
+
+            <TouchableOpacity
+              style={[s.autopilotButton, autopilotLoading && s.autopilotButtonDisabled]}
+              onPress={handleGenerateAutopilotPlan}
+              disabled={autopilotLoading}
+              activeOpacity={0.9}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={isTurkish ? 'AI haftalık plan oluştur' : 'Generate AI weekly plan'}
+            >
+              {autopilotLoading ? (
+                <View style={s.autopilotButtonLoading}>
+                  <ActivityIndicator size="small" color={colors.surface} />
+                  <Text style={s.autopilotButtonText}>
+                    {isTurkish ? 'Plan Oluşturuluyor...' : 'Generating Plan...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={s.autopilotButtonText}>
+                  {isTurkish ? 'Gelecek Haftanın Planını Oluştur' : "Generate Next Week's Plan"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {autopilotError ? <Text style={s.autopilotError}>{autopilotError}</Text> : null}
+
+            {autopilotPlan ? (
+              <View style={s.autopilotResult}>
+                <Text style={s.autopilotResultLabel}>{isTurkish ? 'Koç Mesajı' : 'Coach Message'}</Text>
+                <Text style={s.autopilotMessage}>{autopilotPlan.coachMessage}</Text>
+
+                <Text style={s.autopilotResultLabel}>{isTurkish ? 'Antrenman Ayarı' : 'Workout Adjustment'}</Text>
+                <Text style={s.autopilotAdjustment}>{autopilotPlan.workoutAdjustments}</Text>
+
+                <Text style={s.autopilotResultLabel}>{isTurkish ? 'Kalori Hedefi' : 'Calorie Target'}</Text>
+                <Text style={s.autopilotCalories}>
+                  {autopilotPlan.adjustedCalorieTarget !== null
+                    ? `${autopilotPlan.adjustedCalorieTarget} kcal`
+                    : (isTurkish ? 'Değişiklik önerilmedi' : 'No change recommended')}
+                </Text>
+              </View>
+            ) : null}
+          </View>
 
           {/* ─── TODAY'S WORKOUT PROGRAMS ─── */}
           {/* Duplicate section removed as per user request
@@ -473,73 +498,11 @@ const HomeScreen = ({ navigation }: any) => {
 
           {/* ─── QUICK ACTIONS ─── */}
           <Text style={s.sectionTitle}>{t('quick_actions')}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.quickScroll}>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Sports')} activeOpacity={0.7}>
-              <LinearGradient colors={['#58CC02', '#38a800']} style={s.quickIconWrap}><Ionicons name="sparkles" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('workout')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('FoodScanner')} activeOpacity={0.7}>
-              <LinearGradient colors={['#FF9600', '#FF6B6B']} style={s.quickIconWrap}><Ionicons name="scan" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('scan_food')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Nutrition')} activeOpacity={0.7}>
-              <LinearGradient colors={['#89f7fe', '#66a6ff']} style={s.quickIconWrap}><Ionicons name="restaurant" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('nutrition')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('ProfessionalSearch')} activeOpacity={0.7}>
-              <LinearGradient colors={['#38ef7d', '#11998e']} style={s.quickIconWrap}><Ionicons name="people" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('find_pt')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Health')} activeOpacity={0.7}>
-              <LinearGradient colors={['#f093fb', '#f5576c']} style={s.quickIconWrap}><Ionicons name="heart" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('health')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Supplements')} activeOpacity={0.7}>
-              <LinearGradient colors={['#CE82FF', '#764ba2']} style={s.quickIconWrap}><Ionicons name="medkit" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('supplements')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('WaterTracking')} activeOpacity={0.7}>
-              <LinearGradient colors={['#1CB0F6', '#0077CC']} style={s.quickIconWrap}><Ionicons name="water" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('water_tracking')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.quickItem} onPress={() => navigation.navigate('Assignments')} activeOpacity={0.7}>
-              <LinearGradient colors={['#FFC800', '#FF9600']} style={s.quickIconWrap}><Ionicons name="clipboard" size={22} color={colors.background} /></LinearGradient>
-              <Text style={s.quickLabel}>{t('tasks')}</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          <QuickActions colors={colors} t={t} navigation={navigation} />
 
           {/* ─── EXPLORE CARDS ─── */}
           <Text style={s.sectionTitle}>{t('explore')}</Text>
-          <View style={s.catGrid}>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Sports')}>
-              <LinearGradient colors={['#a18cd1', '#fbc2eb']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
-                <View style={s.catIconBg}><Ionicons name="barbell" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{t('workout')}</Text>
-                <Text style={s.catSub}>{t('exercise_programs')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Nutrition')}>
-              <LinearGradient colors={['#89f7fe', '#66a6ff']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
-                <View style={s.catIconBg}><Ionicons name="restaurant" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{t('nutrition')}</Text>
-                <Text style={s.catSub}>{t('track_food')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('AIToolsStack')}>
-              <LinearGradient colors={['#f093fb', '#f5576c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
-                <View style={s.catIconBg}><Ionicons name="sparkles" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{t('ai_tools')}</Text>
-                <Text style={s.catSub}>{t('coach_diet_chef')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('ProfessionalSearch')}>
-              <LinearGradient colors={['#38ef7d', '#11998e']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.catCard, { width: CARD_W }]}>
-                <View style={s.catIconBg}><Ionicons name="people" size={26} color={colors.background} /></View>
-                <Text style={s.catTitle}>{t('pt_diet')}</Text>
-                <Text style={s.catSub}>{t('find_pros')}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+          <ExploreCards colors={colors} t={t} navigation={navigation} />
 
           <View style={{ height: 100 }} />
         </Animated.View>
@@ -563,21 +526,21 @@ const getStyles = (colors: any) => StyleSheet.create({
   greeting: { fontSize: 14, color: colors.textTertiary },
   name: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginTop: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF5F0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#FFE0CC' },
-  streakNum: { fontSize: 15, fontWeight: '800', color: '#FF9600' },
-  coinBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFFBEB', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#FFF0C1' },
-  coinNum: { fontSize: 14, fontWeight: '800', color: '#FFC800' },
-  avatarBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8FFE0', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#58CC02', overflow: 'hidden' },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceElevated, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.borderLight },
+  streakNum: { fontSize: 15, fontWeight: '800', color: colors.streak },
+  coinBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surfaceElevated, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.borderLight },
+  coinNum: { fontSize: 14, fontWeight: '800', color: colors.warning },
+  avatarBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.primary, overflow: 'hidden' },
   avatarImg: { width: 40, height: 40, borderRadius: 20 },
   // Gamification bar
-  gamifBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 18, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#F0F0F0' },
+  gamifBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 18, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.borderLight },
   gamifLeft: { flexDirection: 'row', alignItems: 'center' },
   gamifLeague: { fontSize: 14, fontWeight: '800', color: colors.text },
   gamifRank: { fontSize: 11, color: colors.textTertiary, fontWeight: '500' },
   gamifRight: { flex: 1, marginHorizontal: 14, alignItems: 'flex-end' },
-  xpBarOuter: { width: '100%', height: 8, backgroundColor: '#E5E5E5', borderRadius: 4, marginBottom: 3 },
-  xpBarInner: { height: 8, backgroundColor: '#FFC800', borderRadius: 4 },
-  xpText: { fontSize: 11, fontWeight: '700', color: '#FFC800' },
+  xpBarOuter: { width: '100%', height: 8, backgroundColor: colors.border, borderRadius: 4, marginBottom: 3 },
+  xpBarInner: { height: 8, backgroundColor: colors.warning, borderRadius: 4 },
+  xpText: { fontSize: 11, fontWeight: '700', color: colors.warning },
   // Daily missions
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 14 },
   ringVal: { fontSize: 13, fontWeight: '700', color: colors.text, marginTop: 6 },
@@ -593,7 +556,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   quickScroll: { gap: 16, paddingRight: 20, marginBottom: 28 },
   quickItem: { alignItems: 'center', width: 72 },
   quickIconWrap: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  quickLabel: { fontSize: 11, fontWeight: '600', color: '#6B7280', textAlign: 'center' },
+  quickLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 16 },
   catCard: { borderRadius: 22, padding: 18, minHeight: 150, justifyContent: 'flex-end' },
   catIconBg: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
@@ -601,14 +564,28 @@ const getStyles = (colors: any) => StyleSheet.create({
   catSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
   // Health insight cards
   insightCard: { flexDirection: 'row', borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1 },
-  insightWarn: { backgroundColor: '#FFF8F0', borderColor: '#FFE0CC' },
-  insightGood: { backgroundColor: '#F0FFF4', borderColor: '#D0F0D0' },
+  insightWarn: { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight },
+  insightGood: { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight },
   insightTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 },
-  insightMsg: { fontSize: 12, color: '#6B7280', lineHeight: 17 },
+  insightMsg: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   // Today's workout cards
-  todayWorkoutCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F0F0F0' },
+  todayWorkoutCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.borderLight },
   todayWorkoutName: { fontSize: 14, fontWeight: '700', color: colors.text },
   todayWorkoutMeta: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+  autopilotCard: { backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.borderLight, marginBottom: 22 },
+  autopilotHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  autopilotTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  autopilotSubtitle: { marginTop: 4, fontSize: 12, lineHeight: 18, color: colors.textTertiary, maxWidth: '90%' },
+  autopilotButton: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center' },
+  autopilotButtonDisabled: { opacity: 0.8 },
+  autopilotButtonLoading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  autopilotButtonText: { fontSize: 13, fontWeight: '700', color: colors.background },
+  autopilotError: { color: '#EF4444', fontSize: 12, marginTop: 10, fontWeight: '600' },
+  autopilotResult: { marginTop: 14, backgroundColor: colors.background, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.borderLight },
+  autopilotResultLabel: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', marginBottom: 4 },
+  autopilotMessage: { fontSize: 13, lineHeight: 19, color: colors.text, marginBottom: 10 },
+  autopilotAdjustment: { fontSize: 13, lineHeight: 19, color: colors.text, marginBottom: 10, fontWeight: '600' },
+  autopilotCalories: { fontSize: 13, color: colors.primary, fontWeight: '800' },
 });
 
 export default HomeScreen;

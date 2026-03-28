@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { FiMessageSquare, FiSend, FiUser, FiArrowLeft } from 'react-icons/fi';
 
@@ -10,8 +10,8 @@ const Messages = () => {
     const [loading, setLoading] = useState(false);
     const [sessionUser, setSessionUser] = useState<any>(null);
     const [showChatList, setShowChatList] = useState(true);
-    const messagesEndRef = useRef(null);
-    const subscriptionRef = useRef(null);
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const subscriptionRef = useRef<any>(null);
 
     useEffect(() => {
         loadSession();
@@ -25,10 +25,10 @@ const Messages = () => {
         }
     };
 
-    const loadChats = async (userId) => {
+    const loadChats = async (userId: string) => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('chat_participants')
                 .select(`
                     chat_id,
@@ -40,10 +40,10 @@ const Messages = () => {
                 .eq('user_id', userId);
 
             if (data) {
-                const formatted = data.map(d => {
+                const formatted = data.map((d: any) => {
                     const chat = Array.isArray(d.chats) ? d.chats[0] : d.chats;
                     const participants = chat?.chat_participants || [];
-                    const other = participants.find(p => p.user_id !== userId)?.users;
+                    const other = participants.find((p: any) => p.user_id !== userId)?.users;
                     const otherUser = Array.isArray(other) ? other[0] : other;
                     return {
                         id: d.chat_id,
@@ -54,17 +54,17 @@ const Messages = () => {
                 });
                 setChats(formatted);
             }
-        } catch (error: any) {
+        } catch {
             console.error('Chat load failed');
         } finally {
             setLoading(false);
         }
     };
 
-    const loadMessagesForChat = async (chatId) => {
+    const loadMessagesForChat = async (chatId: string) => {
         if (!chatId || !sessionUser?.id) { return; }
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('messages')
                 .select('*')
                 .eq('chat_id', chatId)
@@ -121,14 +121,14 @@ const Messages = () => {
         };
     }, []);
 
-    const handleSelectChat = (chat) => {
+    const handleSelectChat = (chat: any) => {
         setActiveChat(chat);
         loadMessagesForChat(chat.id);
         // On mobile, hide chat list when a chat is selected
         setShowChatList(false);
     };
 
-    const handleSend = async (e) => {
+    const handleSend = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!newMessage.trim() || !activeChat) { return; }
 
@@ -151,7 +151,7 @@ const Messages = () => {
                 setMessages(prev => prev.filter(m => m.id !== optimistic.id));
                 console.error('Message send failed:', error);
             }
-        } catch (err: any) {
+        } catch {
             setMessages(prev => prev.filter(m => m.id !== optimistic.id));
             console.error('Message send failed');
         }
@@ -225,6 +225,7 @@ const Messages = () => {
                                         </div>
                                     </div>
                                 ))}
+                                <div ref={messagesEndRef} />
                             </div>
                         </div>
                         {/* Input Area */}

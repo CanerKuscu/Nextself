@@ -53,6 +53,45 @@ export class AIService {
         return AIService.instance;
     }
 
+    private extractFirstJsonObject(raw: string): string | null {
+        const start = raw.indexOf('{');
+        if (start === -1) return null;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let i = start; i < raw.length; i++) {
+            const char = raw[i];
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (char === '\\') {
+                    escaped = true;
+                } else if (char === '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (char === '"') {
+                inString = true;
+                continue;
+            }
+            if (char === '{') {
+                depth++;
+            } else if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                    return raw.slice(start, i + 1);
+                }
+            }
+        }
+        return null;
+    }
+
+    private parseJsonObject(raw: string): any {
+        const extracted = this.extractFirstJsonObject(raw);
+        return JSON.parse(extracted ?? raw);
+    }
+
     /**
      * Besin Tarama AI - Analyzes food from an image URL or Base64
      * Uses Edge Function for real AI analysis
@@ -65,8 +104,7 @@ export class AIService {
                 : 'Identify the food in the image and return only valid JSON: {"name":"","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"fiber_g":0,"sugar_g":0,"sodium_mg":0,"ingredients":[],"vitamins":[],"health_score":0}.';
             const rawResponse = await this.deepseek.generateContent('food_scan', { description, language }, imageBase64);
 
-            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-            const payload = JSON.parse(jsonMatch ? jsonMatch[0] : rawResponse);
+            const payload = this.parseJsonObject(rawResponse);
             const toNumber = (value: any) => {
                 const numeric = Number(value);
                 return Number.isFinite(numeric) ? numeric : 0;
@@ -89,16 +127,7 @@ export class AIService {
         } catch (error) {
             const logManager = LogManager.getInstance();
             logManager.error('AI Scan Error', error);
-            return {
-                name: language === 'tr' ? 'Yemek Öğesi' : 'Food Item',
-                calories: 0,
-                protein: 0,
-                carbs: 0,
-                fats: 0,
-                confidence: 45,
-                healthScore: 5,
-                ingredients: [],
-            };
+            throw new Error('AI Unavailable: Failed to analyze food. Please try again later.');
         }
     }
 
@@ -134,9 +163,9 @@ export class AIService {
 
             try {
                 // Try to extract JSON from response
-                const jsonMatch = response.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
+                const extracted = this.extractFirstJsonObject(response);
+                if (extracted) {
+                    const parsed = JSON.parse(extracted);
 
                     // Validate nutritional data
                     if (!HealthValidator.validateNutritionalData(parsed)) {
@@ -155,16 +184,7 @@ export class AIService {
         } catch (error) {
             logManager.error('Chef AI Error', error);
             logManager.logFailure();
-            return {
-                title: 'Fallback Recipe',
-                prepTime: 10,
-                cookTime: 15,
-                calories: 200,
-                macros: { p: 10, c: 20, f: 5 },
-                ingredients: ['Fallback Ingredient'],
-                instructions: ['Fallback Instruction'],
-                difficulty: 'easy',
-            };
+            throw new Error('AI Unavailable: Failed to generate recipe. Please try again later.');
         } finally {
             const endTime = Date.now();
             logManager.logResponseTime(endTime - startTime);
@@ -211,7 +231,7 @@ export class AIService {
         } catch (error) {
             logManager.error('Dietitian AI Error', error);
             logManager.logFailure();
-            return 'I\'m having trouble calculating this right now, but generally, staying hydrated is key.';
+            throw new Error('AI Unavailable: The Dietitian AI is currently unreachable. Please try again later.');
         } finally {
             const endTime = Date.now();
             logManager.logResponseTime(endTime - startTime);
@@ -247,7 +267,7 @@ export class AIService {
             return response;
         } catch (error) {
             logManager.error('PT AI Error', error);
-            return 'The AI generated an unrealistic value, please try again.';
+            throw new Error('AI Unavailable: The PT AI is currently unreachable. Please try again later.');
         }
     }
 

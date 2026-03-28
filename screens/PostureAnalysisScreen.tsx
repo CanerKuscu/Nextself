@@ -94,8 +94,8 @@ const ANALYSIS_FRAME_LIMIT = 20;
 const DEBUG_SMOOTHING_WINDOW = 3;
 
 export default function PostureAnalysisScreen({ navigation }: any) {
-    const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const { colors, isDark } = useTheme();
+    const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { hasPermission, requestPermission } = useCameraPermission();
     const device = useCameraDevice('back');
@@ -326,7 +326,7 @@ export default function PostureAnalysisScreen({ navigation }: any) {
 
     if (!isVisionCameraAvailable) {
         return (
-            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}>
+            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center, { backgroundColor: colors.background }]}>
                 <Text style={{ ...TYPOGRAPHY.body, textAlign: 'center', padding: SPACING.lg, color: colors.textSecondary }}>
                     {isTurkish
                         ? 'Bu sürümde native kamera modülü bulunamadı. Development build uygulamasını yeniden derleyip yükleyin.'
@@ -339,7 +339,7 @@ export default function PostureAnalysisScreen({ navigation }: any) {
 
     if (!hasPermission) {
         return (
-            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}>
+            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center, { backgroundColor: colors.background }]}>
                 <Text style={{ ...TYPOGRAPHY.body, textAlign: 'center', padding: SPACING.lg, color: colors.textSecondary }}>
                     {isTurkish ? 'Kamera izni verilmedi.' : 'Camera permission not granted.'}
                 </Text>
@@ -351,7 +351,7 @@ export default function PostureAnalysisScreen({ navigation }: any) {
 
     if (!device) {
         return (
-            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}>
+            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center, { backgroundColor: colors.background }]}>
                 <Text style={{ ...TYPOGRAPHY.body, textAlign: 'center', padding: SPACING.lg, color: colors.textSecondary }}>
                     {isTurkish ? 'Arka kamera bulunamadı.' : 'Back camera device not available.'}
                 </Text>
@@ -389,7 +389,7 @@ export default function PostureAnalysisScreen({ navigation }: any) {
                                     onPress={() => setSelectedExercise(option.key)}
                                     activeOpacity={0.8}
                                 >
-                                    <Text style={[styles.exerciseChipText, { color: active ? '#fff' : '#E5E7EB' }]}>
+                                    <Text style={[styles.exerciseChipText, { color: active ? (isDark ? colors.text : colors.textInverse) : colors.textTertiary }]}>
                                         {isTurkish ? option.tr : option.en}
                                     </Text>
                                 </TouchableOpacity>
@@ -614,7 +614,7 @@ const averageAngles = (history: KinematicAngles[]): KinematicAngles => {
     };
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md, backgroundColor: colors.background },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { ...TYPOGRAPHY.h3, color: colors.text },
@@ -624,15 +624,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     exerciseChipActive: { backgroundColor: 'rgba(79,70,229,0.85)' },
     exerciseChipText: { ...TYPOGRAPHY.captionBold, fontSize: 12 },
     debugToggle: { position: 'absolute', zIndex: 6, right: 12, top: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', backgroundColor: 'rgba(17,24,39,0.65)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-    debugToggleText: { ...TYPOGRAPHY.captionBold, color: '#fff', fontSize: 11 },
+    debugToggleText: { ...TYPOGRAPHY.captionBold, color: isDark ? colors.text : colors.textInverse, fontSize: 11 },
     debugPanel: { position: 'absolute', zIndex: 6, left: 12, bottom: 130, paddingHorizontal: 10, paddingVertical: 8, borderRadius: BORDER_RADIUS.md, backgroundColor: 'rgba(17,24,39,0.72)' },
-    debugTitle: { ...TYPOGRAPHY.captionBold, color: '#fff', marginBottom: 4 },
-    debugValue: { ...TYPOGRAPHY.caption, color: '#E5E7EB', lineHeight: 18 },
+    debugTitle: { ...TYPOGRAPHY.captionBold, color: isDark ? colors.text : colors.textInverse, marginBottom: 4 },
+    debugValue: { ...TYPOGRAPHY.caption, color: colors.textTertiary, lineHeight: 18 },
     detectorHintBox: { position: 'absolute', zIndex: 6, left: 12, right: 12, bottom: 90, paddingHorizontal: 10, paddingVertical: 8, borderRadius: BORDER_RADIUS.md, backgroundColor: 'rgba(127,29,29,0.78)' },
     detectorHintText: { ...TYPOGRAPHY.captionBold, color: '#FEE2E2', textAlign: 'center' },
     recordOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 50 },
-    promptText: { ...TYPOGRAPHY.bodyBold, color: '#fff', marginBottom: SPACING.xxl, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
-    recordBtn: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+    promptText: { ...TYPOGRAPHY.bodyBold, color: isDark ? colors.text : colors.textInverse, marginBottom: SPACING.xxl, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
+    recordBtn: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: isDark ? colors.text : colors.textInverse, justifyContent: 'center', alignItems: 'center' },
     recordBtnActive: { borderColor: colors.error },
     loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
     loadingText: { ...TYPOGRAPHY.bodyBold, color: colors.text, marginTop: SPACING.md },

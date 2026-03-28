@@ -1,179 +1,232 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { SupabaseService } from '@nextself/shared';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { useAlert } from '../components/CustomAlert';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SupabaseService } from '@nextself/shared';
 import { safeGoBack } from '../utils/navigation';
+import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation } from '../hooks/useTranslation';
+import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../config/theme';
 
-export default function ProfessionalBillingScreen() {
+const ProfessionalBillingScreen = () => {
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    const { colors } = useTheme();
+    const { isTurkish } = useTranslation();
+    const insets = useSafeAreaInsets();
+
     const [loading, setLoading] = useState(true);
-    const [billingData, setBillingData] = useState<any[]>([]);
-    const [activeClients, setActiveClients] = useState<any[]>([]);
-    const { showAlert, AlertComponent } = useAlert();
+    const [rows, setRows] = useState<any[]>([]);
+    const [activeRelationships, setActiveRelationships] = useState<any[]>([]);
 
-    useEffect(() => {
-        loadBillingData();
-    }, []);
-
-    const loadBillingData = async () => {
-        setLoading(true);
+    const loadBilling = useCallback(async () => {
         try {
-            const supabase = SupabaseService.getInstance().getClient();
-            const { data: { session } } = await supabase.auth.getSession();
-            const professionalId = session?.user?.id;
+            const service = SupabaseService.getInstance();
+            const { user } = await service.getCurrentUser();
+            if (!user) return;
 
-            if (!professionalId) throw new Error("Giriş yapmanız gerekiyor");
+            const { data: pro } = await service.getClient()
+                .from('professional_profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            const professionalId = pro?.id;
+            if (!professionalId) {
+                setRows([]);
+                setActiveRelationships([]);
+                return;
+            }
 
-            // 1. Geçmiş Faturaları Çek
-            const { data: cycles, error: cyclesError } = await supabase
+            const { data: billingCycles } = await service.getClient()
                 .from('billing_cycles')
                 .select('*')
                 .eq('professional_id', professionalId)
                 .order('created_at', { ascending: false });
+            setRows(billingCycles || []);
 
-            if (cyclesError) throw cyclesError;
-            setBillingData(cycles || []);
-
-            // 2. Aktif Müşterileri Çek (Şu anki tahmini kazanç/kesinti için)
-            const { data: clients, error: clientsError } = await supabase
+            const { data: relationships } = await service.getClient()
                 .from('client_relationships')
-                .select(`
-                    id, agreed_price, platform_fee_percent, deposit_paid_amount,
-                    client:users!client_relationships_client_id_fkey(first_name, last_name)
-                `)
-                .eq('professional_id', professionalId)
-                .eq('billing_status', 'active');
-
-            if (clientsError) throw clientsError;
-            setActiveClients(clients || []);
-
-        } catch (error: any) {
-            showAlert({ title: "Hata", message: "Fatura verileri yüklenemedi: " + error.message, type: "error" });
+                .select('agreed_price,platform_fee_percent,deposit_paid_amount,status')
+                .or(`professional_id.eq.${professionalId},trainer_id.eq.${professionalId},dietitian_id.eq.${professionalId}`)
+                .eq('status', 'active');
+            setActiveRelationships(relationships || []);
+        } catch {
+            setRows([]);
+            setActiveRelationships([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const renderBillingItem = ({ item }: { item: any }) => (
-        <View style={styles.card}>
-            <View style={styles.cardHeader}>
-                <Text style={styles.monthText}>{item.month_year}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: item.status === 'paid' ? '#dcfce7' : item.status === 'overdue' ? '#fee2e2' : '#fef9c3' }]}>
-                    <Text style={[styles.statusText, { color: item.status === 'paid' ? '#166534' : item.status === 'overdue' ? '#991b1b' : '#854d0e' }]}>
-                        {item.status.toUpperCase()}
-                    </Text>
-                </View>
-            </View>
-            <View style={styles.cardBody}>
-                <View style={styles.statRow}>
-                    <Text style={styles.statLabel}>Ödenen Depozito:</Text>
-                    <Text style={styles.statValue}>{item.total_deposit_paid} TL</Text>
-                </View>
-                <View style={styles.statRow}>
-                    <Text style={styles.statLabel}>Kalan Komisyon Borcu:</Text>
-                    <Text style={styles.statValueBold}>{item.total_commission_owed} TL</Text>
-                </View>
-            </View>
-            {item.status === 'pending' && (
-                <TouchableOpacity style={styles.payBtn} onPress={() => showAlert({ title: "Ödeme", message: "Iyzico ödeme sayfasına yönlendirilecek...", type: "info" })}>
-                    <Text style={styles.payBtnText}>Faturayı Öde</Text>
-                </TouchableOpacity>
-            )}
-        </View>
-    );
+    useEffect(() => {
+        loadBilling();
+    }, [loadBilling]);
 
-    const calculateCurrentMonthEstimate = () => {
-        let totalOwed = 0;
-        let totalDeposit = 0;
-
-        activeClients.forEach(client => {
-            const expectedCommission = (client.agreed_price || 0) * ((client.platform_fee_percent || 10) / 100);
-            totalDeposit += (client.deposit_paid_amount || 300);
-            if (expectedCommission > (client.deposit_paid_amount || 300)) {
-                totalOwed += (expectedCommission - (client.deposit_paid_amount || 300));
-            }
+    const summary = useMemo(() => {
+        let estimatedRevenue = 0;
+        let expectedCommission = 0;
+        let paidDeposit = 0;
+        activeRelationships.forEach((item) => {
+            const price = Number(item.agreed_price || 0);
+            const feePercent = Number(item.platform_fee_percent || 10);
+            const deposit = Number(item.deposit_paid_amount || 0);
+            estimatedRevenue += price;
+            expectedCommission += (price * feePercent) / 100;
+            paidDeposit += deposit;
         });
+        return {
+            estimatedRevenue,
+            expectedCommission,
+            paidDeposit,
+            remainder: Math.max(expectedCommission - paidDeposit, 0),
+        };
+    }, [activeRelationships]);
 
-        return { totalOwed, totalDeposit };
-    };
-
-    const estimate = calculateCurrentMonthEstimate();
+    if (loading) {
+        return (
+            <View style={[styles.center, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+        );
+    }
 
     return (
-        <View style={styles.container}>
-            <AlertComponent />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => safeGoBack(navigation, 'ProfessionalHome')}>
-                    <Ionicons name="arrow-back" size={24} color="#333" />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <View style={[styles.header, { paddingTop: insets.top + SPACING.xs }]}>
+                <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surface }]} onPress={() => safeGoBack(navigation, 'ProfessionalHome')}>
+                    <Ionicons name="chevron-back" size={22} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Fatura ve Komisyonlar</Text>
-                <View style={{ width: 24 }} />
+                <Text style={[styles.headerTitle, { color: colors.text }]}>{isTurkish ? 'Gelir ve Faturalar' : 'Revenue & Billing'}</Text>
+                <View style={styles.iconBtn} />
             </View>
 
-            {loading ? (
-                <ActivityIndicator size="large" color="#4f46e5" style={{ marginTop: 50 }} />
-            ) : (
-                <FlatList
-                    data={billingData}
-                    keyExtractor={item => String(item.id)}
-                    // Optimize FlatList performance with windowing and fixed-layout
-                    initialNumToRender={8}
-                    maxToRenderPerBatch={10}
-                    windowSize={5}
-                    removeClippedSubviews={true}
-                    updateCellsBatchingPeriod={50}
-                    getItemLayout={(data, index) => ({
-                        length: 120, // Estimated billing item height
-                        offset: 120 * index,
-                        index,
-                    })}
-                    ListHeaderComponent={() => (
-                        <View style={styles.summaryBox}>
-                            <Text style={styles.summaryTitle}>Bu Ayki Tahmini Durum</Text>
-                            <Text style={styles.summarySub}>Aktif {activeClients.length} müşterinize göre hesaplanmıştır.</Text>
-                            <View style={styles.summaryDivider} />
-                            <View style={styles.statRow}>
-                                <Text style={styles.statLabel}>Toplanan Peşinat (Depozito):</Text>
-                                <Text style={styles.statValue}>{estimate.totalDeposit.toFixed(2)} TL</Text>
+            <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.summaryTitle, { color: colors.text }]}>{isTurkish ? 'Bu Ay Özet' : 'This Month Summary'}</Text>
+                <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Tahmini Ciro' : 'Estimated Revenue'}</Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.estimatedRevenue.toFixed(2)} ₺</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Toplam Komisyon' : 'Total Commission'}</Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.expectedCommission.toFixed(2)} ₺</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Ödenen Depozito' : 'Paid Deposit'}</Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.paidDeposit.toFixed(2)} ₺</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Kalan Borç' : 'Outstanding'}</Text>
+                    <Text style={[styles.summaryValue, { color: '#DC2626' }]}>{summary.remainder.toFixed(2)} ₺</Text>
+                </View>
+            </View>
+
+            <FlatList
+                data={rows}
+                keyExtractor={(item) => String(item.id)}
+                contentContainerStyle={styles.list}
+                renderItem={({ item }) => {
+                    const status = String(item.status || 'pending');
+                    const statusColor = status === 'paid' ? '#16A34A' : status === 'overdue' ? '#DC2626' : '#D97706';
+                    return (
+                        <View style={[styles.billCard, { backgroundColor: colors.surface }]}>
+                            <View style={styles.billTop}>
+                                <Text style={[styles.billMonth, { color: colors.text }]}>{item.month_year || '-'}</Text>
+                                <Text style={[styles.billStatus, { color: statusColor }]}>{status.toUpperCase()}</Text>
                             </View>
-                            <View style={styles.statRow}>
-                                <Text style={styles.statLabel}>Ay Sonu Beklenen Ek Fatura:</Text>
-                                <Text style={[styles.statValueBold, { color: '#ef4444' }]}>{estimate.totalOwed.toFixed(2)} TL</Text>
+                            <View style={styles.summaryRow}>
+                                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Komisyon' : 'Commission'}</Text>
+                                <Text style={[styles.billNumber, { color: colors.text }]}>{Number(item.total_commission_owed || 0).toFixed(2)} ₺</Text>
+                            </View>
+                            <View style={styles.summaryRow}>
+                                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{isTurkish ? 'Depozito' : 'Deposit'}</Text>
+                                <Text style={[styles.billNumber, { color: colors.text }]}>{Number(item.total_deposit_paid || 0).toFixed(2)} ₺</Text>
                             </View>
                         </View>
-                    )}
-                    renderItem={renderBillingItem}
-                    contentContainerStyle={styles.listContainer}
-                    ListEmptyComponent={<Text style={styles.emptyText}>Henüz fatura kaydı bulunmuyor.</Text>}
-                />
-            )}
+                    );
+                }}
+                ListEmptyComponent={
+                    <View style={styles.center}>
+                        <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                            {isTurkish ? 'Henüz fatura kaydı yok.' : 'No billing records yet.'}
+                        </Text>
+                    </View>
+                }
+            />
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f9f9f9' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingTop: 50, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
-    headerTitle: { fontSize: 18, fontWeight: 'bold' },
-    listContainer: { padding: 15 },
-    summaryBox: { backgroundColor: '#eef2ff', padding: 20, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#c7d2fe' },
-    summaryTitle: { fontSize: 16, fontWeight: 'bold', color: '#3730a3', marginBottom: 5 },
-    summarySub: { fontSize: 12, color: '#4f46e5', marginBottom: 15 },
-    summaryDivider: { height: 1, backgroundColor: '#c7d2fe', marginBottom: 15 },
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    monthText: { fontSize: 16, fontWeight: 'bold' },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    statusText: { fontSize: 12, fontWeight: 'bold' },
-    cardBody: { gap: 8 },
-    statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-    statLabel: { fontSize: 14, color: '#666' },
-    statValue: { fontSize: 14, fontWeight: '500' },
-    statValueBold: { fontSize: 16, fontWeight: 'bold' },
-    payBtn: { backgroundColor: '#4f46e5', marginTop: 15, padding: 10, borderRadius: 8, alignItems: 'center' },
-    payBtnText: { color: '#fff', fontWeight: 'bold' },
-    emptyText: { textAlign: 'center', marginTop: 30, color: '#666' }
+    container: {
+        flex: 1,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    header: {
+        paddingHorizontal: SPACING.lg,
+        paddingBottom: SPACING.sm,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    iconBtn: {
+        width: 38,
+        height: 38,
+    },
+    headerTitle: {
+        ...TYPOGRAPHY.h2,
+    },
+    summaryCard: {
+        marginHorizontal: SPACING.lg,
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        ...SHADOWS.sm,
+        gap: SPACING.xs,
+    },
+    summaryTitle: {
+        ...TYPOGRAPHY.h3,
+        marginBottom: SPACING.xs,
+    },
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    summaryLabel: {
+        ...TYPOGRAPHY.caption,
+    },
+    summaryValue: {
+        ...TYPOGRAPHY.bodyBold,
+    },
+    list: {
+        paddingHorizontal: SPACING.lg,
+        paddingVertical: SPACING.sm,
+        gap: SPACING.sm,
+        paddingBottom: SPACING.section,
+    },
+    billCard: {
+        borderRadius: BORDER_RADIUS.lg,
+        padding: SPACING.md,
+        ...SHADOWS.sm,
+        gap: SPACING.xs,
+    },
+    billTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    billMonth: {
+        ...TYPOGRAPHY.bodyBold,
+    },
+    billStatus: {
+        ...TYPOGRAPHY.captionBold,
+    },
+    billNumber: {
+        ...TYPOGRAPHY.body,
+    },
 });
+
+export default ProfessionalBillingScreen;

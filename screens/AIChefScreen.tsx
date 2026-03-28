@@ -52,7 +52,7 @@ const detectMessageLanguage = (text: string, fallback: string): string => {
 
 const AIChefScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -83,48 +83,48 @@ const AIChefScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       const deepseek = DeepSeekService.getInstance();
-      
+
       // Fetch User Profile for better context
       let contextData: any = {};
       try {
-          const { user } = await SupabaseService.getInstance().getCurrentUser();
-          if (user) {
-              const { data: profile } = await SupabaseService.getInstance().getClient()
-                  .from('profiles')
-                  .select('fitness_goal, dietary_preferences, allergies')
-                  .eq('id', user.id)
-                  .single();
-              
-              // Fetch supplements
-              const { data: routines } = await SupplementService.getInstance().getUserRoutine(user.id);
-              let activeSupplements: string[] = [];
-              if (routines && routines.length > 0) {
-                  activeSupplements = routines.map((r: any) => 
-                      `${r.supplement.name_en || r.supplement.name_tr} (${r.supplement.dosage_amount || ''}${r.supplement.dosage_unit || ''})`
-                  );
-              }
-              
-              if (profile) {
-                  contextData = {
-                      goal: profile.fitness_goal,
-                      dietary_preferences: profile.dietary_preferences,
-                      allergies: profile.allergies,
-                      supplements: activeSupplements
-                  };
-              }
+        const { user } = await SupabaseService.getInstance().getCurrentUser();
+        if (user) {
+          const { data: profile } = await SupabaseService.getInstance().getClient()
+            .from('profiles')
+            .select('fitness_goal, dietary_preferences, allergies')
+            .eq('id', user.id)
+            .single();
+
+          // Fetch supplements
+          const { data: routines } = await SupplementService.getInstance().getUserRoutine(user.id);
+          let activeSupplements: string[] = [];
+          if (routines && routines.length > 0) {
+            activeSupplements = routines.map((r: any) =>
+              `${r.supplement.name_en || r.supplement.name_tr} (${r.supplement.dosage_amount || ''}${r.supplement.dosage_unit || ''})`
+            );
           }
+
+          if (profile) {
+            contextData = {
+              goal: profile.fitness_goal,
+              dietary_preferences: profile.dietary_preferences,
+              allergies: profile.allergies,
+              supplements: activeSupplements
+            };
+          }
+        }
       } catch (e) {
-          console.warn('Failed to fetch user context for AI Chef:', e);
+        console.warn('Failed to fetch user context for AI Chef:', e);
       }
 
       // Send structured data to Edge Function
       const response = await deepseek.generateContent('chef', {
-          query: `${userMsg.content}\n\n${isTurkish
-            ? 'Cevap formatı: 1) Hedefe göre besin önerisi 2) Tarifi adım adım nasıl yapacağım 3) İlgili en az 2 YouTube videosu için tam bağlantı (youtube.com arama linki olabilir).'
-            : 'Response format: 1) Goal-based food suggestion 2) Step-by-step preparation 3) At least 2 full YouTube links (youtube.com search links are acceptable).'
+        query: `${userMsg.content}\n\n${isTurkish
+          ? 'Cevap formatı: 1) Hedefe göre besin önerisi 2) Tarifi adım adım nasıl yapacağım 3) İlgili en az 2 YouTube videosu için tam bağlantı (youtube.com arama linki olabilir).'
+          : 'Response format: 1) Goal-based food suggestion 2) Step-by-step preparation 3) At least 2 full YouTube links (youtube.com search links are acceptable).'
           }`,
-          context: contextData,
-          language: detectedLanguage
+        context: contextData,
+        language: detectedLanguage
       });
 
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', content: response, timestamp: new Date() }]);
@@ -135,7 +135,7 @@ const AIChefScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={COMMON_STYLES.screenContainer}>
+    <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]}>
       <PremiumFeaturesModal
         visible={showPremiumModal}
         onClose={() => {
@@ -192,7 +192,7 @@ const AIChefScreen = ({ navigation }: any) => {
             maxLength={500}
           />
           <TouchableOpacity style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} onPress={sendMessage} disabled={!input.trim() || loading}>
-            {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
+            {loading ? <ActivityIndicator size="small" color={isDark ? colors.text : colors.textInverse} /> : <Ionicons name="send" size={20} color={isDark ? colors.text : colors.textInverse} />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -200,7 +200,7 @@ const AIChefScreen = ({ navigation }: any) => {
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,7 +231,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   userContent: { flex: 1 },
   aiContent: { flex: 1 },
   messageText: { ...TYPOGRAPHY.body },
-  userText: { color: '#FFF' },
+  userText: { color: isDark ? colors.text : colors.textInverse },
   aiText: { color: colors.text },
   loadingWrap: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.md, marginBottom: SPACING.md },
   loadingText: { marginLeft: SPACING.xs, color: colors.textSecondary, ...TYPOGRAPHY.caption },

@@ -1,6 +1,15 @@
 import { SupabaseService } from '@nextself/shared';
 
-const supabase = SupabaseService.getInstance().getClient();
+// Lazy getter — avoids capturing the Supabase client at module load time
+// before auth is initialized, which would result in a client with no valid session.
+const getSupabase = () => SupabaseService.getInstance().getClient();
+
+// Proxy so existing `supabase.from(...)` calls work without renaming every occurrence.
+const supabase = new Proxy({} as ReturnType<typeof getSupabase>, {
+    get(_target, prop, receiver) {
+        return Reflect.get(getSupabase(), prop, receiver);
+    },
+});
 
 export interface ProgressReport {
     id: string;

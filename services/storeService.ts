@@ -184,134 +184,26 @@ export class StoreService {
     }
 
     // Purchase an item
-    // Uses optimistic concurrency control to prevent double-spend race conditions.
-    // The currency deduction includes the current balance in the WHERE clause so
-    // concurrent purchases can't both succeed with stale balance data.
     public async purchaseItem(itemId: string): Promise<{ success: boolean; message: string }> {
-        const MAX_RETRIES = 3;
         try {
             const supabase = SupabaseService.getInstance().getClient();
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return { success: false, message: 'Not authenticated' };
 
-            // Get item details
-            const { data: item } = await supabase
-                .from('store_items')
-                .select('*')
-                .eq('id', itemId)
-                .single();
+            const { data, error } = await supabase.rpc('purchase_store_item', {
+                p_user_id: user.id,
+                p_item_id: itemId
+            });
 
-            if (!item) return { success: false, message: 'Item not found' };
-
-            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-                // Read fresh currency each attempt
-                const currency = await this.getUserCurrency();
-                if (currency.points < item.price_points) {
-                    return { success: false, message: 'insufficient_points' };
-                }
-
-                // Check max stack
-                const { data: existingInventory } = await supabase
-                    .from('user_inventory')
-                    .select('quantity')
-                    .eq('user_id', user.id)
-                    .eq('item_id', itemId)
-                    .single();
-
-                if (existingInventory && existingInventory.quantity >= item.max_stack) {
-                    return { success: false, message: 'max_stack_reached' };
-                }
-
-                // Deduct points with optimistic lock:
-                // Only succeeds if points haven't changed since we read them.
-                // This prevents double-spend from concurrent purchase requests.
-                const { data: deductResult, error: deductError } = await supabase
-                    .from('user_currency')
-                    .update({
-                        points: currency.points - item.price_points,
-                        total_spent_points: currency.totalSpentPoints + item.price_points,
-                    })
-                    .eq('user_id', user.id)
-                    .eq('points', currency.points)
-                    .select();
-
-                if (deductError || !deductResult || deductResult.length === 0) {
-                    // Conflict: balance changed between read and write (concurrent purchase).
-                    LogManager.getInstance().warn(`Purchase currency deduction conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
-                    continue;
-                }
-
-                // Currency deducted successfully — proceed with inventory + logging.
-                // Add to inventory
-                let inventoryError: any = null;
-                if (existingInventory) {
-                    const { error } = await supabase
-                        .from('user_inventory')
-                        .update({ quantity: existingInventory.quantity + 1 })
-                        .eq('user_id', user.id)
-                        .eq('item_id', itemId);
-                    inventoryError = error;
-                } else {
-                    const { error } = await supabase
-                        .from('user_inventory')
-                        .insert({
-                            user_id: user.id,
-                            item_id: itemId,
-                            quantity: 1,
-                            is_active: false,
-                        });
-                    inventoryError = error;
-                }
-
-                if (inventoryError) {
-                    await supabase
-                        .from('user_currency')
-                        .update({
-                            points: currency.points,
-                            total_spent_points: Math.max(0, currency.totalSpentPoints),
-                        })
-                        .eq('user_id', user.id);
-                    LogManager.getInstance().warn('Inventory update failed after deduction, rolled back currency');
-                    continue;
-                }
-
-                // Log purchase
-                const { error: purchaseLogError } = await supabase
-                    .from('purchase_history')
-                    .insert({
-                        user_id: user.id,
-                        item_id: itemId,
-                        quantity: 1,
-                        price_paid: item.price_points,
-                    });
-
-                if (purchaseLogError) {
-                    await supabase
-                        .from('user_currency')
-                        .update({
-                            points: currency.points,
-                            total_spent_points: Math.max(0, currency.totalSpentPoints),
-                        })
-                        .eq('user_id', user.id);
-
-                    await supabase
-                        .from('user_inventory')
-                        .update({ quantity: existingInventory ? existingInventory.quantity : 0 })
-                        .eq('user_id', user.id)
-                        .eq('item_id', itemId);
-                    LogManager.getInstance().warn('Purchase history insert failed after deduction, rolled back changes');
-                    continue;
-                }
-
-                return { success: true, message: 'purchase_success' };
+            if (error) {
+                LogManager.getInstance().error('RPC purchase_store_item error:', error);
+                return { success: false, message: 'purchase_failed' };
             }
 
-            // All retries exhausted — likely heavy contention
-            LogManager.getInstance().warn('Purchase failed after max retries due to concurrent modifications');
-            return { success: false, message: 'purchase_failed' };
-        } catch (err) {
-            LogManager.getInstance().warn('Purchase error:', err);
-            return { success: false, message: 'purchase_failed' };
+            return data as { success: boolean; message: string };
+        } catch (error) {
+            LogManager.getInstance().error('Error in purchaseItem:', error);
+            return { success: false, message: 'unknown_error' };
         }
     }
 

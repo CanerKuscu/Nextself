@@ -1,11 +1,13 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import { Session } from '@supabase/supabase-js';
+import { auth } from './lib/supabase';
+import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import { isSupabaseConfigured } from './services/api/client';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Users = lazy(() => import('./pages/Users'));
 const Workouts = lazy(() => import('./pages/Workouts'));
+const WorkoutBuilder = lazy(() => import('./pages/WorkoutBuilder'));
 const Nutrition = lazy(() => import('./pages/Nutrition'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -22,61 +24,20 @@ const Ratings = lazy(() => import('./pages/Ratings'));
 const ServiceListing = lazy(() => import('./pages/ServiceListing'));
 
 function App() {
-    const [session, setSession] = useState<Session | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [authorized, setAuthorized] = useState(false);
+    const { session, authorized, loading } = useAuth();
 
-    /** Check whether the current user has a professional role (PT or Dietitian). */
-    const checkRole = async (userId: string) => {
-        if (!userId) { setAuthorized(false); return; }
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('user_type')
-                .eq('id', userId)
-                .single();
-            if (error || !data) { 
-                console.error('Failed to fetch user role:', error);
-                setAuthorized(false); 
-                return; 
-            }
-            const role = (data.user_type || '').toLowerCase();
-            setAuthorized(role === 'pt' || role === 'dietitian' || role === 'admin');
-        } catch (error) {
-            console.error('Exception occurred while checking role:', error);
-            setAuthorized(false);
-        }
-    };
-
-    useEffect(() => {
-        let isMounted = true;
-
-        // Check active session
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
-            if (!isMounted) { return; }
-            setSession(session);
-            if (session?.user?.id) {
-                await checkRole(session.user.id);
-            }
-            if (isMounted) { setLoading(false); }
-        });
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (!isMounted) { return; }
-            setSession(session);
-            if (session?.user?.id) {
-                await checkRole(session.user.id);
-            } else {
-                setAuthorized(false);
-            }
-        });
-
-        return () => {
-            isMounted = false;
-            subscription.unsubscribe();
-        };
-    }, []);
+    if (!isSupabaseConfigured) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+                <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-6">
+                    <h2 className="text-xl font-bold text-amber-900">Configuration Required</h2>
+                    <p className="mt-2 text-sm text-amber-800">
+                        VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing. Add these variables to web/dashboard/.env and restart the app.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (loading) {
         return (
@@ -98,7 +59,7 @@ function App() {
                     <h2 className="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
                     <p className="text-gray-600 mb-6">This dashboard is only available to PT and Dietitian accounts. Please log in with a professional account.</p>
                     <button
-                        onClick={() => supabase.auth.signOut()}
+                        onClick={() => auth.signOut()}
                         className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
                     >
                         Sign Out
@@ -118,6 +79,7 @@ function App() {
                 <Route path="assignments" element={<Suspense fallback={<div>Loading...</div>}><Assignments /></Suspense>} />
                 <Route path="messages" element={<Suspense fallback={<div>Loading...</div>}><Messages /></Suspense>} />
                 <Route path="workouts" element={<Suspense fallback={<div>Loading...</div>}><Workouts /></Suspense>} />
+                <Route path="workouts/builder" element={<Suspense fallback={<div>Loading...</div>}><WorkoutBuilder /></Suspense>} />
                 <Route path="nutrition" element={<Suspense fallback={<div>Loading...</div>}><Nutrition /></Suspense>} />
                 <Route path="analytics" element={<Suspense fallback={<div>Loading...</div>}><Analytics /></Suspense>} />
                 <Route path="courses" element={<Suspense fallback={<div>Loading...</div>}><Courses /></Suspense>} />

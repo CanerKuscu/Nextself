@@ -25,7 +25,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CourseDetailScreen = ({ navigation, route }: any) => {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { course, professionalName } = route.params || {};
     const { isTurkish } = useTranslation();
@@ -41,7 +41,7 @@ const CourseDetailScreen = ({ navigation, route }: any) => {
 
     if (!course) {
         return (
-            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}>
+            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center, { backgroundColor: colors.background }]}>
                 <Text style={{ color: colors.textSecondary }}>{isTurkish ? 'Eğitim bulunamadı' : 'Course not found'}</Text>
             </View>
         );
@@ -132,7 +132,7 @@ const CourseDetailScreen = ({ navigation, route }: any) => {
     ];
 
     return (
-        <View style={[COMMON_STYLES.screenContainer, { paddingTop: insets.top }]}>
+        <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
             <AlertComponent />
 
             {/* Header */}
@@ -161,24 +161,24 @@ const CourseDetailScreen = ({ navigation, route }: any) => {
                                     <Text style={styles.heroBadgeText}>{course.level}</Text>
                                 </View>
                                 <View style={styles.heroBadge}>
-                                    <Ionicons name={isTrainer ? 'barbell-outline' : 'leaf-outline'} size={12} color="#fff" />
+                                    <Ionicons name={isTrainer ? 'barbell-outline' : 'leaf-outline'} size={12} color={isDark ? colors.text : colors.textInverse} />
                                     <Text style={styles.heroBadgeText}>
                                         {isTrainer ? (isTurkish ? 'Fitness' : 'Fitness') : (isTurkish ? 'Beslenme' : 'Nutrition')}
                                     </Text>
                                 </View>
                                 <View style={styles.heroBadge}>
-                                    <Ionicons name="location-outline" size={12} color="#fff" />
+                                    <Ionicons name="location-outline" size={12} color={isDark ? colors.text : colors.textInverse} />
                                     <Text style={styles.heroBadgeText}>{course.location}</Text>
                                 </View>
                             </View>
                             <Text style={styles.heroTitle}>{course.title}</Text>
                             <View style={styles.heroMeta}>
                                 <View style={styles.heroMetaItem}>
-                                    <Ionicons name="person-outline" size={14} color="rgba(255,255,255,0.8)" />
+                                    <Ionicons name="person-outline" size={14} color={isDark ? colors.textSecondary : 'rgba(255,255,255,0.8)'} />
                                     <Text style={styles.heroMetaText}>{professionalName}</Text>
                                 </View>
                                 <View style={styles.heroMetaItem}>
-                                    <Ionicons name="star" size={14} color="#FFC800" />
+                                    <Ionicons name="star" size={14} color={colors.warning} />
                                     <Text style={styles.heroMetaText}>{course.rating.toFixed(1)} ({course.reviews})</Text>
                                 </View>
                             </View>
@@ -490,7 +490,7 @@ const CourseDetailScreen = ({ navigation, route }: any) => {
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -545,13 +545,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     heroBadgeText: {
         ...TYPOGRAPHY.small,
-        color: '#fff',
+        color: isDark ? colors.text : colors.textInverse,
         fontWeight: '700',
         fontSize: 11,
     },
     heroTitle: {
         ...TYPOGRAPHY.h2,
-        color: '#fff',
+        color: isDark ? colors.text : colors.textInverse,
         fontSize: 22,
         marginBottom: SPACING.sm,
     },
@@ -566,7 +566,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     heroMetaText: {
         ...TYPOGRAPHY.small,
-        color: 'rgba(255,255,255,0.85)',
+        color: isDark ? colors.textSecondary : 'rgba(255,255,255,0.85)',
         fontWeight: '600',
     },
     priceCard: {
@@ -1031,7 +1031,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     reviewSubmitText: {
         ...TYPOGRAPHY.captionBold,
-        color: '#fff',
+        color: isDark ? colors.text : colors.textInverse,
     },
 });
 

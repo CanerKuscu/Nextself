@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { AppState, AppStateStatus, Alert, Platform } from 'react-native';
 import { CONFIG } from '@nextself/shared';
 import { SecurityUtils } from './security';
 
@@ -20,6 +21,7 @@ export class OfflineService {
     private syncQueue: OfflineOperation[] = [];
     private syncCallbacks: Map<string, SyncCallback> = new Map();
     private syncInterval: NodeJS.Timeout | null = null;
+    private saveQueueTimer: NodeJS.Timeout | null = null;
     private isProcessing: boolean = false;
     private isPaused: boolean = false;
     private processingPromise: Promise<void> | null = null;
@@ -28,10 +30,12 @@ export class OfflineService {
     private readonly MAX_RETRIES = 3;
     private readonly SYNC_INTERVAL = 30000; // 30 seconds
 
+    private initPromise: Promise<void>;
+    private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
+
     private constructor() {
-        this.init();
-        // IMPORTANT: Call cleanup() when app unmounts or component unmounts:
-        // useEffect(() => { return () => offlineService.cleanup(); }, []);
+        this.initPromise = this.init();
+        this.setupAppStateListener();
     }
 
     public static getInstance(): OfflineService {
@@ -52,6 +56,25 @@ export class OfflineService {
         this.startSyncInterval();
     }
 
+    /**
+     * Flush the queue to persistent storage when the app goes to background,
+     * preventing data loss from the debounce window.
+     */
+    private setupAppStateListener() {
+        this.appStateSubscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+            if (state === 'background' || state === 'inactive') {
+                this.flushQueue();
+            }
+        });
+    }
+
+    /**
+     * Ensure the queue has been loaded from storage before performing operations.
+     */
+    private async ensureReady(): Promise<void> {
+        await this.initPromise;
+    }
+
     private async loadQueue() {
         try {
             const savedQueue = await AsyncStorage.getItem(this.STORAGE_KEY);
@@ -62,13 +85,30 @@ export class OfflineService {
         } catch (error) {
             this.syncQueue = [];
         }
+
+        try {
+            await SecurityUtils.encryptAsync('init'); // Ensure key is initialized
+            if (SecurityUtils.isVolatile && Platform.OS !== 'web') {
+                Alert.alert(
+                    'Security Warning',
+                    'Device secure storage is unavailable. Your offline data is not encrypted.'
+                );
+            }
+        } catch {}
     }
 
-    private async saveQueue() {
+    private async saveQueueImmediate() {
         try {
             const encrypted = await SecurityUtils.encryptAsync(JSON.stringify(this.syncQueue));
             await AsyncStorage.setItem(this.STORAGE_KEY, encrypted);
         } catch (error) { }
+    }
+
+    /**
+     * Immediately persist the queue (e.g., before sign-out or app background).
+     */
+    public async flushQueue() {
+        await this.saveQueueImmediate();
     }
 
     public async clearQueue() {
@@ -112,70 +152,66 @@ export class OfflineService {
     }
 
     public async queueOperation(type: string, data: unknown, maxRetries: number = this.MAX_RETRIES): Promise<string> {
+        await this.ensureReady();
+
+        // Add optimistic concurrency timestamp
+        const enrichedData = typeof data === 'object' && data !== null 
+            ? { ...data, _client_updated_at: new Date().toISOString() } 
+            : data;
+
         const operation: OfflineOperation = {
             id: this.generateId(),
             type,
-            data,
+            data: enrichedData,
             timestamp: Date.now(),
             retries: 0,
             maxRetries,
         };
 
         this.syncQueue.push(operation);
-        await this.saveQueue();
+        await this.flushQueue();
 
         // Always enqueue; let the single processor handle operations to avoid
         // concurrent processing of the same item. If not paused and online,
         // trigger the centralized queue processor.
         if (this.isOnline && !this.isPaused) {
-            // Defer processing to next tick to avoid racing with multiple rapid enqueues
-            setTimeout(() => {
-                this.processQueue();
-            }, 0);
+            this.processQueue();
         }
 
         return operation.id;
     }
 
-    private async processOperation(operation: OfflineOperation): Promise<boolean> {
+    private async processOperation(operation: OfflineOperation): Promise<'success' | 'retry' | 'failed'> {
         const callback = this.syncCallbacks.get(operation.type);
 
         if (!callback) {
-            return false;
+            return 'failed';
         }
 
         try {
             const success = await callback(operation);
 
             if (success) {
-                this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
-                await this.saveQueue();
-                return true;
+                return 'success';
             } else {
                 operation.retries++;
 
                 if (operation.retries >= operation.maxRetries) {
-                    this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
-                    await this.saveQueue();
                     this.emitOperationFailed(operation, 'max_retries');
-                } else {
-                    await this.saveQueue();
+                    return 'failed';
                 }
 
-                return false;
+                return 'retry';
             }
         } catch (error) {
             operation.retries++;
 
             if (operation.retries >= operation.maxRetries) {
-                this.syncQueue = this.syncQueue.filter(op => op.id !== operation.id);
-                await this.saveQueue();
                 this.emitOperationFailed(operation, 'error');
-            } else {
-                await this.saveQueue();
+                return 'failed';
             }
 
-            return false;
+            return 'retry';
         }
     }
 
@@ -184,8 +220,6 @@ export class OfflineService {
             return;
         }
 
-        // Mark processing and expose a promise that callers can await to know
-        // when processing is complete (used by sign-out to wait for quiescence).
         this.isProcessing = true;
         this.processingPromise = new Promise<void>((resolve) => {
             this.resolveProcessingPromise = resolve;
@@ -193,13 +227,29 @@ export class OfflineService {
 
         try {
             const operations = [...this.syncQueue];
+            const toRemove = new Set<string>();
+            let queueModified = false;
 
             for (const operation of operations) {
                 if (!this.isOnline || this.isPaused) {
                     break;
                 }
 
-                await this.processOperation(operation);
+                const result = await this.processOperation(operation);
+                
+                if (result === 'success' || result === 'failed') {
+                    toRemove.add(operation.id);
+                    queueModified = true;
+                } else if (result === 'retry') {
+                    queueModified = true; // retries count was updated
+                }
+            }
+
+            if (queueModified) {
+                if (toRemove.size > 0) {
+                    this.syncQueue = this.syncQueue.filter(op => !toRemove.has(op.id));
+                }
+                await this.flushQueue();
             }
         } finally {
             this.isProcessing = false;
@@ -267,7 +317,7 @@ export class OfflineService {
         this.syncQueue = this.syncQueue.filter(op => op.id !== operationId);
 
         if (this.syncQueue.length < initialLength) {
-            await this.saveQueue();
+            await this.flushQueue();
             return true;
         }
 
@@ -279,6 +329,7 @@ export class OfflineService {
     }
 
     public async syncNow(): Promise<{ success: boolean; processed: number }> {
+        await this.ensureReady();
         if (!this.isOnline) {
             return { success: false, processed: 0 };
         }
@@ -301,9 +352,17 @@ export class OfflineService {
             clearInterval(this.syncInterval);
             this.syncInterval = null;
         }
+        if (this.saveQueueTimer) {
+            clearTimeout(this.saveQueueTimer);
+            this.saveQueueTimer = null;
+        }
         if (this.netInfoUnsubscribe) {
             this.netInfoUnsubscribe();
             this.netInfoUnsubscribe = null;
+        }
+        if (this.appStateSubscription) {
+            this.appStateSubscription.remove();
+            this.appStateSubscription = null;
         }
     }
 }

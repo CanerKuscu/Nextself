@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import * as Localization from 'expo-localization';
-import PlatformStorage from '@nextself/shared';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
+import { useAppStore } from '../store/appStore';
 
 export type CurrencyCode = 'USD' | 'TRY' | 'EUR' | 'GBP' | 'RUB' | 'AED';
 
@@ -38,83 +37,23 @@ export const useCurrency = () => {
     return context;
 };
 
-const STORAGE_KEY = 'NextSelf_currency';
-
-const LANGUAGE_TO_CURRENCY: Record<string, CurrencyCode> = {
-    tr: 'TRY',
-    ru: 'RUB',
-    en: 'USD',
-    de: 'EUR',
-    fr: 'EUR',
-    es: 'EUR',
-    it: 'EUR',
-    ar: 'AED',
-};
-
-const getDeviceCurrency = (): CurrencyCode => {
-    try {
-        const locales = Localization.getLocales();
-        if (locales && locales.length > 0) {
-            // Try region-based detection first
-            const region = locales[0].regionCode?.toUpperCase();
-            if (region === 'TR') return 'TRY';
-            if (region === 'RU') return 'RUB';
-            if (region === 'GB') return 'GBP';
-            if (region === 'AE') return 'AED';
-            if (['DE', 'FR', 'ES', 'IT', 'NL', 'BE', 'AT', 'FI', 'PT', 'IE', 'GR'].includes(region || '')) return 'EUR';
-
-            // Fallback to language
-            const lang = locales[0].languageCode?.toLowerCase();
-            if (lang && LANGUAGE_TO_CURRENCY[lang]) {
-                return LANGUAGE_TO_CURRENCY[lang];
-            }
-        }
-    } catch { }
-    return 'USD';
-};
-
 export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [currency, setCurrencyState] = useState<CurrencyCode>('USD');
-    const [isLoading, setIsLoading] = useState(true);
+    const currency = useAppStore((state) => state.currency);
+    const setStoreCurrency = useAppStore((state) => state.setCurrency);
+    const isLoading = false; // Hydration is handled by Zustand
 
-    useEffect(() => {
-        loadCurrency();
-    }, []);
+    const setCurrency = useCallback((code: CurrencyCode) => {
+        setStoreCurrency(code);
+    }, [setStoreCurrency]);
 
-    const loadCurrency = async () => {
-        try {
-            const saved = await PlatformStorage.getItem(STORAGE_KEY);
-            if (saved && saved in CURRENCIES) {
-                setCurrencyState(saved as CurrencyCode);
-            } else {
-                const detected = getDeviceCurrency();
-                setCurrencyState(detected);
-                await PlatformStorage.setItem(STORAGE_KEY, detected);
-            }
-        } catch (error) {
-            console.error('Failed to load currency:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const setCurrency = useCallback(async (code: CurrencyCode) => {
-        try {
-            setCurrencyState(code);
-            await PlatformStorage.setItem(STORAGE_KEY, code);
-        } catch (error) {
-            console.error('Failed to save currency:', error);
-        }
-    }, []);
-
-    const formatPrice = useCallback((amount: number, overrideCurrency?: CurrencyCode): string => {
-        const code = overrideCurrency || currency;
-        const info = CURRENCIES[code];
+    const formatPrice = useCallback((amount: number, overrideCurrency?: CurrencyCode) => {
+        const targetCurrency = overrideCurrency || currency;
+        const info = CURRENCIES[targetCurrency];
         try {
             return new Intl.NumberFormat(info.locale, {
                 style: 'currency',
-                currency: code,
-                minimumFractionDigits: 2,
+                currency: info.code,
+                minimumFractionDigits: 0,
                 maximumFractionDigits: 2,
             }).format(amount);
         } catch {
@@ -122,15 +61,13 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     }, [currency]);
 
-    const currencyInfo = useMemo(() => CURRENCIES[currency], [currency]);
-
-    const value = useMemo<CurrencyContextType>(() => ({
+    const value = useMemo(() => ({
         currency,
         setCurrency,
         formatPrice,
-        currencyInfo,
+        currencyInfo: CURRENCIES[currency],
         isLoading,
-    }), [currency, setCurrency, formatPrice, currencyInfo, isLoading]);
+    }), [currency, setCurrency, formatPrice, isLoading]);
 
     return (
         <CurrencyContext.Provider value={value}>

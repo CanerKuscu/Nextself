@@ -6,11 +6,17 @@ const IGNORED_PATTERNS: RegExp[] = [
     /EXPO_PUBLIC_ENCRYPTION_KEY/,
     /EXPO_PUBLIC_DEEPSEEK_API_KEY/,
     /EXPO_PUBLIC_SENTRY_DSN/,
-    /\[SupabaseProvider\] EDGE_FN/,
-    /EDGE_FN log failed/,
     /Failed to load language/,
     /Failed to load currency/,
     /Failed to load theme preference/,
+    /Reduced motion setting is enabled/,
+    /Listening to push token changes is not yet fully supported/,
+    /"shadow\*" style props are deprecated/,
+    /Animated: `useNativeDriver` is not supported/,
+    /props\.pointerEvents is deprecated/,
+    /Cannot record touch end without a touch start/,
+    /Decryption failed/,
+    /TRAC/
 ];
 
 let inited = false;

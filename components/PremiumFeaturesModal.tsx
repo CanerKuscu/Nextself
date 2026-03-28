@@ -7,7 +7,7 @@ import {
     TouchableOpacity,
     Animated,
     Dimensions,
-    ScrollView,
+    FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,7 @@ interface PremiumFeaturesModalProps {
 }
 
 interface FeatureItem {
+    id: string;
     icon: string;
     iconColor: string;
     bgColor: string;
@@ -34,6 +35,7 @@ interface FeatureItem {
 
 const FEATURES: FeatureItem[] = [
     {
+        id: 'ai-fitness-coach',
         icon: 'barbell',
         iconColor: '#FF6B35',
         bgColor: '#FFF0EB',
@@ -43,6 +45,7 @@ const FEATURES: FeatureItem[] = [
         descEn: 'Personalized workout plans & body analysis',
     },
     {
+        id: 'ai-dietitian',
         icon: 'nutrition',
         iconColor: '#58CC02',
         bgColor: '#EDFBE0',
@@ -52,6 +55,7 @@ const FEATURES: FeatureItem[] = [
         descEn: 'Custom meal plans & macro tracking',
     },
     {
+        id: 'ai-chef',
         icon: 'restaurant',
         iconColor: '#CE82FF',
         bgColor: '#F5EAFF',
@@ -61,6 +65,7 @@ const FEATURES: FeatureItem[] = [
         descEn: 'Healthy recipes & calorie calculation',
     },
     {
+        id: 'unlimited-food-scan',
         icon: 'scan',
         iconColor: '#1CB0F6',
         bgColor: '#E8F6FF',
@@ -70,6 +75,7 @@ const FEATURES: FeatureItem[] = [
         descEn: 'Instant nutrition analysis via barcode & photo',
     },
     {
+        id: 'progress-tracking',
         icon: 'analytics',
         iconColor: '#FF9600',
         bgColor: '#FFF5E6',
@@ -79,6 +85,7 @@ const FEATURES: FeatureItem[] = [
         descEn: 'Advanced stats & body measurements',
     },
     {
+        id: 'ad-free',
         icon: 'shield-checkmark',
         iconColor: '#00CD9C',
         bgColor: '#E6FFF7',
@@ -172,13 +179,14 @@ const PremiumFeaturesModal: React.FC<PremiumFeaturesModalProps> = ({
                     </LinearGradient>
 
                     {/* Features List */}
-                    <ScrollView
+                    <FlatList
                         style={styles.featuresList}
                         contentContainerStyle={styles.featuresContent}
+                        data={FEATURES}
+                        keyExtractor={(item) => item.id}
                         showsVerticalScrollIndicator={false}
-                    >
-                        {FEATURES.map((feature, index) => (
-                            <View key={index} style={styles.featureRow}>
+                        renderItem={({ item: feature }) => (
+                            <View style={styles.featureRow}>
                                 <View
                                     style={[
                                         styles.featureIconWrap,
@@ -200,8 +208,8 @@ const PremiumFeaturesModal: React.FC<PremiumFeaturesModalProps> = ({
                                     </Text>
                                 </View>
                             </View>
-                        ))}
-                    </ScrollView>
+                        )}
+                    />
 
                     {/* CTA Buttons */}
                     <View style={styles.ctaSection}>
@@ -294,7 +302,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     featuresList: {
-        maxHeight: 320,
+        flexShrink: 1,
     },
     featuresContent: {
         paddingHorizontal: SPACING.lg,
@@ -303,7 +311,7 @@ const styles = StyleSheet.create({
     },
     featureRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: 14,
     },
     featureIconWrap: {

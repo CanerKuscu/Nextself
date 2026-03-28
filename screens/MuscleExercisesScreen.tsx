@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, TextInput, Dimensions, Image, Modal, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, TextInput, Dimensions, Modal, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -420,7 +421,7 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
 const getStyles = (colors: any) => StyleSheet.create({
     header: {
         flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
-        paddingBottom: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+        paddingBottom: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
     },
     backBtn: {
         width: 40, height: 40, borderRadius: 14, backgroundColor: '#F5F5F5',
@@ -441,7 +442,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     emptyHint: { fontSize: 13, color: '#D1D5DB', marginTop: 4 },
     exerciseCard: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background,
-        borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0', paddingRight: 14,
+        borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight, paddingRight: 14,
     },
     exerciseAccent: { width: 4, height: '100%' },
     exerciseImg: { width: 54, height: 54, borderRadius: 14, marginLeft: 12, marginVertical: 12 },
@@ -471,7 +472,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         borderRadius: 20,
         padding: 18,
         borderWidth: 1,
-        borderColor: '#F0F0F0',
+        borderColor: colors.borderLight,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -514,7 +515,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         backgroundColor: '#F8FAFC',
     },
     optionChipActive: {
@@ -539,7 +540,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         height: 42,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         backgroundColor: '#F8FAFC',
         alignItems: 'center',
         justifyContent: 'center',
@@ -563,7 +564,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         backgroundColor: '#F8FAFC',
     },
     cancelBtnText: {

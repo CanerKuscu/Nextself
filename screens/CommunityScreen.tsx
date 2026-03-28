@@ -414,7 +414,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     userCard: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: colors.background, borderRadius: 16, padding: 12,
-        marginBottom: 6, borderWidth: 1, borderColor: '#F0F0F0', overflow: 'hidden',
+        marginBottom: 6, borderWidth: 1, borderColor: colors.borderLight, overflow: 'hidden',
     },
     userCardMe: { backgroundColor: '#58CC02', borderColor: '#58CC02' },
     rankNum: { fontSize: 14, fontWeight: '800', color: colors.textTertiary, width: 28, textAlign: 'center' },
@@ -432,7 +432,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     missionCard: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: colors.background, borderRadius: 18, padding: 14,
-        marginBottom: 10, borderWidth: 1, borderColor: '#F0F0F0',
+        marginBottom: 10, borderWidth: 1, borderColor: colors.borderLight,
     },
     missionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
     missionPts: { fontSize: 13, fontWeight: '800', marginTop: 2 },
@@ -450,7 +450,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     storeCard: {
         flexDirection: 'row', alignItems: 'center', overflow: 'hidden',
         backgroundColor: colors.background, borderRadius: 18, marginBottom: 10,
-        borderWidth: 1, borderColor: '#F0F0F0', paddingRight: 14,
+        borderWidth: 1, borderColor: colors.borderLight, paddingRight: 14,
     },
     storeCardAccent: { width: 4, height: '100%' },
     storeEmoji: {

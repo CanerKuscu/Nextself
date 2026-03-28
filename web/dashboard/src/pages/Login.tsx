@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { FiMail, FiLock, FiAlertCircle } from 'react-icons/fi';
 import { auth } from '../lib/supabase';
@@ -38,7 +38,7 @@ const Login = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = async (e: any) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
         if (!validateForm()) {
@@ -71,17 +71,17 @@ const Login = () => {
         }
     };
 
-    const handleChange = (e: any) => {
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: value,
         }));
         // Clear error when user starts typing
-        if (errors[name]) {
+        if (name in errors && errors[name as keyof LoginErrors]) {
             setErrors(prev => ({
                 ...prev,
-                [name]: '',
+                [name as keyof LoginErrors]: '',
             }));
         }
     };

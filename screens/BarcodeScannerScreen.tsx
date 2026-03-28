@@ -15,7 +15,7 @@ import { useAlert } from '../components/CustomAlert';
 
 export default function BarcodeScannerScreen({ navigation }: any) {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
     const [scanned, setScanned] = useState(false);
@@ -159,11 +159,11 @@ export default function BarcodeScannerScreen({ navigation }: any) {
     };
 
     if (hasPermission === null) {
-        return <View style={COMMON_STYLES.screenContainer} />;
+        return <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]} />;
     }
     if (hasPermission === false) {
         return (
-            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center]}>
+            <View style={[COMMON_STYLES.screenContainer, COMMON_STYLES.center, { backgroundColor: colors.background }]}>
                 <Text style={{ ...TYPOGRAPHY.body, textAlign: 'center', padding: SPACING.lg }}>
                     {isTurkish ? 'Kamera izni verilmedi.' : 'No access to camera.'}
                 </Text>
@@ -184,7 +184,7 @@ export default function BarcodeScannerScreen({ navigation }: any) {
 
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <TouchableOpacity onPress={() => safeGoBack(navigation, 'Nutrition')} style={styles.backBtn} activeOpacity={0.7}>
-                    <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
+                    <Ionicons name="arrow-back" size={24} color={isDark ? colors.text : colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Ürün Okut' : 'Scan Product'}</Text>
                 <View style={{ width: 40 }} />
@@ -212,7 +212,7 @@ export default function BarcodeScannerScreen({ navigation }: any) {
                     <View style={styles.scannedContainer}>
                         {loadingProduct ? (
                             <View style={styles.loadingWrap}>
-                                <ActivityIndicator size="small" color="#fff" />
+                                <ActivityIndicator size="small" color={isDark ? colors.text : colors.textInverse} />
                                 <Text style={styles.loadingText}>{isTurkish ? 'Ürün bilgisi alınıyor...' : 'Fetching product details...'}</Text>
                             </View>
                         ) : (
@@ -228,15 +228,15 @@ export default function BarcodeScannerScreen({ navigation }: any) {
     );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md, backgroundColor: colors.background },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { ...TYPOGRAPHY.h3, color: colors.text },
     cameraContainer: { flex: 1, backgroundColor: '#000' },
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
     scanFrame: { width: 250, height: 250, borderWidth: 2, borderColor: colors.primary, backgroundColor: 'transparent', borderRadius: 16 },
-    scanText: { ...TYPOGRAPHY.bodyBold, color: '#fff', marginTop: SPACING.xl, textAlign: 'center' },
+    scanText: { ...TYPOGRAPHY.bodyBold, color: isDark ? colors.text : colors.textInverse, marginTop: SPACING.xl, textAlign: 'center' },
     scannedContainer: { position: 'absolute', bottom: 50, left: 0, right: 0, alignItems: 'center' },
     loadingWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
-    loadingText: { ...TYPOGRAPHY.caption, color: '#fff' }
+    loadingText: { ...TYPOGRAPHY.caption, color: isDark ? colors.text : colors.textInverse }
 });

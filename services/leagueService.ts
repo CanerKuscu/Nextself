@@ -308,7 +308,6 @@ export class LeagueService {
     // The update includes the read values in the WHERE clause so concurrent
     // writes don't silently overwrite each other. Retries on conflict.
     public async addXP(amount: number, source: string, description?: string): Promise<number> {
-        const MAX_RETRIES = 3;
         try {
             const supabase = SupabaseService.getInstance().getClient();
             const { data: { user } } = await supabase.auth.getUser();
@@ -332,73 +331,21 @@ export class LeagueService {
                 }
             }
 
-            const finalAmount = Math.round(amount * multiplier);
-
-            // Log XP transaction
-            await supabase.from('xp_transactions').insert({
-                user_id: user.id,
-                amount: finalAmount,
-                source,
-                description: description || `${source} XP`,
-                multiplier,
+            // Call the atomic RPC to handle XP, points, and group updates
+            const { data, error } = await supabase.rpc('add_xp_atomic', {
+                p_user_id: user.id,
+                p_amount: amount,
+                p_source: source,
+                p_description: description || `${source} XP`,
+                p_multiplier: multiplier
             });
 
-            // Update user league XP with optimistic concurrency control.
-            // We read the current values and include them in the WHERE clause
-            // so the update only applies if no concurrent write changed them.
-            let updated = false;
-            for (let attempt = 0; attempt < MAX_RETRIES && !updated; attempt++) {
-                const { data: currentLeague } = await supabase
-                    .from('user_leagues')
-                    .select('weekly_xp, total_xp, group_id')
-                    .eq('user_id', user.id)
-                    .single();
-
-                const oldWeeklyXP = currentLeague?.weekly_xp ?? 0;
-                const oldTotalXP = currentLeague?.total_xp ?? 0;
-                const newWeeklyXP = oldWeeklyXP + finalAmount;
-                const newTotalXP = oldTotalXP + finalAmount;
-
-                // Optimistic lock: only update if values haven't changed since read
-                const { data: updateResult, error: updateError } = await supabase
-                    .from('user_leagues')
-                    .update({ weekly_xp: newWeeklyXP, total_xp: newTotalXP })
-                    .eq('user_id', user.id)
-                    .eq('weekly_xp', oldWeeklyXP)
-                    .eq('total_xp', oldTotalXP)
-                    .select();
-
-                if (updateError) {
-                    LogManager.getInstance().warn(`XP update attempt ${attempt + 1} error:`, updateError);
-                    continue;
-                }
-
-                if (updateResult && updateResult.length > 0) {
-                    updated = true;
-
-                    // Update group member XP
-                    if (currentLeague?.group_id) {
-                        await supabase
-                            .from('league_group_members')
-                            .update({ weekly_xp: newWeeklyXP })
-                            .eq('group_id', currentLeague.group_id)
-                            .eq('user_id', user.id);
-                    }
-                } else {
-                    // Conflict: another write happened between our read and update.
-                    // Retry with fresh data.
-                    LogManager.getInstance().warn(`XP update conflict (attempt ${attempt + 1}/${MAX_RETRIES}), retrying...`);
-                }
+            if (error) {
+                LogManager.getInstance().warn('XP add RPC error:', error);
+                return 0;
             }
 
-            if (!updated) {
-                LogManager.getInstance().warn('XP update failed after max retries due to concurrent modifications');
-            }
-
-            // Also add points to user currency
-            await this.addPoints(user.id, Math.round(finalAmount * 0.5));
-
-            return finalAmount;
+            return data as number;
         } catch (err) {
             LogManager.getInstance().warn('XP add error:', err);
             return 0;

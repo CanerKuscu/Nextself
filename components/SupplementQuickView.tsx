@@ -36,7 +36,7 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
 }) => {
   const { t, isTurkish } = useTranslation();
   const { colors, isDark } = useTheme();
-  
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -75,18 +75,20 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
 
   if (!visible || !item) return null;
 
-  const getCategoryColor = (category: string) => {
+  const getCategoryToken = (category: string) => {
     switch (category) {
-      case 'protein': return '#FF6B6B';
-      case 'pre_workout': return '#FFC800';
-      case 'post_workout': return '#58CC02';
-      case 'vitamin': return '#FF9600';
-      case 'mineral': return '#1CB0F6';
-      default: return '#CE82FF';
+      case 'protein': return { color: colors.error, soft: colors.errorSoft };
+      case 'pre_workout': return { color: colors.warning, soft: colors.warningSoft };
+      case 'post_workout': return { color: colors.primary, soft: colors.primarySoft };
+      case 'vitamin': return { color: colors.orange, soft: colors.warningSoft };
+      case 'mineral': return { color: colors.accent, soft: colors.infoSoft };
+      default: return { color: colors.secondary, soft: colors.secondarySoft };
     }
   };
 
-  const categoryColor = getCategoryColor(item.category || item.type);
+  const categoryToken = getCategoryToken(item.category || item.type);
+  const categoryColor = categoryToken.color;
+  const categorySoft = categoryToken.soft;
 
   return (
     <Modal
@@ -97,9 +99,9 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <TouchableOpacity 
-          style={StyleSheet.absoluteFill} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
           onPress={onClose}
         >
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} />
@@ -114,20 +116,20 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
             },
           ]}
         >
-          <GlassCard 
-            variant="premium" 
-            noPadding 
-            style={[styles.card, { borderColor: categoryColor + '40' }]}
-            gradientColors={isDark 
-              ? ['#1A1A2E', '#16162B'] 
-              : ['#FFFFFF', '#F8F9FA']}
+          <GlassCard
+            variant="premium"
+            noPadding
+            style={[styles.card, { borderColor: categorySoft || colors.border }]}
+            gradientColors={isDark
+              ? [colors.surface, colors.surfaceSecondary]
+              : [colors.cardGlass, colors.surfaceSecondary]}
           >
             {/* Header with Icon */}
             <LinearGradient
-              colors={[categoryColor + '20', 'transparent']}
+              colors={[categorySoft || categoryColor, 'transparent']}
               style={styles.headerGradient}
             >
-              <View style={[styles.iconContainer, { backgroundColor: categoryColor + '30' }]}>
+              <View style={[styles.iconContainer, { backgroundColor: categorySoft || categoryColor }]}>
                 <Ionicons name="flask" size={32} color={categoryColor} />
               </View>
               <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -135,8 +137,8 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
               </TouchableOpacity>
             </LinearGradient>
 
-            <ScrollView 
-              style={styles.contentScroll} 
+            <ScrollView
+              style={styles.contentScroll}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.contentContainer}
             >
@@ -153,8 +155,8 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
                   </Text>
                   <View style={styles.tagsContainer}>
                     {item.benefits.map((benefit: string, index: number) => (
-                      <View 
-                        key={index} 
+                      <View
+                        key={index}
                         style={[styles.tag, { backgroundColor: colors.success + '15', borderColor: colors.success + '30' }]}
                       >
                         <Ionicons name="checkmark-circle" size={14} color={colors.success} style={{ marginRight: 4 }} />
@@ -208,17 +210,17 @@ const SupplementQuickView: React.FC<SupplementQuickViewProps> = ({
                 ]}
                 onPress={() => onToggleReminder?.(item)}
               >
-                <Ionicons 
-                  name={isScheduled ? "notifications-off" : "notifications"} 
-                  size={20} 
-                  color={isScheduled ? colors.textSecondary : '#FFF'} 
+                <Ionicons
+                  name={isScheduled ? "notifications-off" : "notifications"}
+                  size={20}
+                  color={isScheduled ? colors.textSecondary : (isDark ? colors.text : colors.textInverse)}
                 />
                 <Text style={[
-                  styles.actionButtonText, 
-                  { color: isScheduled ? colors.textSecondary : '#FFF' }
+                  styles.actionButtonText,
+                  { color: isScheduled ? colors.textSecondary : (isDark ? colors.text : colors.textInverse) }
                 ]}>
-                  {isScheduled 
-                    ? (isTurkish ? 'Hatırlatıcıyı Kaldır' : 'Remove Reminder') 
+                  {isScheduled
+                    ? (isTurkish ? 'Hatırlatıcıyı Kaldır' : 'Remove Reminder')
                     : (isTurkish ? 'Hatırlatıcı Ekle' : 'Add Reminder')}
                 </Text>
               </TouchableOpacity>

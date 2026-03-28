@@ -49,7 +49,7 @@ const DIETITIAN_POPUP_SHOWN_KEY = 'nextself_dietitian_popup_shown';
 
 const AIDietitianScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -95,16 +95,16 @@ const AIDietitianScreen = ({ navigation }: any) => {
         if (status !== 'granted') { showAlert({ title: isTurkish ? 'İzin Gerekli' : 'Permission Required', message: isTurkish ? 'Kamera erişimi gereklidir.' : 'Camera access is required.', type: 'warning' }); return; }
         const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.7, base64: true });
         if (!result.canceled && result.assets[0]) {
-            setSelectedImage(result.assets[0].uri);
-            setSelectedImageBase64(result.assets[0].base64 || null);
+          setSelectedImage(result.assets[0].uri);
+          setSelectedImageBase64(result.assets[0].base64 || null);
         }
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') { showAlert({ title: isTurkish ? 'İzin Gerekli' : 'Permission Required', message: isTurkish ? 'Galeri erişimi gereklidir.' : 'Gallery access is required.', type: 'warning' }); return; }
         const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.7, base64: true });
         if (!result.canceled && result.assets[0]) {
-            setSelectedImage(result.assets[0].uri);
-            setSelectedImageBase64(result.assets[0].base64 || null);
+          setSelectedImage(result.assets[0].uri);
+          setSelectedImageBase64(result.assets[0].base64 || null);
         }
       }
     } catch (err) { console.warn('Image pick error:', err); }
@@ -123,7 +123,7 @@ const AIDietitianScreen = ({ navigation }: any) => {
     setMessages(prev => [...prev, userMsg]);
     const userInput = rawInput;
     const imageBase64 = selectedImageBase64;
-    
+
     setInput('');
     setSelectedImage(null);
     setSelectedImageBase64(null);
@@ -131,40 +131,40 @@ const AIDietitianScreen = ({ navigation }: any) => {
 
     try {
       const deepseek = DeepSeekService.getInstance();
-      
+
       // Fetch User Profile for better context
       let contextData: any = {};
       try {
-          const { user } = await SupabaseService.getInstance().getCurrentUser();
-          if (user) {
-              const { data: profile } = await SupabaseService.getInstance().getClient()
-                  .from('profiles')
-                  .select('height, weight, gender, fitness_goal, activity_level, dietary_preferences')
-                  .eq('id', user.id)
-                  .single();
-              
-              if (profile) {
-                  contextData = {
-                      height: profile.height,
-                      weight: profile.weight,
-                      gender: profile.gender,
-                      goal: profile.fitness_goal,
-                      activity_level: profile.activity_level,
-                      dietary_preferences: profile.dietary_preferences
-                  };
-              }
+        const { user } = await SupabaseService.getInstance().getCurrentUser();
+        if (user) {
+          const { data: profile } = await SupabaseService.getInstance().getClient()
+            .from('profiles')
+            .select('height, weight, gender, fitness_goal, activity_level, dietary_preferences')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            contextData = {
+              height: profile.height,
+              weight: profile.weight,
+              gender: profile.gender,
+              goal: profile.fitness_goal,
+              activity_level: profile.activity_level,
+              dietary_preferences: profile.dietary_preferences
+            };
           }
+        }
       } catch (e) {
-          console.warn('Failed to fetch user context for AI Dietitian:', e);
+        console.warn('Failed to fetch user context for AI Dietitian:', e);
       }
 
       // Send to AI
       const response = await deepseek.generateContent('dietitian', {
-          query: userInput
-            ? `${userInput}\n\n${isTurkish ? 'Kullanıcı isterse haftalık/aylık beslenme programı oluştur ve adım adım uygulanışını yaz.' : 'If requested, create a weekly/monthly nutrition program and include practical step-by-step implementation.'}`
-            : (imageBase64 ? (isTurkish ? 'Fotoğrafıma göre bana özel beslenme planı oluştur.' : 'Based on my photo, create a personalized nutrition/diet plan for me.') : ''),
-          context: contextData,
-          language: detectedLanguage
+        query: userInput
+          ? `${userInput}\n\n${isTurkish ? 'Kullanıcı isterse haftalık/aylık beslenme programı oluştur ve adım adım uygulanışını yaz.' : 'If requested, create a weekly/monthly nutrition program and include practical step-by-step implementation.'}`
+          : (imageBase64 ? (isTurkish ? 'Fotoğrafıma göre bana özel beslenme planı oluştur.' : 'Based on my photo, create a personalized nutrition/diet plan for me.') : ''),
+        context: contextData,
+        language: detectedLanguage
       }, imageBase64 || undefined);
 
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', content: response, timestamp: new Date() }]);
@@ -177,7 +177,7 @@ const AIDietitianScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={COMMON_STYLES.screenContainer}>
+    <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background }]}>
       <AlertComponent />
       <PremiumFeaturesModal
         visible={showPremiumModal}
@@ -266,7 +266,7 @@ const AIDietitianScreen = ({ navigation }: any) => {
             maxLength={500}
           />
           <TouchableOpacity style={[styles.sendBtn, (!input.trim() && !selectedImage) && styles.sendBtnDisabled]} onPress={sendMessage} disabled={!input.trim() && !selectedImage || loading}>
-            {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
+            {loading ? <ActivityIndicator size="small" color={isDark ? colors.text : colors.textInverse} /> : <Ionicons name="send" size={20} color={isDark ? colors.text : colors.textInverse} />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -274,7 +274,7 @@ const AIDietitianScreen = ({ navigation }: any) => {
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -305,7 +305,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   userContent: { flex: 1 },
   aiContent: { flex: 1 },
   messageText: { ...TYPOGRAPHY.body },
-  userText: { color: '#FFF' },
+  userText: { color: isDark ? colors.text : colors.textInverse },
   aiText: { color: colors.text },
   messageImage: { width: '100%', height: 200, borderRadius: BORDER_RADIUS.md, marginBottom: SPACING.sm },
   loadingWrap: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.md, marginBottom: SPACING.md },

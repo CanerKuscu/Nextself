@@ -203,12 +203,45 @@ export class DeepLinkingService {
     }
 
     /**
+     * Sanitize deep link parameters to prevent injection attacks.
+     * Only allows whitelisted param keys with safe string values.
+     */
+    private sanitizeDeepLinkParams(params: Record<string, string>): Record<string, string> {
+        const ALLOWED_PARAM_KEYS = new Set(['id', 'token', 'email', 'screen', 'tab']);
+        const MAX_PARAM_LENGTH = 256;
+        const sanitized: Record<string, string> = {};
+
+        for (const [key, value] of Object.entries(params)) {
+            // Only allow whitelisted param keys
+            if (!ALLOWED_PARAM_KEYS.has(key)) continue;
+            if (typeof value !== 'string') continue;
+            // Limit length and strip dangerous characters
+            const truncated = value.slice(0, MAX_PARAM_LENGTH);
+            // Only allow alphanumeric, hyphens, underscores, dots, @, +
+            const safe = truncated.replace(/[^a-zA-Z0-9\-_.@+]/g, '');
+            if (safe.length > 0) {
+                sanitized[key] = safe;
+            }
+        }
+
+        return sanitized;
+    }
+
+    private isValidUUID(id: string): boolean {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(id);
+    }
+
+    /**
      * Route based on path
      */
     private routeByPath(path: string, params: Record<string, string>) {
+        // Sanitize deep link params to prevent injection
+        const sanitizedParams = this.sanitizeDeepLinkParams(params);
+
         if (!this.navigationRef) {
             // Queue URL for processing when navigation ref becomes available
-            const url = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
+            const url = `${this.SCHEME}://${path}${Object.keys(sanitizedParams).length > 0 ? '?' + Object.entries(sanitizedParams).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
             if (this.pendingURLs.length >= 10) {
                 this.pendingURLs.shift();
             }
@@ -226,9 +259,9 @@ export class DeepLinkingService {
             const authStackNames = new Set(['Auth']);
             const allowedWhileAuth = new Set(['verify-email', 'reset-password']);
             if (currentName && authStackNames.has(currentName) && !allowedWhileAuth.has(path)) {
-                const url = `${this.SCHEME}://${path}${Object.keys(params).length > 0 ? '?' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
-                if (this.pendingURLs.length >= 10) this.pendingURLs.shift();
-                this.pendingURLs.push(url);
+                const url = `${this.SCHEME}://${path}${Object.keys(sanitizedParams).length > 0 ? '?' + Object.entries(sanitizedParams).map(([k, v]) => `${k}=${v}`).join('&') : ''}`;
+            if (this.pendingURLs.length >= 10) this.pendingURLs.shift();
+            this.pendingURLs.push(url);
                 return;
             }
         } catch (_) { }
@@ -295,43 +328,43 @@ export class DeepLinkingService {
                 break;
 
             case 'exercise':
-                if (params.id) {
-                    navigation.navigate('ExerciseDetail', { exerciseId: params.id });
+                if (sanitizedParams.id && this.isValidUUID(sanitizedParams.id)) {
+                    navigation.navigate('ExerciseDetail', { exerciseId: sanitizedParams.id });
                 }
                 break;
 
             case 'food':
-                if (params.id) {
-                    navigation.navigate('FoodScanner', { foodId: params.id });
+                if (sanitizedParams.id && this.isValidUUID(sanitizedParams.id)) {
+                    navigation.navigate('FoodScanner', { foodId: sanitizedParams.id });
                 }
                 break;
 
             case 'supplement':
-                if (params.id) {
+                if (sanitizedParams.id && this.isValidUUID(sanitizedParams.id)) {
                     navigation.navigate('Supplements');
                 }
                 break;
 
             case 'professional':
-                if (params.id) {
+                if (sanitizedParams.id && this.isValidUUID(sanitizedParams.id)) {
                     navigation.navigate('ProfessionalSearch');
                 }
                 break;
 
             case 'verify-email':
-                if (params.token) {
+                if (sanitizedParams.token) {
                     navigation.navigate('EmailVerification', {
-                        token: params.token,
-                        email: params.email
+                        token: sanitizedParams.token,
+                        email: sanitizedParams.email
                     });
                 }
                 break;
 
             case 'reset-password':
-                if (params.token) {
+                if (sanitizedParams.token) {
                     navigation.navigate('Auth', {
                         screen: 'ResetPassword',
-                        params: { token: params.token }
+                        params: { token: sanitizedParams.token }
                     });
                 }
                 break;

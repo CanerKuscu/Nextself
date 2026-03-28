@@ -13,7 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from '../hooks/useTranslation';
 import { AgreementService, BiometricConsentType } from '../services/agreementService';
 import { SupabaseService } from '@nextself/shared';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, GRADIENTS } from '../config/theme';
+import { TYPOGRAPHY, SPACING, BORDER_RADIUS, GRADIENTS } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface BiometricConsentModalProps {
     visible: boolean;
@@ -30,6 +31,8 @@ const ICONS: Record<BiometricConsentType, keyof typeof Ionicons.glyphMap> = {
 };
 
 const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: BiometricConsentModalProps) => {
+    const { colors, isDark } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
     const { isTurkish } = useTranslation();
     const [saving, setSaving] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -85,6 +88,8 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
         }
     };
 
+    const iconColor = isDark ? colors.text : colors.textInverse;
+
     return (
         <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
             <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
@@ -92,10 +97,10 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
                     {/* Header with icon */}
                     <View style={styles.iconContainer}>
                         <LinearGradient
-                            colors={['#FF6B35', '#FF8C42']}
+                            colors={GRADIENTS.warm as any}
                             style={styles.iconGradient}
                         >
-                            <Ionicons name={ICONS[consentType]} size={28} color="#fff" />
+                            <Ionicons name={ICONS[consentType]} size={28} color={iconColor} />
                         </LinearGradient>
                     </View>
 
@@ -104,7 +109,7 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
 
                     {/* KVKK Badge */}
                     <View style={styles.kvkkBadge}>
-                        <Ionicons name="shield-checkmark" size={14} color="#7C3AED" />
+                        <Ionicons name="shield-checkmark" size={14} color={colors.secondaryDark || colors.secondary} />
                         <Text style={styles.kvkkBadgeText}>
                             {isTurkish ? 'KVKK Md. 6 — Özel Nitelikli Veri' : 'KVKK Art. 6 — Special Category Data'}
                         </Text>
@@ -115,7 +120,7 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
 
                     {/* Data Type Info */}
                     <View style={styles.dataTypeRow}>
-                        <Ionicons name="information-circle" size={16} color={COLORS.textSecondary} />
+                        <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
                         <Text style={styles.dataTypeText}>
                             {isTurkish ? 'İşlenecek veri: ' : 'Data to be processed: '}
                             <Text style={{ fontWeight: '700' }}>{info.dataType}</Text>
@@ -124,7 +129,7 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
 
                     {/* Temporary storage notice */}
                     <View style={styles.noticeBox}>
-                        <Ionicons name="time-outline" size={16} color={COLORS.success} />
+                        <Ionicons name="time-outline" size={16} color={colors.success} />
                         <Text style={styles.noticeText}>
                             {isTurkish
                                 ? 'Veriler yalnızca analiz süresince geçici olarak işlenir, kalıcı olarak saklanmaz.'
@@ -157,10 +162,10 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
                                 end={{ x: 1, y: 0 }}
                             >
                                 {saving ? (
-                                    <ActivityIndicator color="#fff" size="small" />
+                                    <ActivityIndicator color={iconColor} size="small" />
                                 ) : (
                                     <>
-                                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                                        <Ionicons name="checkmark-circle" size={18} color={iconColor} />
                                         <Text style={styles.acceptText}>
                                             {isTurkish ? 'Onaylıyorum' : 'I Consent'}
                                         </Text>
@@ -175,16 +180,16 @@ const BiometricConsentModal = ({ visible, consentType, onAccept, onDecline }: Bi
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: colors.overlay,
         justifyContent: 'center',
         alignItems: 'center',
         padding: SPACING.xl,
     },
     container: {
-        backgroundColor: '#fff',
+        backgroundColor: colors.surface,
         borderRadius: 20,
         padding: SPACING.xl,
         width: '100%',
@@ -203,14 +208,14 @@ const styles = StyleSheet.create({
     },
     title: {
         ...TYPOGRAPHY.h3,
-        color: COLORS.text,
+        color: colors.text,
         textAlign: 'center',
         marginBottom: SPACING.sm,
     },
     kvkkBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3E8FF',
+        backgroundColor: colors.secondarySoft,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: BORDER_RADIUS.pill,
@@ -220,11 +225,11 @@ const styles = StyleSheet.create({
     kvkkBadgeText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#7C3AED',
+        color: colors.secondaryDark || colors.secondary,
     },
     message: {
         ...TYPOGRAPHY.body,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         textAlign: 'left',
         lineHeight: 22,
         marginBottom: SPACING.md,
@@ -238,14 +243,14 @@ const styles = StyleSheet.create({
     },
     dataTypeText: {
         ...TYPOGRAPHY.caption,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         flex: 1,
     },
     noticeBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: '#F0FDF4',
+        backgroundColor: colors.successSoft,
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: BORDER_RADIUS.md,
@@ -254,7 +259,7 @@ const styles = StyleSheet.create({
     },
     noticeText: {
         ...TYPOGRAPHY.caption,
-        color: COLORS.success,
+        color: colors.success,
         flex: 1,
         lineHeight: 18,
     },
@@ -269,13 +274,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: BORDER_RADIUS.lg,
-        backgroundColor: COLORS.surfaceSecondary || '#F3F4F6',
+        backgroundColor: colors.surfaceSecondary,
         borderWidth: 1,
-        borderColor: COLORS.borderLight,
+        borderColor: colors.borderLight,
     },
     declineText: {
         ...TYPOGRAPHY.bodyBold,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         fontSize: 15,
     },
     acceptButton: {
@@ -292,7 +297,7 @@ const styles = StyleSheet.create({
     },
     acceptText: {
         ...TYPOGRAPHY.bodyBold,
-        color: '#fff',
+        color: isDark ? colors.text : colors.textInverse,
         fontSize: 15,
     },
 });

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, ActivityIndicator, FlatList } from 'react-native';
 import { Image } from 'expo-image'; // Use expo-image for better caching and performance
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +13,7 @@ const SpotifyPlayer = () => {
     const [connected, setConnected] = useState(false);
     const [playlists, setPlaylists] = useState<any[]>([]);
     const [showPlaylists, setShowPlaylists] = useState(false);
+    const refreshTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
     const spotifyService = SpotifyService.getInstance();
 
@@ -34,6 +35,21 @@ const SpotifyPlayer = () => {
         const interval = setInterval(loadCurrentTrack, 10000);
         return () => clearInterval(interval);
     }, [connected, isPlaying]);
+
+    useEffect(() => {
+        return () => {
+            refreshTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+            refreshTimeoutsRef.current = [];
+        };
+    }, []);
+
+    const scheduleTrackRefresh = useCallback((delayMs: number) => {
+        const timeoutId = setTimeout(() => {
+            loadCurrentTrack();
+            refreshTimeoutsRef.current = refreshTimeoutsRef.current.filter((id) => id !== timeoutId);
+        }, delayMs);
+        refreshTimeoutsRef.current.push(timeoutId);
+    }, []);
 
     const loadPlaylists = async () => {
         try {
@@ -85,7 +101,7 @@ const SpotifyPlayer = () => {
     const handleNext = async () => {
         try {
             await spotifyService.skipToNext();
-            setTimeout(loadCurrentTrack, 1000);
+            scheduleTrackRefresh(1000);
         } catch (error) {
             console.error('Skip to next error:', error);
         }
@@ -94,7 +110,7 @@ const SpotifyPlayer = () => {
     const handlePrev = async () => {
         try {
             await spotifyService.skipToPrevious();
-            setTimeout(loadCurrentTrack, 1000);
+            scheduleTrackRefresh(1000);
         } catch (error) {
             console.error('Skip to previous error:', error);
         }
@@ -113,7 +129,7 @@ const SpotifyPlayer = () => {
         try {
             await spotifyService.playPlaylist(uri);
             setIsPlaying(true);
-            setTimeout(loadCurrentTrack, 1500);
+            scheduleTrackRefresh(1500);
         } catch (error) {
             console.error('Play playlist error:', error);
         }
@@ -188,7 +204,7 @@ const SpotifyPlayer = () => {
                     <Ionicons name="play-skip-forward" size={24} color={COLORS.text} />
                 </TouchableOpacity>
             </View>
-            
+
             {playlists.length > 0 && (
                 <View style={{ marginTop: SPACING.md }}>
                     <TouchableOpacity onPress={() => setShowPlaylists(!showPlaylists)} style={styles.playlistToggleBtn}>
@@ -197,12 +213,16 @@ const SpotifyPlayer = () => {
                         </Text>
                         <Ionicons name={showPlaylists ? "chevron-up" : "chevron-down"} size={16} color={COLORS.textSecondary} />
                     </TouchableOpacity>
-                    
+
                     {showPlaylists && (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistScroll}>
-                            {playlists.map((playlist, index) => (
-                                <TouchableOpacity 
-                                    key={`${playlist.id}-${index}`} 
+                        <FlatList
+                            data={playlists}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.playlistScroll}
+                            keyExtractor={(item) => String(item.id ?? item.uri ?? item.name)}
+                            renderItem={({ item: playlist }) => (
+                                <TouchableOpacity
                                     style={styles.playlistCard}
                                     onPress={() => handlePlayPlaylist(playlist.uri)}
                                 >
@@ -215,8 +235,8 @@ const SpotifyPlayer = () => {
                                     )}
                                     <Text style={styles.playlistName} numberOfLines={2}>{playlist.name}</Text>
                                 </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                            )}
+                        />
                     )}
                 </View>
             )}

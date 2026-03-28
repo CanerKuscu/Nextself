@@ -156,6 +156,6 @@ jest.mock('crypto-js', () => {
             },
         },
     };
-});
+}, { virtual: true });
 
 // Clear all mocks after each test - removed as afterEach is not available in global scope

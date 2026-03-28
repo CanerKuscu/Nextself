@@ -31,7 +31,7 @@ const TodayWorkoutsCard = memo(({ workouts, onWorkoutPress }: TodayWorkoutsCardP
         <Text style={styles.workoutType}>{workout.type}</Text>
       </View>
 
-      <Text style={styles.workoutName} numberOfLines={2}>
+      <Text style={styles.workoutName}>
         {workout.name}
       </Text>
 
@@ -79,8 +79,6 @@ const TodayWorkoutsCard = memo(({ workouts, onWorkoutPress }: TodayWorkoutsCardP
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.workoutScroll}
         decelerationRate="fast"
-        snapToInterval={172} // width (160) + marginRight (12)
-        snapToAlignment="start"
       />
     </View>
   );
@@ -131,7 +129,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
-    width: 160,
+    minWidth: 160,
     marginRight: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

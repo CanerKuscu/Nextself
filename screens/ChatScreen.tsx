@@ -26,6 +26,15 @@ export default function ChatScreen() {
     const { chatId, userName } = route.params || {};
     const { isTurkish } = useTranslation();
     const flatListRef = useRef<FlatList>(null);
+    const scrollTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+
+    const scheduleScrollToEnd = useCallback((animated: boolean) => {
+        const timeoutId = setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated });
+            scrollTimeoutsRef.current = scrollTimeoutsRef.current.filter((id) => id !== timeoutId);
+        }, 100);
+        scrollTimeoutsRef.current.push(timeoutId);
+    }, []);
 
     const loadMessages = useCallback(async () => {
         try {
@@ -39,7 +48,7 @@ export default function ChatScreen() {
                 if (error) throw error;
                 if (data) {
                     setMessages(data);
-                    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+                    scheduleScrollToEnd(false);
                 }
             }
         } catch (err) {
@@ -47,7 +56,7 @@ export default function ChatScreen() {
         } finally {
             setLoading(false);
         }
-    }, [chatId]);
+    }, [chatId, scheduleScrollToEnd]);
 
     useEffect(() => {
         if (!chatId) return;
@@ -61,15 +70,17 @@ export default function ChatScreen() {
                 if (prev.some((m: any) => m.id === payload.new?.id)) return prev;
                 return [...prev, payload.new];
             });
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+            scheduleScrollToEnd(true);
         });
 
         return () => {
+            scrollTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+            scrollTimeoutsRef.current = [];
             if (channel) {
                 supabase.getClient().removeChannel(channel);
             }
         };
-    }, [chatId, loadMessages]);
+    }, [chatId, loadMessages, scheduleScrollToEnd]);
 
     const handleSend = async () => {
         if (!newMessage.trim() || !currentUserId || !chatId) return;
@@ -112,7 +123,13 @@ export default function ChatScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <LinearGradient colors={GRADIENTS.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
-                <TouchableOpacity style={styles.backButton} onPress={() => safeGoBack(navigation, 'ChatList')}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => safeGoBack(navigation, 'ChatList')}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={isTurkish ? 'Sohbet listesine geri dön' : 'Go back to chat list'}
+                >
                     <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{userName || (isTurkish ? 'Sohbet' : 'Chat')}</Text>
@@ -146,7 +163,13 @@ export default function ChatScreen() {
                     multiline
                     maxLength={2000}
                 />
-                <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+                <TouchableOpacity
+                    style={styles.sendButton}
+                    onPress={handleSend}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={isTurkish ? 'Mesajı gönder' : 'Send message'}
+                >
                     <Ionicons name="send" size={20} color={colors.textInverse} />
                 </TouchableOpacity>
             </View>
@@ -167,7 +190,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     messageText: { ...TYPOGRAPHY.body, color: colors.text },
     myMessageText: { color: colors.textInverse },
     timeText: { ...TYPOGRAPHY.small, color: colors.textTertiary, alignSelf: 'flex-end', marginTop: 4, fontSize: 10 },
-    myTimeText: { color: 'rgba(255,255,255,0.7)' },
+    myTimeText: { color: colors.textSecondary },
     inputContainer: { flexDirection: 'row', padding: SPACING.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.borderLight, alignItems: 'center' },
     input: { flex: 1, backgroundColor: colors.background, borderRadius: BORDER_RADIUS.pill, paddingHorizontal: SPACING.md, paddingTop: Platform.OS === 'ios' ? 12 : 8, paddingBottom: Platform.OS === 'ios' ? 12 : 8, minHeight: 40, maxHeight: 100, ...TYPOGRAPHY.body, color: colors.text, marginRight: SPACING.sm },
     sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },

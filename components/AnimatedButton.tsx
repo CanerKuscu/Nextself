@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAnimation } from '../animations/Animations';
-import { COLORS, TYPOGRAPHY, BORDER_RADIUS, SHADOWS, SPACING } from '../config/theme';
+import { TYPOGRAPHY, BORDER_RADIUS, SHADOWS, SPACING } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AnimatedButtonProps {
   title: string;
@@ -23,6 +24,8 @@ interface AnimatedButtonProps {
   loading?: boolean;
   variant?: 'primary' | 'secondary' | 'danger' | 'success';
   size?: 'small' | 'medium' | 'large';
+  accessible?: boolean;
+  accessibilityLabel?: string;
 }
 
 const AnimatedButton: React.FC<AnimatedButtonProps> = ({
@@ -33,11 +36,14 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   disabled = false,
   icon,
   iconSize = 20,
-  iconColor = '#FFFFFF',
+  iconColor,
   loading = false,
   variant = 'primary',
   size = 'medium',
+  accessible = true,
+  accessibilityLabel,
 }) => {
+  const { colors, isDark } = useTheme();
   const { value, springPress, springRelease } = useAnimation();
   const isPressed = useRef(false);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -83,19 +89,19 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
 
     const variantStyles = {
       primary: {
-        backgroundColor: isTouchActive ? COLORS.primaryDark : COLORS.primary,
+        backgroundColor: isTouchActive ? colors.primaryDark : colors.primary,
         ...SHADOWS.glow,
       },
       secondary: {
-        backgroundColor: isTouchActive ? COLORS.primarySoft : COLORS.surfaceElevated,
+        backgroundColor: isTouchActive ? colors.primarySoft : colors.surfaceElevated,
         borderWidth: 1,
-        borderColor: isTouchActive ? COLORS.primary : COLORS.borderFocus,
+        borderColor: isTouchActive ? colors.primary : colors.borderFocus,
       },
       danger: {
-        backgroundColor: isTouchActive ? '#E53935' : COLORS.error,
+        backgroundColor: isTouchActive ? colors.error : colors.error,
       },
       success: {
-        backgroundColor: isTouchActive ? COLORS.primaryDark : COLORS.success,
+        backgroundColor: isTouchActive ? colors.primaryDark : colors.success,
       },
     };
 
@@ -124,7 +130,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       ...sizeStyles[size],
       ...style,
     };
-  }, [value, disabled, variant, size, style, isTouchActive]);
+  }, [value, disabled, variant, size, style, isTouchActive, colors]);
 
   // Memoize text style to prevent recalculation on every render
   const textStyleMemo = useMemo(() => {
@@ -139,10 +145,10 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     };
 
     const variantStyles = {
-      primary: { color: COLORS.textInverse },
-      secondary: { color: COLORS.text },
-      danger: { color: COLORS.textInverse },
-      success: { color: COLORS.textInverse },
+      primary: { color: colors.textInverse },
+      secondary: { color: colors.text },
+      danger: { color: colors.textInverse },
+      success: { color: colors.textInverse },
     };
 
     return {
@@ -151,7 +157,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       ...variantStyles[variant],
       ...textStyle,
     };
-  }, [size, variant, textStyle]);
+  }, [size, variant, textStyle, colors]);
 
   return (
     <TouchableOpacity
@@ -160,6 +166,8 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       onPressOut={handlePressOut}
       disabled={disabled || loading}
       activeOpacity={1}
+      accessible={accessible}
+      accessibilityLabel={accessibilityLabel || title}
     >
       {loading ? (
         <Text style={[styles.text, textStyleMemo]}>Loading...</Text>
@@ -169,7 +177,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
             <Ionicons
               name={icon}
               size={iconSize}
-              color={iconColor}
+              color={iconColor ?? (isDark ? colors.text : colors.textInverse)}
               style={styles.icon}
             />
           )}

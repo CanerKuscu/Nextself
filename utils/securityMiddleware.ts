@@ -1,5 +1,6 @@
 import { CONFIG } from '@nextself/shared';
 import { Request, Response, NextFunction } from '@nextself/shared';
+import { generateSecurityCSRFToken, sanitizeSecurityInput, validateSecurityCSRFToken } from './securityShared';
 
 /**
  * Security middleware for enforcing HTTPS and adding security headers
@@ -135,14 +136,7 @@ export class SecurityMiddleware {
      * React's built-in escaping handles XSS at the presentation layer.
      */
     static sanitizeInput(input: string, maxLength: number = 10000): string {
-        if (!input || typeof input !== 'string') return '';
-        
-        // Truncate to prevent memory exhaustion / ReDoS
-        const truncated = input.length > maxLength ? input.slice(0, maxLength) : input;
-        
-        // Remove null bytes and non-printable control characters (excluding newlines/tabs)
-        // eslint-disable-next-line no-control-regex
-        return truncated.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+        return sanitizeSecurityInput(input, maxLength);
     }
 
     /**
@@ -184,46 +178,19 @@ export class SecurityMiddleware {
      * Generate CSRF token (platform-safe)
      */
     static generateCSRFToken(): string {
-        try {
-            const CryptoJS = require('crypto-js');
-            return CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
-        } catch {
-            // Fallback using expo-crypto for secure random bytes
-            try {
-                const ExpoCrypto = require('expo-crypto');
-                return ExpoCrypto.getRandomBytes(32)
-                    .reduce((hex: string, byte: number) => hex + byte.toString(16).padStart(2, '0'), '');
-            } catch {
-                // Last fallback: Date + high-resolution timer based token
-                const timestamp = Date.now().toString(36);
-                const random = Array.from({ length: 48 }, () =>
-                    Math.floor(Math.random() * 16).toString(16)
-                ).join('');
-                return timestamp + random;
-            }
-        }
+        return generateSecurityCSRFToken();
     }
 
     /**
      * Validate CSRF token (constant-time comparison)
      */
     static validateCSRFToken(token: string, sessionToken: string): boolean {
-        if (!token || !sessionToken || token.length !== sessionToken.length) return false;
-        try {
-            const CryptoJS = require('crypto-js');
-            const salt = process.env.EXPO_PUBLIC_CSRF_KEY || 'csrf-salt-dev-only';
-            const hmac1 = CryptoJS.HmacSHA256(token, salt).toString();
-            const hmac2 = CryptoJS.HmacSHA256(sessionToken, salt).toString();
-            return hmac1 === hmac2;
-        } catch {
-            // Constant-time comparison fallback to prevent timing attacks
-            if (token.length !== sessionToken.length) return false;
-            let result = 0;
-            for (let i = 0; i < token.length; i++) {
-                result |= token.charCodeAt(i) ^ sessionToken.charCodeAt(i);
-            }
-            return result === 0;
-        }
+        return validateSecurityCSRFToken(
+            token,
+            sessionToken,
+            process.env.EXPO_PUBLIC_CSRF_KEY || '',
+            CONFIG.IS_PRODUCTION
+        );
     }
 
     /**
@@ -231,7 +198,20 @@ export class SecurityMiddleware {
      */
     static logSecurityEvent(event: string, details: unknown) {
         const timestamp = new Date().toISOString();
-        console.log('[SECURITY]', `${timestamp} - ${event}`, details);
+        let safeDetails: unknown;
+        try {
+            const lowered = JSON.stringify(details, (_key, value) => {
+                if (typeof value !== 'string') return value;
+                const v = value.trim();
+                if (!v) return v;
+                if (v.length > 256) return `${v.slice(0, 256)}...`;
+                return v;
+            });
+            safeDetails = lowered ? JSON.parse(lowered) : details;
+        } catch {
+            safeDetails = '[unserializable]';
+        }
+        console.log('[SECURITY]', `${timestamp} - ${event}`, safeDetails);
 
         // In production, this should be sent to a security monitoring service
         if (CONFIG.IS_PRODUCTION) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FiTrendingUp, FiHeart, FiActivity, FiUsers } from 'react-icons/fi';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -16,6 +16,8 @@ import {
     Filler,
 } from 'chart.js';
 import { db } from '../lib/supabase';
+import Skeleton from '../components/ui/Skeleton';
+import toast from 'react-hot-toast';
 
 // Register ChartJS components
 ChartJS.register(
@@ -61,6 +63,7 @@ const Analytics = () => {
             setNutritionStats(nutrition.data || null);
         } catch (error: any) {
             console.error('Error fetching analytics:', error);
+            toast.error('Failed to load analytics data');
         } finally {
             setLoading(false);
         }
@@ -96,9 +99,15 @@ const Analytics = () => {
             color: 'secondary',
         },
     ];
+    const colorClasses: Record<'primary' | 'success' | 'warning' | 'secondary', string> = {
+        primary: 'bg-primary-50 text-primary-600',
+        success: 'bg-success-50 text-success-600',
+        warning: 'bg-warning-50 text-warning-600',
+        secondary: 'bg-secondary-50 text-secondary-600',
+    };
 
     // Activity Trend Chart
-    const activityChartData = {
+    const activityChartData = useMemo(() => ({
         labels: dailyStats.map(stat => {
             const date = new Date(stat.date);
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -125,10 +134,10 @@ const Analytics = () => {
                 pointHoverRadius: 6,
             },
         ],
-    };
+    }), [dailyStats]);
 
     // Calories Chart
-    const caloriesChartData = {
+    const caloriesChartData = useMemo(() => ({
         labels: dailyStats.map(stat => {
             const date = new Date(stat.date);
             return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
@@ -147,10 +156,10 @@ const Analytics = () => {
                 borderRadius: 6,
             },
         ],
-    };
+    }), [dailyStats]);
 
     // Macro distribution doughnut
-    const macroChartData = {
+    const macroChartData = useMemo(() => ({
         labels: ['Protein', 'Carbs', 'Fat'],
         datasets: [
             {
@@ -168,7 +177,7 @@ const Analytics = () => {
                 hoverOffset: 8,
             },
         ],
-    };
+    }), [nutritionStats]);
 
     const lineOptions: ChartOptions<'line'> = {
         responsive: true,
@@ -218,8 +227,28 @@ const Analytics = () => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="loading-spinner w-12 h-12"></div>
+            <div className="space-y-6 animate-fade-in w-full">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <Skeleton className="w-48 h-8 mb-2" rounded="md" />
+                        <Skeleton className="w-64 h-5" rounded="md" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="stat-card">
+                            <Skeleton className="w-full h-24" rounded="lg" />
+                        </div>
+                    ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="card lg:col-span-2">
+                        <Skeleton className="w-full h-[400px]" rounded="xl" />
+                    </div>
+                    <div className="card">
+                        <Skeleton className="w-full h-[400px]" rounded="xl" />
+                    </div>
+                </div>
             </div>
         );
     }
@@ -249,12 +278,6 @@ const Analytics = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {summaryCards.map((card, index) => {
                     const Icon = card.icon;
-                    const colorClasses = {
-                        primary: 'bg-primary-50 text-primary-600',
-                        success: 'bg-success-50 text-success-600',
-                        warning: 'bg-warning-50 text-warning-600',
-                        secondary: 'bg-secondary-50 text-secondary-600',
-                    };
                     return (
                         <div key={index} className="stat-card">
                             <div className="flex items-center justify-between">
@@ -263,7 +286,7 @@ const Analytics = () => {
                                     <p className="stat-value mt-2">{card.value}</p>
                                     <p className="stat-change stat-change-positive mt-1">{card.change}</p>
                                 </div>
-                                <div className={`p-3 rounded-lg ${colorClasses[card.color]}`}>
+                                <div className={`p-3 rounded-lg ${colorClasses[card.color as keyof typeof colorClasses]}`}>
                                     <Icon className="w-6 h-6" />
                                 </div>
                             </div>

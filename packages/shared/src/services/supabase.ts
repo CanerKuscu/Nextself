@@ -48,9 +48,12 @@ export class SupabaseService {
   }
 
   private constructor() {
-    // Avoid persisting Supabase session into web `localStorage` by default.
-    // Web clients should use cookie-based sessions (HttpOnly) via a server/proxy.
-    const persistSession = Platform.OS !== 'web';
+    // Avoid persisting Supabase session into web `localStorage` by default in production.
+    // Web clients should use cookie-based sessions (HttpOnly) via a server/proxy in prod.
+    // For local development, we allow persisting to bypass cross-domain cookie issues.
+    const isWebProd = Platform.OS === 'web' && !__DEV__;
+    const persistSession = !isWebProd;
+    
     const authOptions: any = {
       autoRefreshToken: true,
       detectSessionInUrl: false,
@@ -58,7 +61,10 @@ export class SupabaseService {
     };
 
     if (persistSession) {
-      authOptions.storage = SecureStoreAdapter;
+      // Use SecureStore on native, let Supabase use default localStorage on Web
+      if (Platform.OS !== 'web') {
+        authOptions.storage = SecureStoreAdapter;
+      }
     }
 
     this.client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_PUBLISHABLE_KEY, {
@@ -449,7 +455,7 @@ export class SupabaseService {
 
         // 3) Last resort: get all exercises for this category without muscle filter
         if (category && category !== 'all') {
-          let altQuery3 = this.client
+          const altQuery3 = this.client
             .from('exercises')
             .select(columns)
             .eq('is_verified', true)
@@ -779,7 +785,14 @@ export class SupabaseService {
     return { data, error };
   }
 
-  // ==================== SOFT DELETE ====================
+  // ==================== DELETE ACCOUNT ====================
+
+  public async hardDeleteUser() {
+    const { error } = await this.client.rpc('delete_own_account');
+    return { error };
+  }
+
+  // ==================== SOFT DELETE (LEGACY) ====================
 
   public async softDeleteUser(userId: string) {
     const { error } = await this.client

@@ -1,8 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import * as Localization from 'expo-localization';
-import PlatformStorage from '@nextself/shared';
+import React, { createContext, useContext, useMemo, useCallback, useEffect, useState } from 'react';
 import { translations, Language, TranslationKey } from '../locales/i18n';
-import { NotificationService } from '../services/notificationService';
+import { useAppStore } from '../store/appStore';
 
 interface LanguageContextType {
   language: Language;
@@ -25,58 +23,14 @@ interface LanguageProviderProps {
   children: React.ReactNode;
 }
 
-const STORAGE_KEY = 'NextSelf_language';
-const SUPPORTED_LANGUAGES: Language[] = ['en', 'tr', 'ru'];
-
-const getDeviceLanguage = (): Language => {
-  try {
-    const locales = Localization.getLocales();
-    if (locales && locales.length > 0) {
-      const deviceLang = locales[0].languageCode?.toLowerCase();
-      if (deviceLang && SUPPORTED_LANGUAGES.includes(deviceLang as Language)) {
-        return deviceLang as Language;
-      }
-    }
-  } catch { }
-  return 'en';
-};
-
 export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('en');
-  const [isLoading, setIsLoading] = useState(true);
+  const language = useAppStore((state) => state.language);
+  const setStoreLanguage = useAppStore((state) => state.setLanguage);
+  const [isLoading, setIsLoading] = useState(false); // Hydration is handled by Zustand
 
-  useEffect(() => {
-    loadLanguage();
-  }, []);
-
-  const loadLanguage = async () => {
-    try {
-      const savedLanguage = await PlatformStorage.getItem(STORAGE_KEY);
-      if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage as Language)) {
-        setLanguageState(savedLanguage as Language);
-      } else {
-        // First launch: detect device language
-        const deviceLang = getDeviceLanguage();
-        setLanguageState(deviceLang);
-        await PlatformStorage.setItem(STORAGE_KEY, deviceLang);
-      }
-    } catch (error) {
-      console.error('Failed to load language:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const setLanguage = useCallback(async (newLanguage: Language) => {
-    try {
-      setLanguageState(newLanguage);
-      await PlatformStorage.setItem(STORAGE_KEY, newLanguage);
-      // Reschedule notifications in new language
-      await NotificationService.getInstance().rescheduleAll(newLanguage);
-    } catch (error) {
-      console.error('Failed to save language:', error);
-    }
-  }, []);
+  const setLanguage = useCallback((newLanguage: Language) => {
+    void setStoreLanguage(newLanguage);
+  }, [setStoreLanguage]);
 
   const t = useCallback((key: TranslationKey, params?: Record<string, string | number>): string => {
     const translation = (translations[language] as Record<TranslationKey, string>)[key] || translations.en[key] || key;

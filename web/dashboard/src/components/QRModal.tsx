@@ -1,8 +1,14 @@
-import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { FiX, FiCheckCircle } from 'react-icons/fi';
 
-const QRModal = ({ isOpen, onClose, sessionId, isVerified }) => {
+type QRModalProps = {
+    isOpen: boolean;
+    onClose: () => void;
+    sessionId: string | null;
+    isVerified: boolean;
+};
+
+const QRModal = ({ isOpen, onClose, sessionId, isVerified }: QRModalProps) => {
     if (!isOpen) { return null; }
 
     // The data payload for the QR code, which the Mobile app will read

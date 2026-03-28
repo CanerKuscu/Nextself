@@ -6,6 +6,7 @@ import { WebView } from 'react-native-webview';
 import { SupabaseService } from '@nextself/shared';
 import { useAlert } from '../components/CustomAlert';
 import { safeGoBack } from '../utils/navigation';
+import { useTheme } from '../contexts/ThemeContext';
 
 export const calculateDepositAmount = (months: number) => {
     if (months === 3) return 750;
@@ -15,6 +16,8 @@ export const calculateDepositAmount = (months: number) => {
 };
 
 export default function ProfessionalCheckoutScreen() {
+    const { colors } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const route = useRoute();
     const { clientId, clientName } = route.params as { clientId: string, clientName: string };
@@ -105,6 +108,7 @@ export default function ProfessionalCheckoutScreen() {
                 <TextInput
                     style={styles.input}
                     placeholder="Örn: 6000"
+                    placeholderTextColor={colors.textTertiary}
                     keyboardType="numeric"
                     value={agreedPrice}
                     onChangeText={setAgreedPrice}
@@ -150,21 +154,21 @@ export default function ProfessionalCheckoutScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', justifyContent: 'center' },
-    title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-    description: { fontSize: 14, color: '#666', marginBottom: 30, textAlign: 'center', lineHeight: 20 },
+const getStyles = (colors: any) => StyleSheet.create({
+    container: { flex: 1, padding: 20, backgroundColor: colors.background, justifyContent: 'center' },
+    title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: colors.text },
+    description: { fontSize: 14, color: colors.textSecondary, marginBottom: 30, textAlign: 'center', lineHeight: 20 },
     inputContainer: { marginBottom: 20 },
-    label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-    input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', padding: 15, borderRadius: 8, fontSize: 16, textAlignVertical: 'center' },
-    summaryContainer: { backgroundColor: '#eef2ff', padding: 15, borderRadius: 8, marginBottom: 30 },
+    label: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: colors.text },
+    input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, color: colors.text, padding: 15, borderRadius: 8, fontSize: 16, textAlignVertical: 'center' },
+    summaryContainer: { backgroundColor: colors.primarySoft, padding: 15, borderRadius: 8, marginBottom: 30 },
     summaryText: { fontSize: 16, color: '#4f46e5', fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
-    summarySubText: { fontSize: 12, color: '#666', textAlign: 'center', fontStyle: 'italic' },
+    summarySubText: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
     button: { backgroundColor: '#4f46e5', padding: 15, borderRadius: 8, alignItems: 'center' },
     buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
     durationContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-    durationButton: { flex: 1, padding: 10, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginHorizontal: 4, alignItems: 'center', backgroundColor: '#fff' },
+    durationButton: { flex: 1, padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 8, marginHorizontal: 4, alignItems: 'center', backgroundColor: colors.surface },
     durationButtonActive: { borderColor: '#4f46e5', backgroundColor: '#eef2ff' },
-    durationText: { fontSize: 14, color: '#666' },
+    durationText: { fontSize: 14, color: colors.textSecondary },
     durationTextActive: { color: '#4f46e5', fontWeight: 'bold' }
 });

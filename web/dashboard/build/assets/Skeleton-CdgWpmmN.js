@@ -1,0 +1,1 @@
+import{j as l}from"./index-BjT6AbT9.js";const o=({className:s="",rounded:d="lg"})=>{const e={sm:"rounded-sm",md:"rounded-md",lg:"rounded-lg",xl:"rounded-xl","2xl":"rounded-2xl",full:"rounded-full"};return l.jsx("div",{className:`animate-pulse bg-gray-200 ${e[d]} ${s}`,style:{animationDuration:"1.5s"}})};export{o as S};

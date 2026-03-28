@@ -24,6 +24,7 @@ import { CalendarService } from '../services/calendarService';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCurrency, CurrencyCode, CURRENCIES } from '../contexts/CurrencyContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuthStore } from '../store/authStoreSecure';
 import { safeGoBack } from '../utils/navigation';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '../config/theme';
 
@@ -57,6 +58,8 @@ const SettingsScreen = ({ navigation }: any) => {
     const { currency, setCurrency, currencyInfo } = useCurrency();
     const insets = useSafeAreaInsets();
     const { showAlert, AlertComponent } = useAlert();
+    const profile = useAuthStore(state => state.profile);
+    const isProfessional = profile?.role === 'pt' || profile?.role === 'dietitian' || profile?.role === 'trainer';
 
     const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIF_PREFS);
 
@@ -212,8 +215,14 @@ const SettingsScreen = ({ navigation }: any) => {
                 return;
             }
 
-            // Proceed with deletion
-            await supabase.softDeleteUser(user.id);
+            // Proceed with hard deletion to completely remove the account
+            const { error: deleteError } = await supabase.hardDeleteUser();
+            if (deleteError) {
+                console.error("Hard delete error:", deleteError);
+                // Fallback to soft delete if RPC fails
+                await supabase.softDeleteUser(user.id);
+            }
+
             await supabase.signOut();
             setShowReAuthModal(false);
             navigation.replace('Auth');
@@ -293,14 +302,14 @@ const SettingsScreen = ({ navigation }: any) => {
                 <AnimatedCard style={styles.card}>
                     <View style={[styles.switchRow]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <Ionicons name={isDark ? 'moon' : 'sunny'} size={20} color={isDark ? '#CE82FF' : '#FFC800'} />
+                            <Ionicons name={isDark ? 'moon' : 'sunny'} size={20} color={isDark ? colors.secondary : colors.warning} />
                             <Text style={styles.switchLabel}>{t('dark_theme')}</Text>
                         </View>
                         <Switch
                             value={isDark}
                             onValueChange={(value) => setThemeMode(value ? 'dark' : 'light')}
-                            trackColor={{ false: isDark ? colors.surfaceElevated : '#E9E9EA', true: colors.primary }}
-                            thumbColor={'#FFFFFF'}
+                            trackColor={{ false: isDark ? colors.surfaceElevated : colors.borderLight, true: colors.primary }}
+                            thumbColor={colors.surface}
                         />
                     </View>
                 </AnimatedCard>
@@ -308,7 +317,11 @@ const SettingsScreen = ({ navigation }: any) => {
                 {/* Notifications */}
                 <Text style={styles.sectionTitle}>{t('notification_preferences')}</Text>
                 <AnimatedCard style={styles.card}>
-                    {[
+                    {(isProfessional ? [
+                        { label: isTurkish ? 'Yeni Mesajlar' : 'New Messages', key: 'water' as keyof NotificationPrefs }, // Reuse keys or map properly
+                        { label: isTurkish ? 'Danışan Uyarıları' : 'Client Alerts', key: 'health' as keyof NotificationPrefs },
+                        { label: isTurkish ? 'Takvim Senkronizasyonu' : 'Calendar Sync', key: 'calendar_sync' as keyof NotificationPrefs },
+                    ] : [
                         { label: t('water_reminder'), key: 'water' as keyof NotificationPrefs },
                         { label: t('workout_reminder'), key: 'workout' as keyof NotificationPrefs },
                         { label: t('health_alerts'), key: 'health' as keyof NotificationPrefs },
@@ -316,34 +329,38 @@ const SettingsScreen = ({ navigation }: any) => {
                         { label: t('meal_reminder'), key: 'meal' as keyof NotificationPrefs },
                         { label: t('health_tips'), key: 'tips' as keyof NotificationPrefs },
                         { label: isTurkish ? 'Takvim Senkronizasyonu' : 'Calendar Sync', key: 'calendar_sync' as keyof NotificationPrefs },
-                    ].map((item, i, arr) => (
+                    ]).map((item, i, arr) => (
                         <View key={i} style={[styles.switchRow, i < arr.length - 1 && styles.itemBorder]}>
                             <Text style={styles.switchLabel}>{item.label}</Text>
                             <Switch
                                 value={notifPrefs[item.key]}
                                 onValueChange={() => toggleNotifPref(item.key)}
                                 trackColor={{ false: colors.borderLight, true: colors.primarySoft }}
-                                thumbColor={notifPrefs[item.key] ? colors.primary : colors.textTertiary}
+                                thumbColor={colors.surface}
                             />
                         </View>
                     ))}
                 </AnimatedCard>
 
-                {/* PT/Dietitian Data Sharing */}
-                <Text style={styles.sectionTitle}>{t('pt_data_sharing')}</Text>
-                <AnimatedCard style={styles.card}>
-                    <TouchableOpacity
-                        style={[styles.menuItem, { paddingHorizontal: 16 }]}
-                        onPress={() => navigation.navigate('PrivacySettings')}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.menuIcon}>
-                            <Ionicons name="lock-closed-outline" size={20} color={colors.primary} />
-                        </View>
-                        <Text style={styles.menuLabel}>{t('manage_privacy_settings')}</Text>
-                        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                    </TouchableOpacity>
-                </AnimatedCard>
+                {/* PT/Dietitian Data Sharing (Hide for Professionals) */}
+                {!isProfessional && (
+                    <>
+                        <Text style={styles.sectionTitle}>{t('pt_data_sharing')}</Text>
+                        <AnimatedCard style={styles.card}>
+                            <TouchableOpacity
+                                style={[styles.menuItem, { paddingHorizontal: 16 }]}
+                                onPress={() => navigation.navigate('PrivacySettings')}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.menuIcon}>
+                                    <Ionicons name="lock-closed-outline" size={20} color={colors.primary} />
+                                </View>
+                                <Text style={styles.menuLabel}>{t('manage_privacy_settings')}</Text>
+                                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                            </TouchableOpacity>
+                        </AnimatedCard>
+                    </>
+                )}
 
                 {/* Privacy & Legal */}
                 <Text style={styles.sectionTitle}>{t('privacy_legal')}</Text>
@@ -378,7 +395,7 @@ const SettingsScreen = ({ navigation }: any) => {
                     <Pressable
                         style={({ pressed }) => [
                             styles.deleteRow,
-                            { backgroundColor: pressed ? colors.error + '10' : 'transparent' }
+                            { backgroundColor: pressed ? `${colors.error}10` : 'transparent' }
                         ]}
                         onPress={handleDeleteAccount}
                     >

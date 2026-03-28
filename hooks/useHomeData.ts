@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { SupabaseService } from '@nextself/shared';
 import { StreakService, StreakData } from '../services/streakService';
 import { HealthService, HealthInsight } from '../services/healthService';
@@ -22,180 +23,134 @@ export interface HomeData {
   currency: UserCurrency | null;
   dailyMissions: DailyMission[];
   dailyProgram: DailyItem[];
-  loading: boolean;
-  refreshing: boolean;
-  error: Error | null;
-  isOfflineData: boolean;
 }
 
 export const useHomeData = (language: Language = 'en') => {
-  const [data, setData] = useState<HomeData>({
-    profile: null,
-    streakData: null,
-    healthInsights: [],
-    todaysWorkouts: [],
-    leagueData: null,
-    currency: null,
-    dailyMissions: [],
-    dailyProgram: [],
-    loading: true,
-    refreshing: false,
-    error: null,
-    isOfflineData: false,
-  });
+  const supa = SupabaseService.getInstance();
 
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setData(prev => ({ ...prev, refreshing: true }));
-    } else {
-      setData(prev => ({ ...prev, loading: true }));
-    }
-
-    // Try to load from cache first for immediate UI
-    if (!isRefresh) {
-      try {
-        const cached = await offlineCache.get<Partial<HomeData>>(CACHE_KEY_HOME);
-        if (cached) {
-          setData(prev => ({
-            ...prev,
-            ...cached,
-            loading: false, // Show cached content immediately
-            isOfflineData: true
-          }));
-        }
-      } catch (e) {
-        console.warn('Failed to load home cache:', e);
-      }
-    }
-
-    try {
-      const supa = SupabaseService.getInstance();
+  // 1. Core Data (Profile, Streak, Currency) - Fast, high priority
+  const coreQuery = useQuery({
+    queryKey: ['homeCore', language],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryFn: async () => {
       const { user } = await supa.getCurrentUser();
-      
-      if (!user) {
-        throw new Error('No user found');
-      }
+      if (!user) throw new Error('No user found');
 
-      // Fetch Profile
-      let profileData = null;
+      let profileData;
       try {
         const { data } = await supa.getUserProfile(user.id);
         profileData = data;
       } catch (error) {
-        console.warn('Failed to load user profile:', error);
-        // If we have cached profile, keep it, otherwise use fallback
-        if (!data.profile) {
-            profileData = {
-            id: user.id,
-            email: user.email,
-            full_name: 'User',
-            username: `user_${user.id.slice(0, 8)}`
-            };
-        } else {
-            profileData = data.profile;
-        }
+        profileData = { id: user.id, email: user.email, full_name: 'User', username: `user_${user.id.slice(0, 8)}` };
       }
 
-      const today = getLocalDateString();
-
-      // Parallel Data Fetching
-      const results = await Promise.allSettled([
-        StreakService.getInstance().getStreak(),
-        (async () => {
-          const hs = HealthService.getInstance();
-          await hs.initialize();
-          const hData = await hs.getTodayHealthData();
-          const insights = hs.generateHealthInsights(hData, profileData?.gender || null);
-          await NotificationService.getInstance().checkSmartReminders(hData, language);
-          return insights;
-        })(),
-        supa.getClient().from('workouts').select('*').eq('user_id', user.id).gte('created_at', today + 'T00:00:00').order('created_at', { ascending: false }).limit(5),
-        LeagueService.getInstance().getUserLeague(),
-        StoreService.getInstance().getUserCurrency(),
-        MissionService.getInstance().getDailyMissions(),
-        // Daily Program Items
-        (async () => {
-          const [wRes, nRes, sRes] = await Promise.all([
-            supa.getAssignedWorkouts(user.id),
-            supa.getAssignedNutritionPlans(user.id),
-            supa.getAssignedSupplements(user.id).catch(() => ({ data: [] }))
-          ]);
-
-          const items: DailyItem[] = [];
-          const todayStr = new Date().toISOString().split('T')[0];
-
-          if (wRes.data) {
-            wRes.data.forEach((w: any) => {
-              if (w.scheduled_date && w.scheduled_date.startsWith(todayStr)) {
-                items.push({
-                  id: w.id,
-                  type: 'workout',
-                  title: w.workout_name || 'Workout',
-                  subtitle: `${w.duration_minutes || 0} min • ${w.calories_burned || 0} cal`,
-                  completed: w.is_completed,
-                  time: w.scheduled_time 
-                });
-              }
-            });
-          }
-          // Add nutrition and supplements processing here if needed
-          return items;
-        })()
+      const [streakData, currency, leagueData] = await Promise.all([
+        StreakService.getInstance().getStreak().catch(() => null),
+        StoreService.getInstance().getUserCurrency().catch(() => null),
+        LeagueService.getInstance().getUserLeague().catch(() => null),
       ]);
 
-      // Extract results
-      const streakData = results[0].status === 'fulfilled' ? results[0].value : null;
-      const healthInsights = results[1].status === 'fulfilled' ? results[1].value : [];
-      const todaysWorkouts = results[2].status === 'fulfilled' ? (results[2].value.data || []) : [];
-      const leagueData = results[3].status === 'fulfilled' ? results[3].value : null;
-      const currency = results[4].status === 'fulfilled' ? results[4].value : null;
-      const dailyMissions = results[5].status === 'fulfilled' ? results[5].value : [];
-      const dailyProgram = results[6].status === 'fulfilled' ? results[6].value : [];
-
-      // Background task
-      MissionService.getInstance().getWeeklyMissions().catch(err => console.warn('Weekly mission generation trigger:', err));
-
-      const newData = {
-        profile: profileData,
-        streakData,
-        healthInsights,
-        todaysWorkouts,
-        leagueData,
-        currency,
-        dailyMissions,
-        dailyProgram,
-        loading: false,
-        refreshing: false,
-        error: null,
-        isOfflineData: false,
-      };
-
-      setData(newData);
-
-      // Update Cache
-      offlineCache.set(CACHE_KEY_HOME, {
-        profile: profileData,
-        streakData,
-        healthInsights,
-        todaysWorkouts,
-        leagueData,
-        currency,
-        dailyMissions,
-        dailyProgram,
-      });
-
-    } catch (error: any) {
-      console.error('Home data load error:', error);
-      setData(prev => ({ 
-        ...prev, 
-        loading: false, 
-        refreshing: false, 
-        error: error,
-        // Keep isOfflineData true if we are falling back to cache
-        isOfflineData: prev.isOfflineData || !!prev.profile 
-      }));
+      return { profileData, streakData, currency, leagueData, userId: user.id };
     }
-  }, [language]);
+  });
 
-  return { ...data, loadData };
+  const userId = coreQuery.data?.userId;
+  const profileData = coreQuery.data?.profileData;
+
+  // 2. Health & Missions (Medium priority)
+  const healthQuery = useQuery({
+    queryKey: ['homeHealth', language, userId],
+    enabled: !!userId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    queryFn: async () => {
+      const [healthInsights, dailyMissions] = await Promise.all([
+        (async () => {
+          try {
+            const hs = HealthService.getInstance();
+            await hs.initialize();
+            const hData = await hs.getTodayHealthData();
+            const insights = hs.generateHealthInsights(hData, profileData?.gender || null);
+            await NotificationService.getInstance().checkSmartReminders(hData, language);
+            return insights;
+          } catch { return []; }
+        })(),
+        MissionService.getInstance().getDailyMissions().catch(() => []),
+      ]);
+      MissionService.getInstance().getWeeklyMissions().catch(() => {});
+      return { healthInsights, dailyMissions };
+    }
+  });
+
+  // 3. Daily Program & Workouts (Dynamic, changes daily)
+  const programQuery = useQuery({
+    queryKey: ['homeProgram', language, userId],
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryFn: async () => {
+      const today = getLocalDateString();
+      const [workoutsRes, assignedRes] = await Promise.all([
+        (async () => {
+          try {
+            return await supa.getClient().from('workouts').select('*').eq('user_id', userId as string).gte('created_at', today + 'T00:00:00').order('created_at', { ascending: false }).limit(5);
+          } catch {
+            return { data: [] };
+          }
+        })(),
+        (async () => {
+          try {
+            const [wRes] = await Promise.all([
+              supa.getAssignedWorkouts(userId as string).catch(() => ({ data: [] }))
+            ]);
+            const items: DailyItem[] = [];
+            if (wRes.data) {
+              wRes.data.forEach((w: any) => {
+                const scheduledDate = typeof w.scheduled_date === 'string' ? w.scheduled_date.slice(0, 10) : '';
+                if (scheduledDate === today) {
+                  items.push({
+                    id: w.id,
+                    type: 'workout',
+                    title: w.workout_name || 'Workout',
+                    subtitle: `${w.duration_minutes || 0} min • ${w.calories_burned || 0} cal`,
+                    completed: w.is_completed,
+                    time: w.scheduled_time 
+                  });
+                }
+              });
+            }
+            return items;
+          } catch { return []; }
+        })()
+      ]);
+      return { todaysWorkouts: workoutsRes.data || [], dailyProgram: assignedRes };
+    }
+  });
+
+  const isLoading = coreQuery.isLoading || (coreQuery.isSuccess && (healthQuery.isLoading || programQuery.isLoading));
+  const isRefetching = coreQuery.isRefetching || healthQuery.isRefetching || programQuery.isRefetching;
+
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      coreQuery.refetch(),
+      healthQuery.refetch(),
+      programQuery.refetch()
+    ]);
+  }, [coreQuery, healthQuery, programQuery]);
+
+  return {
+    data: {
+      profile: coreQuery.data?.profileData || null,
+      streakData: coreQuery.data?.streakData || null,
+      healthInsights: healthQuery.data?.healthInsights || [],
+      todaysWorkouts: programQuery.data?.todaysWorkouts || [],
+      leagueData: coreQuery.data?.leagueData || null,
+      currency: coreQuery.data?.currency || null,
+      dailyMissions: healthQuery.data?.dailyMissions || [],
+      dailyProgram: programQuery.data?.dailyProgram || [],
+    },
+    loading: isLoading,
+    refreshing: isRefetching,
+    error: coreQuery.error || healthQuery.error || programQuery.error,
+    isOfflineData: false,
+    refresh,
+  };
 };

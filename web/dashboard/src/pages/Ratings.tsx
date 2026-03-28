@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { FiStar, FiUser, FiCalendar, FiMessageSquare, FiFilter, FiChevronDown } from 'react-icons/fi';
-import { db } from '../lib/supabase';
+import { useState, useEffect } from 'react';
+import { FiStar, FiUser, FiMessageSquare, FiFilter } from 'react-icons/fi';
+
+type ProfessionalType = 'pt' | 'dietitian';
 
 const Ratings = () => {
     const [ratings, setRatings] = useState<any[]>([]);
@@ -39,18 +40,18 @@ const Ratings = () => {
         }
     };
 
-    const renderStars = (rating) => {
+    const renderStars = (rating: number) => {
         return Array.from({ length: 5 }, (_, i) => (
             <FiStar key={i} className={`w-5 h-5 ${i < rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
         ));
     };
 
-    const getProfessionalTypeBadge = (type) => {
+    const getProfessionalTypeBadge = (type: ProfessionalType) => {
         const map = {
             pt: { label: 'Personal Trainer', color: 'bg-blue-100 text-blue-800' },
             dietitian: { label: 'Diyetisyen', color: 'bg-green-100 text-green-800' }
         };
-        const info = map[type] || { label: type, color: 'bg-gray-100 text-gray-800' };
+        const info = map[type] || { label: String(type), color: 'bg-gray-100 text-gray-800' };
         return <span className={`px-2 py-1 rounded-full text-xs font-medium ${info.color}`}>{info.label}</span>;
     };
 

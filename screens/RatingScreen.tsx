@@ -15,9 +15,9 @@ import { useTranslation } from '../hooks/useTranslation';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useAlert } from '../components/CustomAlert';
 import { RatingService } from '../services/ratingService';
-import { useSupabaseAuth } from '../contexts/SupabaseContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigation';
+import { useAuthStore } from '../store/authStoreSecure';
 
 const RatingScreen = ({ route, navigation }: any) => {
   const { colors, isDark } = useTheme();
@@ -30,7 +30,7 @@ const RatingScreen = ({ route, navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const { isTurkish } = useTranslation();
   const { showAlert, AlertComponent } = useAlert();
-  const { user } = useSupabaseAuth();
+  const user = useAuthStore((state) => state.user);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -39,9 +39,16 @@ const RatingScreen = ({ route, navigation }: any) => {
     }
     setLoading(true);
     try {
+      const userId = user?.id;
+      if (!userId) {
+        setLoading(false);
+        showAlert({ type: 'warning', title: isTurkish ? 'Oturum açın' : 'Sign in', message: isTurkish ? 'Lütfen puan vermek için giriş yapın.' : 'Please sign in to submit a rating.', buttons: [{ text: 'OK' }] });
+        return;
+      }
+
       const ratingService = RatingService.getInstance();
       await ratingService.createRating({
-        userId: user?.id,
+        userId,
         professionalId,
         professionalType: professionalType || 'trainer',
         rating,

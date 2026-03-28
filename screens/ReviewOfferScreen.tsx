@@ -6,8 +6,11 @@ import { SupabaseService } from '@nextself/shared';
 import { useLanguage } from '../contexts/LanguageContext';
 import CustomAlert, { useAlert } from '../components/CustomAlert';
 import { safeGoBack } from '../utils/navigation';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function ReviewOfferScreen() {
+    const { colors } = useTheme();
+    const styles = React.useMemo(() => getStyles(colors), [colors]);
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
     const route = useRoute();
     const { inviteData } = route.params as { inviteData: any };
@@ -222,19 +225,19 @@ export default function ReviewOfferScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f3f4f6', padding: 20 },
-    title: { fontSize: 24, fontWeight: 'bold', color: '#1f2937', marginBottom: 20, textAlign: 'center' },
-    card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
-    cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', paddingBottom: 10 },
+const getStyles = (colors: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background, padding: 20 },
+    title: { fontSize: 24, fontWeight: 'bold', color: colors.text, marginBottom: 20, textAlign: 'center' },
+    card: { backgroundColor: colors.surface, padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: colors.borderLight },
+    cardTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text, marginBottom: 15, borderBottomWidth: 1, borderBottomColor: colors.borderLight, paddingBottom: 10 },
     detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    detailLabel: { fontSize: 16, color: '#4b5563' },
+    detailLabel: { fontSize: 16, color: colors.textSecondary },
     detailValue: { fontSize: 16, fontWeight: 'bold', color: '#4f46e5' },
-    infoText: { fontSize: 13, color: '#6b7280', marginTop: 10, lineHeight: 18 },
-    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+    infoText: { fontSize: 13, color: colors.textSecondary, marginTop: 10, lineHeight: 18 },
+    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
     switchTextContainer: { flex: 1, paddingRight: 15 },
-    switchLabel: { fontSize: 15, fontWeight: '600', color: '#374151', marginBottom: 4 },
-    switchDescription: { fontSize: 12, color: '#9ca3af' },
+    switchLabel: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 4 },
+    switchDescription: { fontSize: 12, color: colors.textTertiary },
     acceptButton: { backgroundColor: '#4f46e5', padding: 16, borderRadius: 10, alignItems: 'center', marginBottom: 12 },
     acceptButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
     cancelButton: { backgroundColor: 'transparent', padding: 16, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },

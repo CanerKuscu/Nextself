@@ -64,7 +64,7 @@ export function useProgressReport(period: Period, isTurkish: boolean, targetUser
             const startIso = startDate.toISOString();
             const startDateOnly = startIso.split('T')[0];
 
-            const [{ data: healthData }, { data: workoutData, error: wErr }, { data: nutData, error: nErr }, { data: waterData }, { data: vitData }, { data: minData }] = await Promise.all([
+            const [{ data: healthData }, { data: workoutData, error: wErr }, { data: nutData, error: nErr }, { data: waterData }, { data: vitData }, { data: minData }, { data: healthGoals }] = await Promise.all([
                 supabase.getClient()
                     .from('health_data')
                     .select('*')
@@ -91,6 +91,11 @@ export function useProgressReport(period: Period, isTurkish: boolean, targetUser
                     .select('id')
                     .eq('user_id', userId)
                     .gte('created_at', startIso),
+                supabase.getClient()
+                    .from('health_goals')
+                    .select('goal_type, target_value, is_active')
+                    .eq('user_id', userId)
+                    .eq('is_active', true),
             ]);
 
             const metrics: BodyMetric[] = (healthData || []).map((r: any) => ({
@@ -150,44 +155,57 @@ export function useProgressReport(period: Period, isTurkish: boolean, targetUser
 
             // Goal Progress calculation
             const goals: typeof goalProgress = [];
+            const goalRows = healthGoals || [];
+            const findGoalTarget = (goalTypes: string[], fallback: number): number => {
+                const row = goalRows.find((goal: any) =>
+                    goalTypes.includes(String(goal?.goal_type || '').toLowerCase())
+                );
+                const value = Number(row?.target_value);
+                return Number.isFinite(value) && value > 0 ? value : fallback;
+            };
 
             if (metrics.length > 0) {
                 const latestWeight = metrics[metrics.length - 1].weight;
                 goals.push({
                     label: isTurkish ? 'Kilo' : 'Weight',
                     current: latestWeight,
-                    target: 75,
+                    target: findGoalTarget(['weight', 'body_weight', 'weight_kg', 'goal_weight'], latestWeight),
                     unit: 'kg',
                     icon: 'scale-outline',
                     color: '#3498db',
                 });
                 if (metrics[metrics.length - 1].bodyFat) {
+                    const latestBodyFat = metrics[metrics.length - 1].bodyFat!;
                     goals.push({
                         label: isTurkish ? 'Vücut Yağı' : 'Body Fat',
-                        current: metrics[metrics.length - 1].bodyFat!,
-                        target: 15,
+                        current: latestBodyFat,
+                        target: findGoalTarget(['body_fat', 'body_fat_percentage', 'fat'], latestBodyFat),
                         unit: '%',
                         icon: 'flame-outline',
                         color: '#e74c3c',
                     });
                 }
                 if (metrics[metrics.length - 1].muscleMass) {
+                    const latestMuscleMass = metrics[metrics.length - 1].muscleMass!;
                     goals.push({
                         label: isTurkish ? 'Kas' : 'Muscle',
-                        current: metrics[metrics.length - 1].muscleMass!,
-                        target: 45,
+                        current: latestMuscleMass,
+                        target: findGoalTarget(['muscle', 'muscle_mass', 'muscle_percentage'], latestMuscleMass),
                         unit: '%',
                         icon: 'fitness-outline',
                         color: '#2ecc71',
                     });
                 }
             }
-            // Simplified goal adding
             if (workoutData && workoutData.length > 0) {
+                const workoutCurrent = Number(workoutData[0].total_workouts) || 0;
                 goals.push({
                     label: isTurkish ? 'Antrenman' : 'Workouts',
-                    current: Number(workoutData[0].total_workouts) || 0,
-                    target: period === 'weekly' ? 5 : period === 'monthly' ? 20 : 240,
+                    current: workoutCurrent,
+                    target: findGoalTarget(
+                        ['workout', 'workouts', 'training', 'training_sessions'],
+                        period === 'weekly' ? 5 : period === 'monthly' ? 20 : 240
+                    ),
                     unit: '',
                     icon: 'barbell-outline',
                     color: '#9b59b6',

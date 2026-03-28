@@ -10,8 +10,8 @@ import { MissionService, WeeklyMission, DailyMission } from '../services/mission
 import { LeagueService } from '../services/leagueService';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAlert } from '../components/CustomAlert';
-import { COLORS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { GRADIENTS } from '../config/theme';
 import { safeGoBack } from '../utils/navigation';
 
 const CATEGORY_META: Record<string, { icon: string; color: string; gradient: string[] }> = {
@@ -27,7 +27,7 @@ const CATEGORY_META: Record<string, { icon: string; color: string; gradient: str
 
 const MissionsScreen = ({ navigation }: any) => {
     const { colors, isDark } = useTheme();
-    const st = React.useMemo(() => getStyles(colors), [colors]);
+    const st = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -121,7 +121,7 @@ const MissionsScreen = ({ navigation }: any) => {
                 >
                     {/* Category icon */}
                     <LinearGradient colors={meta.gradient as any} style={st.missionIconBg}>
-                        <Ionicons name={meta.icon as any} size={20} color="#FFF" />
+                        <Ionicons name={meta.icon as any} size={20} color={isDark ? colors.text : colors.textInverse} />
                     </LinearGradient>
 
                     {/* Content */}
@@ -132,7 +132,7 @@ const MissionsScreen = ({ navigation }: any) => {
                             </Text>
                             {completed && (
                                 <View style={st.completedBadge}>
-                                    <Ionicons name="checkmark-circle" size={18} color="#58CC02" />
+                                    <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                                 </View>
                             )}
                         </View>
@@ -147,7 +147,7 @@ const MissionsScreen = ({ navigation }: any) => {
                         <View style={st.progressRow}>
                             <View style={st.progressOuter}>
                                 <LinearGradient
-                                    colors={completed ? ['#58CC02', '#89E219'] : [meta.color, meta.color + 'CC']}
+                                    colors={completed ? [colors.success, colors.primaryLight] : [meta.color, meta.color + 'CC']}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                     style={[st.progressInner, { width: `${progress * 100}%` }]}
                                 />
@@ -158,12 +158,12 @@ const MissionsScreen = ({ navigation }: any) => {
                         {/* Rewards */}
                         <View style={st.rewardRow}>
                             <View style={st.rewardBadge}>
-                                <Ionicons name="flash" size={11} color="#FFC800" />
+                                <Ionicons name="flash" size={11} color={colors.warning} />
                                 <Text style={st.rewardText}>{mission.xpReward} XP</Text>
                             </View>
-                            <View style={[st.rewardBadge, { backgroundColor: '#F0EAFF' }]}>
-                                <Ionicons name="diamond" size={11} color="#CE82FF" />
-                                <Text style={[st.rewardText, { color: '#CE82FF' }]}>{mission.pointReward}</Text>
+                            <View style={[st.rewardBadge, { backgroundColor: colors.surfaceElevated }]}>
+                                <Ionicons name="diamond" size={11} color={colors.secondary} />
+                                <Text style={[st.rewardText, { color: colors.secondary }]}>{mission.pointReward}</Text>
                             </View>
                             <View style={[st.categoryTag, { backgroundColor: meta.color + '15' }]}>
                                 <Text style={[st.categoryText, { color: meta.color }]}>
@@ -213,7 +213,7 @@ const MissionsScreen = ({ navigation }: any) => {
                         style={[st.tabBtn, tab === 'weekly' && st.tabBtnActive]}
                         onPress={() => setTab('weekly')}
                     >
-                        <Ionicons name="calendar" size={16} color={tab === 'weekly' ? '#FFF' : '#6B7280'} />
+                        <Ionicons name="calendar" size={16} color={tab === 'weekly' ? (isDark ? colors.text : colors.textInverse) : colors.textTertiary} />
                         <Text style={[st.tabText, tab === 'weekly' && st.tabTextActive]}>
                             {isTurkish ? 'Haftalık' : 'Weekly'}
                         </Text>
@@ -222,7 +222,7 @@ const MissionsScreen = ({ navigation }: any) => {
                         style={[st.tabBtn, tab === 'daily' && st.tabBtnActive]}
                         onPress={() => setTab('daily')}
                     >
-                        <Ionicons name="today" size={16} color={tab === 'daily' ? '#FFF' : '#6B7280'} />
+                        <Ionicons name="today" size={16} color={tab === 'daily' ? (isDark ? colors.text : colors.textInverse) : colors.textTertiary} />
                         <Text style={[st.tabText, tab === 'daily' && st.tabTextActive]}>
                             {isTurkish ? 'Günlük' : 'Daily'}
                         </Text>
@@ -231,7 +231,7 @@ const MissionsScreen = ({ navigation }: any) => {
 
                 {/* Summary card */}
                 <LinearGradient
-                    colors={tab === 'weekly' ? ['#667eea', '#764ba2'] : ['#f093fb', '#f5576c']}
+                    colors={tab === 'weekly' ? GRADIENTS.secondary : GRADIENTS.aiTools}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={st.summaryCard}
                 >
@@ -270,8 +270,8 @@ const MissionsScreen = ({ navigation }: any) => {
 
                 {/* AI badge */}
                 <View style={st.aiBadge}>
-                    <LinearGradient colors={['#667eea', '#764ba2']} style={st.aiBadgeGrad}>
-                        <Ionicons name="sparkles" size={14} color="#FFF" />
+                    <LinearGradient colors={GRADIENTS.secondary} style={st.aiBadgeGrad}>
+                        <Ionicons name="sparkles" size={14} color={isDark ? colors.text : colors.textInverse} />
                         <Text style={st.aiBadgeText}>
                             {isTurkish
                                 ? 'Bu görevler senin seviyene ve aktivitelerine göre AI tarafından oluşturuldu'
@@ -296,7 +296,7 @@ const MissionsScreen = ({ navigation }: any) => {
                 {/* All completed celebration */}
                 {activeMissions.length > 0 && activeCompleted === activeMissions.length && (
                     <View style={st.allDoneCard}>
-                        <Ionicons name="trophy" size={48} color="#FFC800" />
+                        <Ionicons name="trophy" size={48} color={colors.gold} />
                         <Text style={st.allDoneTitle}>
                             {isTurkish ? 'Tüm görevler tamamlandı!' : 'All missions completed!'}
                         </Text>
@@ -314,98 +314,105 @@ const MissionsScreen = ({ navigation }: any) => {
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
-    loadingText: { marginTop: 16, fontSize: 15, color: '#6B7280', fontWeight: '600' },
-    scroll: { paddingHorizontal: 20 },
+const getStyles = (colors: any, isDark: boolean) => {
+    const gradientLabelColor = isDark ? colors.text : 'rgba(255,255,255,0.85)';
+    const gradientSubColor = isDark ? colors.textSecondary : 'rgba(255,255,255,0.8)';
+    const gradientOverlay = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.2)';
+    const gradientInnerColor = isDark ? colors.text : colors.textInverse;
 
-    // Header
-    headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
-    backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-    headerSub: { fontSize: 12, color: colors.textTertiary, fontWeight: '500', marginTop: 2 },
+    return StyleSheet.create({
+        center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+        loadingText: { marginTop: 16, fontSize: 15, color: colors.textSecondary, fontWeight: '600' },
+        scroll: { paddingHorizontal: 20 },
 
-    // Tabs
-    tabRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-    tabBtn: {
-        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-        paddingVertical: 12, borderRadius: 16, backgroundColor: '#F5F5F5',
-    },
-    tabBtnActive: { backgroundColor: colors.primary },
-    tabText: { fontSize: 14, fontWeight: '700', color: '#6B7280' },
-    tabTextActive: { color: colors.background },
+        // Header
+        headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+        backBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' },
+        headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+        headerSub: { fontSize: 12, color: colors.textTertiary, fontWeight: '500', marginTop: 2 },
 
-    // Summary card
-    summaryCard: { borderRadius: 24, padding: 24, marginBottom: 16 },
-    summaryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    summaryLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-    summaryPercent: { fontSize: 42, fontWeight: '900', color: '#FFF', marginTop: 4 },
-    summaryCircle: {
-        width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center', alignItems: 'center',
-    },
-    summaryCircleText: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-    summaryCircleSub: { fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-    summaryBarOuter: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.2)' },
-    summaryBarInner: { height: 8, borderRadius: 4, backgroundColor: '#FFF' },
-    summaryXpText: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: 8, textAlign: 'center' },
+        // Tabs
+        tabRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+        tabBtn: {
+            flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+            paddingVertical: 12, borderRadius: 16, backgroundColor: colors.surface,
+        },
+        tabBtnActive: { backgroundColor: colors.primary },
+        tabText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+        tabTextActive: { color: isDark ? colors.text : colors.textInverse },
 
-    // Week dates
-    weekDates: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-    weekDateText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+        // Summary card
+        summaryCard: { borderRadius: 24, padding: 24, marginBottom: 16 },
+        summaryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+        summaryLabel: { fontSize: 13, color: gradientLabelColor, fontWeight: '600' },
+        summaryPercent: { fontSize: 42, fontWeight: '900', color: gradientLabelColor, marginTop: 4 },
+        summaryCircle: {
+            width: 64, height: 64, borderRadius: 32, backgroundColor: gradientOverlay,
+            justifyContent: 'center', alignItems: 'center',
+        },
+        summaryCircleText: { fontSize: 18, fontWeight: '800', color: gradientLabelColor },
+        summaryCircleSub: { fontSize: 10, color: gradientSubColor, fontWeight: '600' },
+        summaryBarOuter: { height: 8, borderRadius: 4, backgroundColor: gradientOverlay },
+        summaryBarInner: { height: 8, borderRadius: 4, backgroundColor: gradientInnerColor },
+        summaryXpText: { fontSize: 12, color: gradientSubColor, fontWeight: '600', marginTop: 8, textAlign: 'center' },
 
-    // AI badge
-    aiBadge: { marginBottom: 18 },
-    aiBadgeGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-    aiBadgeText: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '500', flex: 1 },
+        // Week dates
+        weekDates: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+        weekDateText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
 
-    // Mission card
-    missionCard: { marginBottom: 12 },
-    missionInner: {
-        flexDirection: 'row', alignItems: 'flex-start',
-        backgroundColor: colors.surface, borderRadius: 20, padding: 16,
-        borderWidth: 1, borderColor: '#F0F0F0',
-    },
-    missionIconBg: {
-        width: 44, height: 44, borderRadius: 14,
-        justifyContent: 'center', alignItems: 'center', marginRight: 12,
-    },
-    missionContent: { flex: 1 },
-    missionHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-    missionTitle: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 },
-    missionTitleDone: { textDecorationLine: 'line-through', color: colors.textTertiary },
-    completedBadge: { marginTop: 1 },
-    missionDesc: { fontSize: 11, color: colors.textTertiary, fontWeight: '500', marginTop: 4, marginBottom: 8 },
+        // AI badge
+        aiBadge: { marginBottom: 18 },
+        aiBadgeGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
+        aiBadgeText: { fontSize: 11, color: gradientLabelColor, fontWeight: '500', flex: 1 },
 
-    // Progress
-    progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 8 },
-    progressOuter: { flex: 1, height: 6, borderRadius: 3, backgroundColor: '#E5E5EA', overflow: 'hidden' },
-    progressInner: { height: 6, borderRadius: 3 },
-    progressText: { fontSize: 11, fontWeight: '700', color: '#6B7280', minWidth: 30 },
+        // Mission card
+        missionCard: { marginBottom: 12 },
+        missionInner: {
+            flexDirection: 'row', alignItems: 'flex-start',
+            backgroundColor: colors.surface, borderRadius: 20, padding: 16,
+            borderWidth: 1, borderColor: colors.borderLight,
+        },
+        missionIconBg: {
+            width: 44, height: 44, borderRadius: 14,
+            justifyContent: 'center', alignItems: 'center', marginRight: 12,
+        },
+        missionContent: { flex: 1 },
+        missionHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+        missionTitle: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 },
+        missionTitleDone: { textDecorationLine: 'line-through', color: colors.textTertiary },
+        completedBadge: { marginTop: 1 },
+        missionDesc: { fontSize: 11, color: colors.textTertiary, fontWeight: '500', marginTop: 4, marginBottom: 8 },
 
-    // Rewards
-    rewardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-    rewardBadge: {
-        flexDirection: 'row', alignItems: 'center', gap: 3,
-        backgroundColor: '#FFF8E0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
-    },
-    rewardText: { fontSize: 11, fontWeight: '700', color: '#FF9600' },
-    categoryTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-    categoryText: { fontSize: 10, fontWeight: '700' },
+        // Progress
+        progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 8 },
+        progressOuter: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.border, overflow: 'hidden' },
+        progressInner: { height: 6, borderRadius: 3 },
+        progressText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, minWidth: 30 },
 
-    // Empty state
-    emptyState: { alignItems: 'center', paddingVertical: 60 },
-    emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16 },
-    emptyText: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', marginTop: 8, paddingHorizontal: 20 },
+        // Rewards
+        rewardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+        rewardBadge: {
+            flexDirection: 'row', alignItems: 'center', gap: 3,
+            backgroundColor: colors.warningSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+        },
+        rewardText: { fontSize: 11, fontWeight: '700', color: colors.streak },
+        categoryTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+        categoryText: { fontSize: 10, fontWeight: '700' },
 
-    // All done
-    allDoneCard: {
-        alignItems: 'center', backgroundColor: '#E8FFE0', borderRadius: 24,
-        padding: 28, marginTop: 8, borderWidth: 1, borderColor: '#C5F0A5',
-    },
-    allDoneEmoji: { fontSize: 48 },
-    allDoneTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 12 },
-    allDoneSub: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 8, lineHeight: 20 },
-});
+        // Empty state
+        emptyState: { alignItems: 'center', paddingVertical: 60 },
+        emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16 },
+        emptyText: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', marginTop: 8, paddingHorizontal: 20 },
+
+        // All done
+        allDoneCard: {
+            alignItems: 'center', backgroundColor: colors.successSoft, borderRadius: 24,
+            padding: 28, marginTop: 8, borderWidth: 1, borderColor: colors.success,
+        },
+        allDoneEmoji: { fontSize: 48 },
+        allDoneTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 12 },
+        allDoneSub: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+    });
+};
 
 export default MissionsScreen;

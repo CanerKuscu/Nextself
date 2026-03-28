@@ -239,7 +239,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
 
   typeScroll: { gap: 10, marginBottom: 20, paddingRight: 12 },
-  typeCard: { paddingHorizontal: 18, height: 50, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#E5E5E5' },
+  typeCard: { paddingHorizontal: 18, height: 50, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border },
   typeCardActive: { borderColor: 'transparent', elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   typeLabel: { fontSize: 14, fontWeight: '700', color: '#6B7280' },
   typeLabelActive: { color: colors.background },
@@ -249,14 +249,14 @@ const getStyles = (colors: any) => StyleSheet.create({
   toggleBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#E8FFE0', justifyContent: 'center', alignItems: 'center' },
 
   bodyRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  bodyCol: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 20, padding: 8, borderWidth: 1, borderColor: '#F0F0F0' },
+  bodyCol: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 20, padding: 8, borderWidth: 1, borderColor: colors.borderLight },
   bodyPlaceholder: { alignItems: 'center', justifyContent: 'center', height: 280 },
   muscleCol: { flex: 1, maxHeight: 380 },
 
   muscleBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 6, borderWidth: 1.5, borderColor: '#F0F0F0',
+    marginBottom: 6, borderWidth: 1.5, borderColor: colors.borderLight,
   },
   muscleDot: { width: 8, height: 8, borderRadius: 4 },
   muscleBtnText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.text },

@@ -34,6 +34,22 @@ const TermsScreen = ({ navigation, route }: any) => {
     const [accepting, setAccepting] = useState(false);
     const [allAccepted, setAllAccepted] = useState(false);
 
+    const navigateAfterAgreementAccepted = async (currentUserId: string) => {
+        const supabase = SupabaseService.getInstance().getClient();
+        const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('user_type')
+            .eq('id', currentUserId)
+            .maybeSingle();
+
+        const role = userProfile?.user_type;
+        if (role === 'pt' || role === 'dietitian' || role === 'trainer') {
+            navigation.replace('ProfessionalMain');
+            return;
+        }
+        navigation.replace('Main');
+    };
+
     const handleBack = async () => {
         if (fromAuth) {
             try {
@@ -61,6 +77,10 @@ const TermsScreen = ({ navigation, route }: any) => {
                     const { allAccepted: all } = await agreementService.hasAcceptedAll(currentUserId);
                     setAllAccepted(all);
                     setAccepted(all);
+                    if (all) {
+                        await navigateAfterAgreementAccepted(currentUserId);
+                        return;
+                    }
                 } else {
                     const isAccepted = await agreementService.hasAccepted(currentUserId, section as AgreementType);
                     setAccepted(isAccepted);
@@ -85,10 +105,7 @@ const TermsScreen = ({ navigation, route }: any) => {
                     if (result.success) {
                         setAllAccepted(true);
                         setAccepted(true);
-                        // Navigate to main app after accepting all
-                        setTimeout(() => {
-                            navigation.replace('Main');
-                        }, 500);
+                        await navigateAfterAgreementAccepted(currentUserId);
                     }
                 } else {
                     const result = await agreementService.acceptAgreement(currentUserId, section as AgreementType);
@@ -111,7 +128,7 @@ const TermsScreen = ({ navigation, route }: any) => {
             // ═══════════════════════════════════════════════════════════════════
             case 'kvkk':
                 return {
-                    title: 'KVKK Aydınlatma Metni',
+                    title: isTurkish ? 'KVKK Aydınlatma Metni' : 'KVKK Disclosure',
                     content: isTurkish
                         ? `1. Veri Sorumlusunun Kimliği
 
@@ -1425,7 +1442,7 @@ Virtual Unit Rules:
                         {/* KVKK */}
                         <TouchableOpacity
                             style={[styles.card, { marginBottom: 12 }]}
-                            onPress={() => navigation.navigate('Terms', { section: 'kvkk' })}
+                            onPress={() => navigation.navigate('Terms', { section: 'kvkk', fromAuth, userId })}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -1441,7 +1458,7 @@ Virtual Unit Rules:
                         {/* Consent */}
                         <TouchableOpacity
                             style={[styles.card, { marginBottom: 12 }]}
-                            onPress={() => navigation.navigate('Terms', { section: 'consent' })}
+                            onPress={() => navigation.navigate('Terms', { section: 'consent', fromAuth, userId })}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -1457,7 +1474,7 @@ Virtual Unit Rules:
                         {/* Privacy */}
                         <TouchableOpacity
                             style={[styles.card, { marginBottom: 12 }]}
-                            onPress={() => navigation.navigate('Terms', { section: 'privacy' })}
+                            onPress={() => navigation.navigate('Terms', { section: 'privacy', fromAuth, userId })}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -1473,7 +1490,7 @@ Virtual Unit Rules:
                         {/* Terms */}
                         <TouchableOpacity
                             style={[styles.card, { marginBottom: 12 }]}
-                            onPress={() => navigation.navigate('Terms', { section: 'terms' })}
+                            onPress={() => navigation.navigate('Terms', { section: 'terms', fromAuth, userId })}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -1489,7 +1506,7 @@ Virtual Unit Rules:
                         {/* Subscription */}
                         <TouchableOpacity
                             style={[styles.card, { marginBottom: 24 }]}
-                            onPress={() => navigation.navigate('Terms', { section: 'subscription' })}
+                            onPress={() => navigation.navigate('Terms', { section: 'subscription', fromAuth, userId })}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>

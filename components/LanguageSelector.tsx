@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Language } from '../locales/i18n';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface LanguageSelectorProps {
   visible: boolean;
@@ -17,6 +18,8 @@ interface LanguageSelectorProps {
 }
 
 const LanguageSelector: React.FC<LanguageSelectorProps> = ({ visible, onClose }) => {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const { language, setLanguage, t } = useLanguage();
 
   const languages = [
@@ -40,7 +43,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ visible, onClose })
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close-outline" size={24} color="#1F2937" />
+            <Ionicons name="close-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>{t('language')}</Text>
           <View style={styles.placeholder} />
@@ -61,7 +64,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ visible, onClose })
                 <Text style={styles.languageSubtitle}>{lang.name}</Text>
               </View>
               {language === lang.code && (
-                <Ionicons name="checkmark-circle" size={24} color="#4F46E5" />
+                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
               )}
             </TouchableOpacity>
           ))}
@@ -71,10 +74,10 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ visible, onClose })
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -84,12 +87,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.text,
   },
   placeholder: {
     width: 24,
@@ -104,10 +107,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderLight,
   },
   selectedLanguage: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: colors.primarySoft,
   },
   languageInfo: {
     flex: 1,
@@ -115,12 +118,12 @@ const styles = StyleSheet.create({
   languageName: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#1F2937',
+    color: colors.text,
     marginBottom: 4,
   },
   languageSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
 });
 

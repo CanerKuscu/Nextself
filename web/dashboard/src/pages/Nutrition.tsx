@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiSearch, FiFilter, FiCalendar } from 'react-icons/fi';
 import { MdFastfood, MdLocalFireDepartment } from 'react-icons/md';
@@ -92,6 +92,12 @@ const Nutrition = () => {
             sub: t('nutrition.allTime'),
         },
     ];
+    const colorClasses: Record<'primary' | 'success' | 'warning' | 'secondary', string> = {
+        primary: 'bg-primary-50 text-primary-600',
+        success: 'bg-success-50 text-success-600',
+        warning: 'bg-warning-50 text-warning-600',
+        secondary: 'bg-secondary-50 text-secondary-600',
+    };
 
     if (loading && !logs.length) {
         return (
@@ -133,12 +139,6 @@ const Nutrition = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {macroCards.map((card, index) => {
                     const Icon = card.icon;
-                    const colorClasses = {
-                        primary: 'bg-primary-50 text-primary-600',
-                        success: 'bg-success-50 text-success-600',
-                        warning: 'bg-warning-50 text-warning-600',
-                        secondary: 'bg-secondary-50 text-secondary-600',
-                    };
                     return (
                         <div key={index} className="stat-card">
                             <div className="flex items-center justify-between">
@@ -147,7 +147,7 @@ const Nutrition = () => {
                                     <p className="stat-value mt-2">{card.value}</p>
                                     <p className="stat-change stat-change-positive mt-1">{card.sub}</p>
                                 </div>
-                                <div className={`p-3 rounded-lg ${colorClasses[card.color]}`}>
+                                <div className={`p-3 rounded-lg ${colorClasses[card.color as keyof typeof colorClasses]}`}>
                                     <Icon className="w-6 h-6" />
                                 </div>
                             </div>

@@ -102,12 +102,41 @@ serve(async (req: Request) => {
         }
 
         // ─── Flow B: DB webhook trigger (storage.objects insert) ───
-        const record = payload.record;
-        if (!record || record.bucket_id !== "avatars") {
+        const WebhookSecret = Deno.env.get('WEBHOOK_SECRET');
+        const authHeader = req.headers.get('Authorization') || '';
+        
+        // 1. Lightweight Webhook Secret Validation
+        if (WebhookSecret && authHeader !== `Bearer ${WebhookSecret}`) {
+            console.warn("[SECURITY] Webhook blocked: Missing or invalid Authorization secret.");
+            return new Response("Unauthorized webhook", { status: 401, headers: corsHeaders });
+        }
+
+        const payloadRecord = payload.record;
+        
+        // 2. Strict ID validation
+        if (!payloadRecord || !payloadRecord.id || typeof payloadRecord.id !== 'string') {
+            console.warn("[SECURITY] Webhook blocked: Malformed payload missing valid record ID.");
+            return new Response("Invalid webhook payload", { status: 400, headers: corsHeaders });
+        }
+
+        // 3. Fetch-Back: Retrieve verified state from the database
+        const { data: dbRecord, error: fetchError } = await supabase
+            .schema('storage')
+            .from('objects')
+            .select('name, owner, bucket_id')
+            .eq('id', payloadRecord.id)
+            .single();
+
+        if (fetchError || !dbRecord) {
+            console.info(`[WEBHOOK] Record not found for ID ${payloadRecord.id}. Likely deleted or invalid.`);
+            return new Response("Record not found", { status: 200, headers: corsHeaders });
+        }
+
+        if (dbRecord.bucket_id !== "avatars") {
             return new Response("Not an avatar upload", { status: 200, headers: corsHeaders });
         }
 
-        const { name: filePath, owner } = record;
+        const { name: filePath, owner } = dbRecord;
 
         if (!sightengineUser || !sightengineSecret) {
             return new Response("Missing moderation API credentials, allowed by default", { status: 200, headers: corsHeaders });

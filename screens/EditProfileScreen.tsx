@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Image } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +23,7 @@ const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
 const EditProfileScreen = ({ navigation, route }: any) => {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const { isTurkish } = useTranslation();
     const insets = useSafeAreaInsets();
@@ -179,14 +180,14 @@ const EditProfileScreen = ({ navigation, route }: any) => {
 
             <LinearGradient colors={GRADIENTS.primary as any} style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <TouchableOpacity onPress={() => safeGoBack(navigation, 'Profile')} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color={isDark ? colors.text : colors.textInverse} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{isTurkish ? 'Profil Düzenle' : 'Edit Profile'}</Text>
                 <View style={{ width: 40 }} />
             </LinearGradient>
 
-            <ScrollView 
-                contentContainerStyle={[styles.content, { paddingBottom: 100 }]} 
+            <ScrollView
+                contentContainerStyle={[styles.content, { paddingBottom: 100 }]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
@@ -283,11 +284,11 @@ const EditProfileScreen = ({ navigation, route }: any) => {
                         )}
                         {uploadingAvatar ? (
                             <View style={styles.avatarOverlay}>
-                                <ActivityIndicator color="#fff" size="small" />
+                                <ActivityIndicator color={isDark ? colors.text : colors.textInverse} size="small" />
                             </View>
                         ) : (
                             <View style={styles.avatarBadge}>
-                                <Ionicons name="camera" size={14} color="#fff" />
+                                <Ionicons name="camera" size={14} color={isDark ? colors.text : colors.textInverse} />
                             </View>
                         )}
                     </TouchableOpacity>
@@ -342,45 +343,50 @@ const EditProfileScreen = ({ navigation, route }: any) => {
                     <Text style={styles.hintText}>{isTurkish ? 'Sadece küçük harf, rakam ve _ kullanılabilir' : 'Only lowercase letters, numbers and _ allowed'}</Text>
                 </GlassCard>
 
-                {/* Body Measurements */}
-                <Text style={styles.sectionTitle}>{isTurkish ? 'Vücut Ölçüleri' : 'Body Measurements'}</Text>
-                <GlassCard style={styles.card}>
-                    <Text style={styles.label}>{isTurkish ? 'Doğum Tarihi (YYYY-MM-DD)' : 'Date of Birth (YYYY-MM-DD)'}</Text>
-                    <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.9}>
-                        <View pointerEvents="none">
-                            <TextInput style={inputStyle(dob)} value={dob} onChangeText={setDob}
-                                placeholder="1995-06-15" placeholderTextColor={colors.textTertiary} keyboardType="numeric" editable={false} />
-                        </View>
-                    </TouchableOpacity>
-                    {showDatePicker && (
-                        <DateTimePicker
-                            value={dob ? new Date(dob) : new Date(2000, 0, 1)}
-                            mode="date"
-                            display="default"
-                            maximumDate={new Date()}
-                            onChange={(event, selectedDate) => {
-                                setShowDatePicker(Platform.OS === 'ios');
-                                if (selectedDate) {
-                                    setDob(getLocalDateString(selectedDate));
-                                }
-                            }}
-                        />
-                    )}
+                {/* Hide body measurements for professionals */}
+                {existingProfile?.user_type !== 'pt' && existingProfile?.user_type !== 'dietitian' && (
+                    <>
+                        {/* Body Measurements */}
+                        <Text style={styles.sectionTitle}>{isTurkish ? 'Vücut Ölçüleri' : 'Body Measurements'}</Text>
+                        <GlassCard style={styles.card}>
+                            <Text style={styles.label}>{isTurkish ? 'Doğum Tarihi (YYYY-MM-DD)' : 'Date of Birth (YYYY-MM-DD)'}</Text>
+                            <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.9}>
+                                <View pointerEvents="none">
+                                    <TextInput style={inputStyle(dob)} value={dob} onChangeText={setDob}
+                                        placeholder="1995-06-15" placeholderTextColor={colors.textTertiary} keyboardType="numeric" editable={false} />
+                                </View>
+                            </TouchableOpacity>
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={dob ? new Date(dob) : new Date(2000, 0, 1)}
+                                    mode="date"
+                                    display="default"
+                                    maximumDate={new Date()}
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(Platform.OS === 'ios');
+                                        if (selectedDate) {
+                                            setDob(getLocalDateString(selectedDate));
+                                        }
+                                    }}
+                                />
+                            )}
 
-                    <View style={styles.row}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.label, { marginTop: SPACING.md }]}>{isTurkish ? 'Boy (cm)' : 'Height (cm)'}</Text>
-                            <TextInput style={inputStyle(height)} value={height} onChangeText={setHeight}
-                                placeholder="175" placeholderTextColor={colors.textTertiary} keyboardType="numeric" />
-                        </View>
-                        <View style={{ width: SPACING.md }} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.label, { marginTop: SPACING.md }]}>{isTurkish ? 'Kilo (kg)' : 'Weight (kg)'}</Text>
-                            <TextInput style={inputStyle(weight)} value={weight} onChangeText={setWeight}
-                                placeholder="70" placeholderTextColor={colors.textTertiary} keyboardType="numeric" />
-                        </View>
-                    </View>
-                </GlassCard>
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.label, { marginTop: SPACING.md }]}>{isTurkish ? 'Boy (cm)' : 'Height (cm)'}</Text>
+                                    <TextInput style={inputStyle(height)} value={height} onChangeText={setHeight}
+                                        placeholder="175" placeholderTextColor={colors.textTertiary} keyboardType="numeric" />
+                                </View>
+                                <View style={{ width: SPACING.md }} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.label, { marginTop: SPACING.md }]}>{isTurkish ? 'Kilo (kg)' : 'Weight (kg)'}</Text>
+                                    <TextInput style={inputStyle(weight)} value={weight} onChangeText={setWeight}
+                                        placeholder="70" placeholderTextColor={colors.textTertiary} keyboardType="numeric" />
+                                </View>
+                            </View>
+                        </GlassCard>
+                    </>
+                )}
 
                 {/* Gender */}
                 <Text style={styles.sectionTitle}>{isTurkish ? 'Cinsiyet' : 'Gender'}</Text>
@@ -419,11 +425,11 @@ const EditProfileScreen = ({ navigation, route }: any) => {
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row', alignItems: 'center', paddingBottom: SPACING.xl, paddingHorizontal: SPACING.lg },
     backBtn: { width: 40, height: 40, justifyContent: 'center' },
-    headerTitle: { ...TYPOGRAPHY.h2, color: '#fff', flex: 1, textAlign: 'center' },
+    headerTitle: { ...TYPOGRAPHY.h2, color: isDark ? colors.text : colors.textInverse, flex: 1, textAlign: 'center' },
     content: { paddingHorizontal: SPACING.lg },
     sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginTop: SPACING.xl, marginBottom: SPACING.md },
     card: { gap: SPACING.xs },
@@ -448,7 +454,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     avatarImage: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: colors.primary },
     avatarPlaceholder: { width: 90, height: 90, borderRadius: 45, backgroundColor: colors.primarySoft || '#E8FFE0', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: colors.primary },
     avatarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 45, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-    avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+    avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? colors.text : colors.textInverse },
 });
 
 export default EditProfileScreen;

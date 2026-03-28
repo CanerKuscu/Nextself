@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { FiFileText, FiCheck, FiChevronDown, FiChevronUp, FiShield, FiLock, FiCreditCard, FiBookOpen, FiAlertCircle, FiExternalLink } from 'react-icons/fi';
 
-const AGREEMENT_SECTIONS = [
+type AgreementType = 'kvkk' | 'consent' | 'privacy' | 'subscription' | 'terms';
+
+const AGREEMENT_SECTIONS: Array<{
+    key: AgreementType;
+    titleTr: string;
+    titleEn: string;
+    icon: any;
+    articles: number;
+    color: string;
+}> = [
     {
         key: 'kvkk',
         titleTr: 'KVKK Aydınlatma Metni',
@@ -406,6 +415,8 @@ Virtual units cannot be converted to cash or transferred. No ownership rights. A
     }
 };
 
+type ContractStatus = 'pending' | 'accepted' | 'active' | 'completed' | 'cancelled' | 'refunded' | 'withdrawn';
+
 const LegalAgreements = () => {
     const [session, setSession] = useState<any>(null);
     const [userAgreements, setUserAgreements] = useState<any[]>([]);
@@ -435,7 +446,7 @@ const LegalAgreements = () => {
         }
     };
 
-    const fetchUserAgreements = async (userId) => {
+    const fetchUserAgreements = async (userId: string) => {
         try {
             const { data, error } = await supabase
                 .from('user_agreements')
@@ -450,7 +461,7 @@ const LegalAgreements = () => {
         }
     };
 
-    const fetchUserContracts = async (userId) => {
+    const fetchUserContracts = async (userId: string) => {
         try {
             const { data, error } = await supabase
                 .from('distance_sales_contracts')
@@ -465,7 +476,7 @@ const LegalAgreements = () => {
         }
     };
 
-    const getContractStatusBadge = (status) => {
+    const getContractStatusBadge = (status: ContractStatus) => {
         const colors = {
             pending: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: language === 'tr' ? 'Bekliyor' : 'Pending' },
             accepted: { bg: 'bg-blue-50', text: 'text-blue-700', label: language === 'tr' ? 'Kabul Edildi' : 'Accepted' },
@@ -478,11 +489,11 @@ const LegalAgreements = () => {
         return colors[status] || colors.pending;
     };
 
-    const isAccepted = (agreementType) => {
+    const isAccepted = (agreementType: AgreementType) => {
         return userAgreements.some(a => a.agreement_type === agreementType && a.is_active);
     };
 
-    const handleAccept = async (agreementType) => {
+    const handleAccept = async (agreementType: AgreementType) => {
         if (!session?.user) { return; }
         setAccepting(agreementType);
         try {
@@ -622,7 +633,7 @@ const LegalAgreements = () => {
                     const Icon = section.icon;
                     const accepted = isAccepted(section.key);
                     const isExpanded = expandedSection === section.key;
-                    const content = AGREEMENT_CONTENT[section.key];
+                    const content = AGREEMENT_CONTENT[section.key as AgreementType];
 
                     return (
                         <div

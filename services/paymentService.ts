@@ -2,8 +2,17 @@ import { SupabaseService } from '@nextself/shared';
 import { AgreementService } from './agreementService';
 import { CONFIG } from '@nextself/shared';
 import { SubscriptionPlan, UserSubscription } from '@nextself/shared';
+import { SecurityUtils } from '../utils/security';
 
-const supabase = SupabaseService.getInstance().getClient();
+const getSupabaseClient = () => SupabaseService.getInstance().getClient();
+const supabase = {
+    from: (...args: Parameters<ReturnType<typeof getSupabaseClient>['from']>) => getSupabaseClient().from(...args),
+    rpc: (...args: Parameters<ReturnType<typeof getSupabaseClient>['rpc']>) => getSupabaseClient().rpc(...args),
+    auth: {
+        getUser: (...args: Parameters<ReturnType<typeof getSupabaseClient>['auth']['getUser']>) =>
+            getSupabaseClient().auth.getUser(...args),
+    },
+};
 
 export interface PaymentMethod {
     id: string;
@@ -47,6 +56,8 @@ export interface PaymentHistory {
     created_at: string;
 }
 
+type PaymentGatewayStatus = 'succeeded' | 'pending' | 'failed';
+
 export class PaymentService {
     private static instance: PaymentService;
     private iyzico: any;
@@ -64,13 +75,95 @@ export class PaymentService {
 
     private async initIyzico() {
         try {
-            // In production, initialize iyzico SDK with API key & secret key
-            // iyzico is the primary payment provider for Turkey market
-            // When expanding to Dubai/international, Stripe can be added as secondary provider
             console.log('iyzico initialized');
         } catch (error) {
             console.error('Error initializing iyzico:', error);
         }
+    }
+
+    private getGatewayUrl(): string {
+        const fromEnv = (process.env.EXPO_PUBLIC_IYZICO_CHARGE_URL || '').trim();
+        if (fromEnv) {
+            return fromEnv;
+        }
+        return `${CONFIG.API_BASE_URL.replace(/\/+$/, '')}/payments/iyzico/charge`;
+    }
+
+    private parseGatewayStatus(payload: any): PaymentGatewayStatus {
+        const rawStatus = String(
+            payload?.status ??
+            payload?.payment_status ??
+            payload?.paymentStatus ??
+            payload?.result ??
+            ''
+        ).toLowerCase();
+        if (rawStatus === 'success' || rawStatus === 'succeeded' || rawStatus === 'paid' || rawStatus === 'ok') {
+            return 'succeeded';
+        }
+        if (rawStatus === 'pending' || rawStatus === 'processing' || rawStatus === 'requires_action') {
+            return 'pending';
+        }
+        if (rawStatus === 'failed' || rawStatus === 'failure' || rawStatus === 'error' || rawStatus === 'declined') {
+            return 'failed';
+        }
+        if (payload?.success === true) {
+            return 'succeeded';
+        }
+        if (payload?.pending === true) {
+            return 'pending';
+        }
+        return 'failed';
+    }
+
+    private async chargeWithGateway(
+        userId: string,
+        amount: number,
+        currency: string,
+        description: string,
+        paymentMethod: string
+    ): Promise<{ status: PaymentGatewayStatus; reference: string; metadata: Record<string, any> }> {
+        const gatewayUrl = this.getGatewayUrl();
+        if (!gatewayUrl) {
+            throw new Error('Payment gateway URL is not configured');
+        }
+
+        const response = await fetch(gatewayUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId,
+                amount,
+                currency,
+                description,
+                paymentMethodId: paymentMethod
+            })
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+            const message = payload?.error || payload?.message || `Gateway request failed with HTTP ${response.status}`;
+            throw new Error(message);
+        }
+
+        const status = this.parseGatewayStatus(payload);
+        const reference =
+            payload?.paymentId ||
+            payload?.payment_id ||
+            payload?.conversationId ||
+            payload?.conversation_id ||
+            `iyz_pay_${SecurityUtils.generateSecureToken(16)}`;
+
+        return {
+            status,
+            reference,
+            metadata: {
+                gateway: 'iyzico',
+                gateway_url: gatewayUrl,
+                gateway_response: payload
+            }
+        };
     }
 
     /**
@@ -162,6 +255,8 @@ export class PaymentService {
         }
     }
 
+    private activeSubscriptionRequests = new Set<string>();
+
     /**
      * Create subscription (with MSS — Mesafeli Satış Sözleşmesi compliance per 6502 Kanun)
      *
@@ -174,6 +269,12 @@ export class PaymentService {
         paymentMethodId?: string,
         buyerInfo?: { fullName: string; email: string; address: string; phone?: string }
     ): Promise<UserSubscription | null> {
+        const idempotencyKey = `${userId}_${planId}_${billingCycle}`;
+        if (this.activeSubscriptionRequests.has(idempotencyKey)) {
+            throw new Error('Subscription request already in progress');
+        }
+        this.activeSubscriptionRequests.add(idempotencyKey);
+
         try {
             // Get plan details
             const plan = await this.getSubscriptionPlan(planId);
@@ -251,7 +352,7 @@ export class PaymentService {
                 trial_start: trialStart,
                 trial_end: trialEnd,
                 payment_method_id: paymentMethodId,
-                iyzico_subscription_ref: `iyz_sub_${Date.now()}`,
+                iyzico_subscription_ref: `iyz_sub_${SecurityUtils.generateSecureToken(16)}`,
                 iyzico_customer_ref: `iyz_cus_${userId}`
             };
 
@@ -281,6 +382,8 @@ export class PaymentService {
         } catch (error) {
             console.error('Error creating subscription');
             return null;
+        } finally {
+            this.activeSubscriptionRequests.delete(idempotencyKey);
         }
     }
 
@@ -566,7 +669,6 @@ export class PaymentService {
         paymentMethodId?: string
     ): Promise<PaymentHistory | null> {
         try {
-            // Get default payment method if none specified
             let paymentMethod = paymentMethodId;
             if (!paymentMethod) {
                 const methods = await this.getPaymentMethods(userId);
@@ -577,19 +679,44 @@ export class PaymentService {
                 paymentMethod = defaultMethod.iyzico_card_token;
             }
 
-            // In production, process payment via iyzico API
-            // For international (Dubai) expansion, Stripe can be added as secondary provider
+            let gatewayStatus: PaymentGatewayStatus = 'pending';
+            let gatewayReference = `iyz_pay_${SecurityUtils.generateSecureToken(16)}`;
+            let metadata: Record<string, any> = {
+                processed_at: new Date().toISOString(),
+                gateway: 'iyzico'
+            };
+
+            if (CONFIG.IS_PRODUCTION || !CONFIG.MOCK_PAYMENTS) {
+                const gatewayResult = await this.chargeWithGateway(
+                    userId,
+                    amount,
+                    currency,
+                    description,
+                    paymentMethod || 'unknown'
+                );
+                gatewayStatus = gatewayResult.status;
+                gatewayReference = gatewayResult.reference;
+                metadata = {
+                    ...metadata,
+                    ...gatewayResult.metadata
+                };
+            } else {
+                metadata = {
+                    ...metadata,
+                    mock_payment: true
+                };
+            }
 
             const payment: Omit<PaymentHistory, 'id' | 'created_at'> = {
                 user_id: userId,
                 amount,
                 currency,
                 description,
-                status: 'succeeded',
+                status: gatewayStatus,
                 payment_method: paymentMethod || 'unknown',
                 metadata: {
-                    processed_at: new Date().toISOString(),
-                    mock_payment: true
+                    ...metadata,
+                    payment_reference: gatewayReference
                 }
             };
 
@@ -706,9 +833,12 @@ export class PaymentService {
                 .eq('status', 'active');
 
             let mrr = 0;
-            if (activeSubscriptions.data) {
+            if (activeSubscriptions.data && activeSubscriptions.data.length > 0) {
+                const plans = await this.getSubscriptionPlans();
+                const planMap = new Map(plans.map(p => [p.id, p]));
+
                 for (const sub of activeSubscriptions.data) {
-                    const plan = await this.getSubscriptionPlan(sub.plan_id);
+                    const plan = planMap.get(sub.plan_id);
                     if (plan) {
                         const price = sub.billing_cycle === 'monthly' ? plan.price_monthly : plan.price_yearly / 12;
                         mrr += price;
@@ -750,15 +880,16 @@ export class PaymentService {
         description: string
     ): Promise<Invoice | null> {
         try {
+            const paymentId = `iyz_pay_${SecurityUtils.generateSecureToken(16)}`;
             const invoice: Omit<Invoice, 'id' | 'created_at'> = {
                 user_id: userId,
                 subscription_id: subscriptionId,
-                iyzico_payment_id: `iyz_pay_${Date.now()}`,
+                iyzico_payment_id: paymentId,
                 amount,
                 currency,
                 status: 'paid',
                 paid_at: new Date().toISOString(),
-                hosted_invoice_url: `https://example.com/invoices/iyz_pay_${Date.now()}`
+                hosted_invoice_url: `https://example.com/invoices/${paymentId}`
             };
 
             const { data, error } = await supabase

@@ -227,7 +227,7 @@ const getStyles = (colors: any) => StyleSheet.create({
 
     sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
 
-    proCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F0F0F0', gap: 12 },
+    proCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.borderLight, gap: 12 },
     proAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E8FFE0', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#58CC02' },
     proName: { fontSize: 14, fontWeight: '700', color: colors.text },
     proSpec: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
@@ -238,7 +238,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     toggleAllBtn: { flex: 1, backgroundColor: '#E8FFE0', borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
     toggleAllText: { fontSize: 13, fontWeight: '700', color: '#58CC02' },
 
-    fieldRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F0F0F0' },
+    fieldRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.borderLight },
     fieldLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
     fieldDesc: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
 });

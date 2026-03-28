@@ -44,7 +44,7 @@ const detectMessageLanguage = (text: string, fallback: string): string => {
 
 const AICoachScreen = ({ navigation }: any) => {
     const { colors, isDark } = useTheme();
-    const styles = React.useMemo(() => getStyles(colors), [colors]);
+    const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -146,7 +146,7 @@ const AICoachScreen = ({ navigation }: any) => {
         const imageBase64 = selectedImageBase64;
         setSelectedImage(null);
         setSelectedImageBase64(null);
-        
+
         try {
             let contextData: any = {};
             try {
@@ -157,7 +157,7 @@ const AICoachScreen = ({ navigation }: any) => {
                         .select('height, weight, gender, fitness_goal, activity_level')
                         .eq('id', user.id)
                         .single();
-                    
+
                     if (profile) {
                         contextData = {
                             height: profile.height,
@@ -177,7 +177,7 @@ const AICoachScreen = ({ navigation }: any) => {
                 context: contextData,
                 language: detectedLanguage
             }, imageBase64 || undefined);
-            
+
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'ai',
@@ -275,7 +275,7 @@ const AICoachScreen = ({ navigation }: any) => {
                         maxLength={500}
                     />
                     <TouchableOpacity style={[styles.sendBtn, (!input.trim() && !selectedImage) && styles.sendBtnDisabled]} onPress={sendMessage} disabled={!input.trim() && !selectedImage || loading}>
-                        {loading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
+                        {loading ? <ActivityIndicator size="small" color={isDark ? colors.text : colors.textInverse} /> : <Ionicons name="send" size={20} color={isDark ? colors.text : colors.textInverse} />}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -283,7 +283,7 @@ const AICoachScreen = ({ navigation }: any) => {
     );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     header: {
         flexDirection: 'row',
@@ -315,7 +315,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     userContent: { flex: 1 },
     aiContent: { flex: 1 },
     messageText: { ...TYPOGRAPHY.body },
-    userText: { color: '#FFF' },
+    userText: { color: isDark ? colors.text : colors.textInverse },
     aiText: { color: colors.text },
     messageImage: { width: '100%', height: 200, borderRadius: BORDER_RADIUS.md, marginBottom: SPACING.sm },
     loadingWrap: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.md, marginBottom: SPACING.md },

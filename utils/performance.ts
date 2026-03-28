@@ -1,5 +1,5 @@
 import React from 'react';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, Platform } from 'react-native';
 
 export class PerformanceUtils {
   // Run expensive operations after interactions complete
@@ -122,19 +122,18 @@ export class PerformanceUtils {
     };
   }
 
-  // Optimize image loading
-  static optimizeImageUri(uri: string, width: number, height: number): string {
-    // This would integrate with image optimization services
-    // For now, return the original URI
-    return uri;
-  }
-
-  // Memory cleanup
-  static cleanup() {
-    // Clear any caches or perform memory cleanup
-    if (global.gc) {
-      global.gc();
+  // Check if device is low-end based on available memory
+  static isLowEndDevice(): boolean {
+    try {
+      const Device = require('expo-device');
+      // totalMemory is in bytes; consider < 3GB as low-end
+      if (Device.totalMemory && Device.totalMemory < 3 * 1024 * 1024 * 1024) {
+        return true;
+      }
+    } catch {
+      // expo-device not available
     }
+    return false;
   }
 
   // Performance monitoring
@@ -155,12 +154,6 @@ export class PerformanceUtils {
     return null;
   }
 
-  // Check if device is low-end
-  static isLowEndDevice(): boolean {
-    // This would check device capabilities
-    // For now, return false
-    return false;
-  }
 
   // Adjust quality based on device performance
   static getQualityForDevice(): 'low' | 'medium' | 'high' {
@@ -225,21 +218,26 @@ export const usePerformanceMonitor = () => {
   return { metrics, startMeasure };
 };
 
-// Memory monitoring
+// Memory monitoring — polls infrequently to avoid excessive re-renders
 export const useMemoryMonitor = () => {
   const [memoryUsage, setMemoryUsage] = React.useState<number>(0);
 
   React.useEffect(() => {
+    if (Platform.OS !== 'web') {
+      setMemoryUsage(0);
+      return;
+    }
+
     const interval = setInterval(() => {
-      // Check if performance.memory is available (browser environment)
       interface PerformanceMemory {
         memory?: { usedJSHeapSize: number };
       }
       const perf = performance as unknown as PerformanceMemory;
       if (typeof performance !== 'undefined' && perf.memory) {
-        setMemoryUsage(perf.memory.usedJSHeapSize);
+        const current = perf.memory.usedJSHeapSize;
+        setMemoryUsage(prev => prev === current ? prev : current);
       }
-    }, 5000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);

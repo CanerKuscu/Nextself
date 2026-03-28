@@ -9,7 +9,8 @@ import {
   TextStyle,
 } from 'react-native';
 import { useAnimation } from '../animations/Animations';
-import { COLORS, BORDER_RADIUS, SHADOWS, SPACING } from '../config/theme';
+import { BORDER_RADIUS, SHADOWS, SPACING } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AnimatedCardProps {
   children: React.ReactNode;
@@ -30,6 +31,8 @@ const AnimatedCard: React.FC<AnimatedCardProps> = ({
   duration = 300,
   disabled = false,
 }) => {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const { value, fadeIn, slideUp, scale, bounce } = useAnimation(0);
   const opacity = useRef(new Animated.Value(0)).current;
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -116,14 +119,13 @@ const AnimatedCard: React.FC<AnimatedCardProps> = ({
   return CardComponent;
 };
 
-const styles = StyleSheet.create({
-  // 8px grid aligned card
+const getStyles = (colors: any) => StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: colors.borderLight,
     ...SHADOWS.card,
   },
 });

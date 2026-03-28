@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { FiPlus, FiChevronLeft, FiChevronRight, FiClock, FiUser, FiMapPin, FiX, FiTrash2 } from 'react-icons/fi';
+import { useState, useEffect, useCallback } from 'react';
+import { FiPlus, FiChevronLeft, FiChevronRight, FiClock, FiMapPin, FiX, FiTrash2 } from 'react-icons/fi';
 import { MdFitnessCenter, MdRestaurant } from 'react-icons/md';
 import { db } from '../lib/supabase';
 
@@ -74,7 +74,7 @@ const Calendar = () => {
         }
     };
 
-    const handleDeleteSession = async (sessionId) => {
+    const handleDeleteSession = async (sessionId: string) => {
         if (!window.confirm('Delete this session?')) { return; }
         try {
             const { error } = await db.deleteSession(sessionId);
@@ -85,8 +85,8 @@ const Calendar = () => {
         }
     };
 
-    const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -94,20 +94,13 @@ const Calendar = () => {
     const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
     const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
 
-    const getSessionsForDate = (day) => {
+    const getSessionsForDate = (day: number) => {
         return sessions.filter(s =>
             s.date.getDate() === day &&
             s.date.getMonth() === currentDate.getMonth() &&
             s.date.getFullYear() === currentDate.getFullYear()
         );
     };
-
-    const todaySessions = sessions.filter(s => {
-        const today = new Date();
-        return s.date.getDate() === today.getDate() &&
-            s.date.getMonth() === today.getMonth() &&
-            s.date.getFullYear() === today.getFullYear();
-    });
 
     const selectedDaySessions = getSessionsForDate(selectedDate.getDate());
 
@@ -214,7 +207,9 @@ const Calendar = () => {
 
                     {/* Calendar Days */}
                     <div className="grid grid-cols-7">
-                        {renderCalendarDays()}
+                        {loading ? (
+                            <div className="col-span-7 flex items-center justify-center py-12 text-sm text-gray-500">Loading sessions...</div>
+                        ) : renderCalendarDays()}
                     </div>
                 </div>
 

@@ -27,16 +27,18 @@ export default tseslint.config(
     {
         files: ['**/*.{ts,tsx}'],
         rules: {
+            'no-undef': 'off', // TypeScript handles this
+            'no-useless-escape': 'off',
+            'no-case-declarations': 'off',
+            'no-empty': 'off',
+            'preserve-caught-error': 'off',
+            'no-unused-vars': 'off',
+            '@typescript-eslint/ban-ts-comment': 'off',
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-require-imports': 'off',
-            'no-undef': 'off', // TypeScript handles this
-            '@typescript-eslint/no-unused-vars': 'off',
-            'no-empty': 'off',
-            'no-case-declarations': 'off',
-            'prefer-const': 'off',
-            'no-useless-escape': 'off',
-            'preserve-caught-error': 'off',
-            '@typescript-eslint/ban-ts-comment': 'off'
+            '@typescript-eslint/no-namespace': 'off',
+            '@typescript-eslint/no-empty-object-type': 'off',
+            '@typescript-eslint/no-unused-vars': 'off'
         },
     },
     {
@@ -51,6 +53,12 @@ export default tseslint.config(
             'no-implied-eval': 'warn',
             'eqeqeq': ['warn', 'always'],
             'no-throw-literal': 'warn',
+        },
+    },
+    {
+        files: ['supabase/functions/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/triple-slash-reference': 'off',
         },
     },
 );

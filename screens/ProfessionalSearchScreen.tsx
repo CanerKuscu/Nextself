@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -40,24 +40,18 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
   const [district, setDistrict] = useState('');
   const [sortBy, setSortBy] = useState<'rating' | 'name' | 'city'>('rating');
 
-  const { isTurkish } = useTranslation();
+  const { isTurkish, language } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, AlertComponent } = useAlert();
 
-  // Stable random fallback values per professional (persists across renders)
-  const randomValuesRef = useRef<Map<string, { specCount: number; clients: number; years: number; courses: number }>>(new Map());
-
-  const getStableRandomValues = (id: string) => {
-    if (!randomValuesRef.current.has(id)) {
-      randomValuesRef.current.set(id, {
-        specCount: 2 + Math.floor(Math.random() * 2),
-        clients: Math.floor(Math.random() * 50 + 10),
-        years: Math.floor(Math.random() * 10 + 2),
-        courses: Math.floor(Math.random() * 5 + 1),
-      });
-    }
-    return randomValuesRef.current.get(id)!;
-  };
+  const isRussian = language === 'ru';
+  const labels = useMemo(() => ({
+    profile: isTurkish ? 'Profili İncele' : isRussian ? 'Профиль' : 'View Profile',
+    courses: isTurkish ? 'Programlar' : isRussian ? 'Программы' : 'Programs',
+    connect: isTurkish ? 'Bağlan' : isRussian ? 'Связаться' : 'Connect',
+    noResults: isTurkish ? 'Sonuç Bulunamadı' : isRussian ? 'Ничего не найдено' : 'No Results Found',
+    noResultsSub: isTurkish ? 'Filtreleri değiştirip tekrar deneyin.' : isRussian ? 'Измените фильтры и попробуйте снова.' : 'Try changing filters.',
+  }), [isTurkish, isRussian]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -192,23 +186,30 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
     }
   };
 
-  const getSpecializations = (type: string) => {
+  const getSpecializations = (type: string, rowSpecialties?: string[]) => {
+    if (Array.isArray(rowSpecialties) && rowSpecialties.length > 0) return rowSpecialties;
     if (isTrainerType(type)) {
       return isTurkish
-        ? ['Kuvvet', 'HIIT', 'Fonksiyonel', 'Yoga']
-        : ['Strength', 'HIIT', 'Functional', 'Yoga'];
+        ? ['Kuvvet', 'HIIT', 'Fonksiyonel', 'Mobility']
+        : isRussian
+          ? ['Сила', 'HIIT', 'Функционал', 'Мобилити']
+          : ['Strength', 'HIIT', 'Functional', 'Mobility'];
     }
     return isTurkish
       ? ['Kilo Yönetimi', 'Sporcu Beslenmesi', 'Klinik']
-      : ['Weight Mgmt', 'Sports Nutrition', 'Clinical'];
+      : isRussian
+        ? ['Контроль веса', 'Спорт питание', 'Клиническое']
+        : ['Weight Mgmt', 'Sports Nutrition', 'Clinical'];
   };
 
   const renderProfessional = useCallback(({ item, index }: { item: any, index: number }) => {
     const isTrainer = isTrainerType(item.professional_type);
-    const specializations = getSpecializations(item.professional_type);
-    const stableRandom = getStableRandomValues(item.id);
-    const randomSpecs = specializations.slice(0, stableRandom.specCount);
+    const specializations = getSpecializations(item.professional_type, item.specialties || item.users?.specialties);
+    const shownSpecs = specializations.slice(0, 4);
     const rankBadge = sortBy === 'rating' ? getRankBadge(index, item.average_rating || 0, item.total_reviews || 0) : null;
+    const totalClients = Number(item.total_clients ?? item.active_clients ?? 0);
+    const totalExperience = Number(item.experience ?? item.experience_years ?? 0);
+    const totalCourses = Number(item.courses_count ?? 0);
 
     return (
       <AnimatedCard delay={index * 80} style={styles.proCard}>
@@ -257,7 +258,7 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
 
           {/* Specializations */}
           <View style={styles.specializationsRow}>
-            {randomSpecs.map((spec: string, i: number) => (
+            {shownSpecs.map((spec: string, i: number) => (
               <View key={i} style={styles.specBadge}>
                 <Text style={styles.specText}>{spec}</Text>
               </View>
@@ -267,17 +268,17 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
           {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{item.total_clients || stableRandom.clients}</Text>
+              <Text style={styles.statValue}>{totalClients}</Text>
               <Text style={styles.statLabel}>{isTurkish ? 'Danışan' : 'Clients'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{item.experience_years || stableRandom.years}</Text>
+              <Text style={styles.statValue}>{totalExperience}</Text>
               <Text style={styles.statLabel}>{isTurkish ? 'Yıl Deneyim' : 'Years Exp.'}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{item.courses_count || stableRandom.courses}</Text>
+              <Text style={styles.statValue}>{totalCourses}</Text>
               <Text style={styles.statLabel}>{isTurkish ? 'Eğitim' : 'Courses'}</Text>
             </View>
           </View>
@@ -299,6 +300,13 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
           {/* Action Buttons */}
           <View style={styles.actionRow}>
             <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => navigation.navigate('ProfessionalDetail', { professionalId: item.id })}
+            >
+              <Ionicons name="person-circle-outline" size={16} color={colors.secondary} />
+              <Text style={styles.profileBtnText}>{labels.profile}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.coursesBtn}
               onPress={() => navigation.navigate('ProfessionalCourses', {
                 professionalId: item.user_id || item.id,
@@ -307,10 +315,12 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
               })}
             >
               <Ionicons name="book-outline" size={16} color={colors.primary} />
-              <Text style={styles.coursesBtnText}>{isTurkish ? 'Eğitimler' : 'Courses'}</Text>
+              <Text style={styles.coursesBtnText}>{labels.courses}</Text>
             </TouchableOpacity>
+          </View>
+          <View style={styles.connectRow}>
             <AnimatedButton
-              title={isTurkish ? 'Bağlan' : 'Connect'}
+              title={labels.connect}
               onPress={() => handleConnect(item.user_id, item.id)}
               size="medium"
               style={styles.connectBtn}
@@ -319,10 +329,10 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
         </View>
       </AnimatedCard>
     );
-  }, [styles, colors, isTurkish, sortBy, navigation, getSpecializations, getRankBadge, renderStar, handleConnect, getStableRandomValues]);
+  }, [styles, colors, isTurkish, sortBy, navigation, getSpecializations, getRankBadge, renderStar, handleConnect, labels]);
 
   return (
-    <View style={[COMMON_STYLES.screenContainer, { paddingTop: insets.top }]}>
+    <View style={[COMMON_STYLES.screenContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <AlertComponent />
 
       {/* Header */}
@@ -467,10 +477,10 @@ const ProfessionalSearchScreen = ({ navigation }: any) => {
                 <Ionicons name="search-outline" size={48} color={colors.border} />
               </View>
               <Text style={styles.emptyTitle}>
-                {isTurkish ? 'Sonuç Bulunamadı' : 'No Results Found'}
+                {labels.noResults}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {isTurkish ? 'Yalnızca yüz yüze görüşebileceğiniz antrenörler listelenir. Başka bir ilçe/şehir deneyin.' : 'Only strictly matched in-person professionals are listed. Try another district/city.'}
+                {labels.noResultsSub}
               </Text>
             </View>
           }
@@ -751,6 +761,23 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.sm,
   },
+  profileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1,
+    paddingVertical: SPACING.sm + 4,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: colors.secondary,
+    backgroundColor: colors.secondarySoft,
+  },
+  profileBtnText: {
+    ...TYPOGRAPHY.captionBold,
+    color: colors.secondary,
+    fontSize: 13,
+  },
   coursesBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -768,8 +795,11 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.primary,
     fontSize: 13,
   },
+  connectRow: {
+    marginTop: SPACING.sm,
+  },
   connectBtn: {
-    flex: 1.5,
+    width: '100%',
   },
   emptyIconContainer: {
     width: 80,

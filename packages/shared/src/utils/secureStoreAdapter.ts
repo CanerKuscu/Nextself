@@ -5,25 +5,37 @@ import * as SecureStore from 'expo-secure-store';
 // This adapter chunks the string into 2000-byte segments.
 const CHUNK_SIZE = 2000;
 
+const getChunkCount = (value: string | null): number | null => {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const count = Number.parseInt(value, 10);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return count;
+};
+
+const removeStoredChunks = async (key: string, count: number) => {
+  for (let i = 0; i < count; i++) {
+    await SecureStore.deleteItemAsync(`${key}_chunk_${i}`);
+  }
+};
+
 export const SecureStoreAdapter = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      // Fetch the master manifest/count
       const chunkCountStr = await SecureStore.getItemAsync(key);
       if (!chunkCountStr) return null;
-      
-      const chunkCount = parseInt(chunkCountStr, 10);
-      if (isNaN(chunkCount)) {
-        // Fallback for legacy un-chunked data
+
+      const chunkCount = getChunkCount(chunkCountStr);
+      if (!chunkCount) {
         return chunkCountStr;
       }
-      
+
       let fullString = '';
       for (let i = 0; i < chunkCount; i++) {
         const chunk = await SecureStore.getItemAsync(`${key}_chunk_${i}`);
-        if (chunk) {
-          fullString += chunk;
+        if (!chunk) {
+          return null;
         }
+        fullString += chunk;
       }
       return fullString || null;
     } catch (e) {
@@ -34,15 +46,23 @@ export const SecureStoreAdapter = {
   
   setItem: async (key: string, value: string): Promise<void> => {
     try {
+      const previousRaw = await SecureStore.getItemAsync(key);
+      const previousChunkCount = getChunkCount(previousRaw);
+
       if (value.length <= CHUNK_SIZE) {
-        // Fast path for small values
+        if (previousChunkCount) {
+          await removeStoredChunks(key, previousChunkCount);
+        }
         await SecureStore.setItemAsync(key, value);
         return;
       }
-      
+
       const chunks = Math.ceil(value.length / CHUNK_SIZE);
+      if (previousChunkCount) {
+        await removeStoredChunks(key, previousChunkCount);
+      }
       await SecureStore.setItemAsync(key, chunks.toString());
-      
+
       for (let i = 0; i < chunks; i++) {
         const chunk = value.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
         await SecureStore.setItemAsync(`${key}_chunk_${i}`, chunk);
@@ -56,14 +76,10 @@ export const SecureStoreAdapter = {
     try {
       const chunkCountStr = await SecureStore.getItemAsync(key);
       await SecureStore.deleteItemAsync(key);
-      
-      if (chunkCountStr) {
-        const chunkCount = parseInt(chunkCountStr, 10);
-        if (!isNaN(chunkCount)) {
-          for (let i = 0; i < chunkCount; i++) {
-            await SecureStore.deleteItemAsync(`${key}_chunk_${i}`);
-          }
-        }
+
+      const chunkCount = getChunkCount(chunkCountStr);
+      if (chunkCount) {
+        await removeStoredChunks(key, chunkCount);
       }
     } catch (e) {
       console.warn('SecureStoreAdapter removeItem Error:', e);

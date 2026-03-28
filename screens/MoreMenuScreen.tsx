@@ -47,8 +47,8 @@ const MoreMenuScreen = ({ navigation }: any) => {
 const getStyles = (colors: any) => StyleSheet.create({
   scroll: { padding: 20 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: colors.text, marginBottom: 24, marginTop: 12 },
-  menuContainer: { backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  menuContainer: { backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   menuLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
 });

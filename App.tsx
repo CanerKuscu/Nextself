@@ -1,10 +1,8 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import * as Sentry from '@sentry/react-native';
+import { Observability } from './utils/observability';
 import { enableScreens } from 'react-native-screens';
-import { initLogFilter } from './utils/logFilter';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SupabaseProvider } from './contexts/SupabaseContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -14,9 +12,24 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CONFIG, validateEnvironment } from '@nextself/shared';
 
 import * as Notifications from 'expo-notifications';
-import { WaterTrackingService } from './services/waterTrackingService';
+import { OfflineSyncService } from './services/offlineSyncService';
+import { DeepLinkingService } from './utils/deepLinking';
+import { OfflineService } from './utils/offlineService';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { useAuthStore } from './store/authStoreSecure';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,  // 5 minutes before data is considered stale
+      gcTime: 10 * 60 * 1000,    // 10 minutes before inactive queries are garbage collected
+      retry: 2,                   // Retry failed queries twice
+      refetchOnWindowFocus: false, // Don't refetch when app is foregrounded (mobile best practice)
+    },
+  },
+});
 
 const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND-NOTIFICATION-TASK';
 
@@ -43,7 +56,10 @@ const setupBackgroundNotificationTask = () => {
       if (action === 'drank_water' && contentData?.type === 'water') {
         const ml = Number(contentData?.mlAmount || 0);
         try {
-          await WaterTrackingService.getInstance().drinkWater(ml > 0 ? ml : undefined);
+          if (Platform.OS !== 'web') {
+            const { WaterTrackingService } = require('./services/waterTrackingService');
+            await WaterTrackingService.getInstance().drinkWater(ml > 0 ? ml : undefined);
+          }
         } catch (e) {
           console.error('Background water track failed', e);
         }
@@ -56,54 +72,51 @@ const setupBackgroundNotificationTask = () => {
 setupBackgroundNotificationTask();
 
 // Enable react-native-screens for better navigation perf
-enableScreens();
-
-// Initialize selective log filtering early to reduce noisy dev output
-if (__DEV__) initLogFilter();
+try { enableScreens(); } catch (e) { console.warn('enableScreens() failed:', e); }
 
 if (CONFIG.IS_PRODUCTION) {
-  validateEnvironment();
+  try { validateEnvironment(); } catch (e) { console.error('Environment validation failed:', e); }
 }
 
-// Initialize Sentry only when a DSN is provided for production builds.
-// Also keep `debug` off to avoid SDK internal logging in development,
-// and avoid performance tracing in non-production to reduce noise.
-if (CONFIG.SENTRY_DSN && CONFIG.IS_PRODUCTION) {
-  Sentry.init({
-    dsn: CONFIG.SENTRY_DSN,
-    debug: false,
-    enabled: true,
-    tracesSampleRate: 0.2,
-    beforeSend(event) {
-      // Drop low severity info events from being sent
-      if (event.level === 'info') return null;
-      return event;
-    },
-  });
-} else {
-  // Ensure SDK does not emit debug logs when not configured for production
-  Sentry.init({ dsn: '', debug: false, enabled: false, tracesSampleRate: 0 });
-}
+try { Observability.init(); } catch (e) { console.warn('Observability.init() failed:', e); }
+
+// Initialize Offline Sync
+try { OfflineSyncService.getInstance(); } catch (e) { console.warn('OfflineSyncService init failed:', e); }
 
 function App() {
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+
+  React.useEffect(() => {
+    useAuthStore.getState().initializeAuth().catch((error) => {
+      console.error('Auth initialization failed:', error);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      try { OfflineService.getInstance().resume(); } catch (e) {}
+      try { DeepLinkingService.getInstance().processPendingURLs(); } catch (e) {}
+    }
+  }, [isAuthenticated]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <SupabaseProvider>
-            <LanguageProvider>
-              <CurrencyProvider>
-                <ThemeProvider>
+          <LanguageProvider>
+            <CurrencyProvider>
+              <ThemeProvider>
+                <ErrorBoundary>
                   <AppNavigator />
                   <StatusBar style="auto" translucent={false} />
-                </ThemeProvider>
-              </CurrencyProvider>
-            </LanguageProvider>
-          </SupabaseProvider>
+                </ErrorBoundary>
+              </ThemeProvider>
+            </CurrencyProvider>
+          </LanguageProvider>
         </SafeAreaProvider>
-      </ErrorBoundary>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
 
-export default Sentry.wrap(App);
+export default Observability.wrapApp(App);

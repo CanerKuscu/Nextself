@@ -19,7 +19,7 @@ export const CONFIG = {
         throw new Error('EXPO_PUBLIC_SUPABASE_URL is required in production.');
       }
     }
-    return url;
+    return url.trim();
   })(),
   SUPABASE_PUBLISHABLE_KEY: (() => {
     const key = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -31,7 +31,7 @@ export const CONFIG = {
         throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY is required in production.');
       }
     }
-    return key;
+    return key.trim();
   })(),
   ENCRYPTION_KEY: (() => {
     // NOTE: Client-side encryption keys MUST NOT be embedded in production client builds.
@@ -63,26 +63,6 @@ export const CONFIG = {
     return envKey;
   })(),
 
-  // AI Configuration
-  // SECURITY: AI calls MUST go through Supabase Edge Functions in production.
-  // These keys should NEVER be embedded in client builds via EXPO_PUBLIC_ prefix.
-  // They are only used as a development fallback when running locally.
-  DEEPSEEK_API_KEY: (() => {
-    // In production, this should always be empty - use Edge Functions only
-    if (IS_PRODUCTION) {
-      return '';
-    }
-
-    const key = process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY;
-    if (!key) {
-      if (IS_DEV) {
-        console.warn('⚠️ EXPO_PUBLIC_DEEPSEEK_API_KEY is not set. AI features will use Edge Functions only.');
-      }
-      return '';
-    }
-    return key;
-  })(),
-
   // App Configuration
   APP_NAME: 'NextSelf',
   SUPPORTED_LANGUAGES: ['en', 'tr', 'ru'] as const,
@@ -93,12 +73,13 @@ export const CONFIG = {
   // Environment flags
   IS_DEV: IS_DEV,
   IS_PRODUCTION: IS_PRODUCTION,
+  MOCK_PAYMENTS: process.env.EXPO_PUBLIC_MOCK_PAYMENTS === 'true' || IS_DEV,
 
   // Security - HTTPS enabled by default in production
   REQUIRE_HTTPS: !__DEV__,
 
   // API Configuration
-  API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.nextself.com',
+  API_BASE_URL: (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.nextself.com').trim(),
 
   // Database table names (allow overriding via expo config or env for different schemas)
   SUBSCRIPTIONS_TABLE: (() => {
@@ -123,7 +104,7 @@ export const CONFIG = {
       console.warn('⚠️ EXPO_PUBLIC_SENTRY_DSN is not set. Sentry error tracking is disabled.');
       return '';
     }
-    return dsn;
+    return dsn.trim();
   })(),
 };
 

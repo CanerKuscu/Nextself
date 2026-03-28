@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { FiUsers, FiActivity, FiTrendingUp, FiCalendar, FiAward, FiTarget, FiClock, FiZap, FiArrowUpRight, FiArrowDownRight, FiAlertCircle } from 'react-icons/fi';
@@ -19,6 +19,8 @@ import {
     Filler,
 } from 'chart.js';
 import { db } from '../lib/supabase';
+import toast from 'react-hot-toast';
+import DashboardSkeleton from '../components/ui/DashboardSkeleton';
 
 ChartJS.register(
     CategoryScale,
@@ -54,7 +56,7 @@ const Dashboard = () => {
         fetchDashboardData();
     }, []);
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -92,13 +94,15 @@ const Dashboard = () => {
         } catch (error: any) {
             console.error('Error fetching dashboard data:', error);
             setError('Failed to load dashboard data. Please check your connection and try again.');
+            toast.error('Failed to load dashboard data');
         } finally {
             setLoading(false);
         }
-    };
+    }, [toast]);
 
-    const statCards = [
+    const statCards = useMemo(() => [
         {
+            id: 'total-clients',
             title: t('dashboard.totalClients'),
             value: stats.totalUsers,
             change: `+${stats.newUsersToday}`,
@@ -110,6 +114,7 @@ const Dashboard = () => {
             trend: 'up',
         },
         {
+            id: 'workouts',
             title: t('dashboard.workouts'),
             value: stats.totalWorkouts,
             change: `+${stats.workoutsToday}`,
@@ -121,6 +126,7 @@ const Dashboard = () => {
             trend: 'up',
         },
         {
+            id: 'nutrition-logs',
             title: t('dashboard.nutritionLogs'),
             value: stats.totalNutritionLogs,
             change: `+${stats.nutritionLogsToday}`,
@@ -132,6 +138,7 @@ const Dashboard = () => {
             trend: 'up',
         },
         {
+            id: 'active-users',
             title: t('dashboard.activeUsers'),
             value: stats.activeUsers,
             change: '+12%',
@@ -142,16 +149,16 @@ const Dashboard = () => {
             textColor: 'text-violet-600',
             trend: 'up',
         },
-    ];
+    ], [stats.activeUsers, stats.newUsersToday, stats.nutritionLogsToday, stats.totalNutritionLogs, stats.totalUsers, stats.totalWorkouts, stats.workoutsToday, t]);
 
-    const quickActions = [
-        { icon: FiCalendar, label: t('dashboard.scheduleSession'), color: 'bg-blue-500', href: '/calendar' },
-        { icon: FiTarget, label: t('dashboard.createProgram'), color: 'bg-emerald-500', href: '/assignments' },
-        { icon: FiAward, label: t('dashboard.viewCourses'), color: 'bg-violet-500', href: '/courses' },
-        { icon: FiUsers, label: t('dashboard.clientList'), color: 'bg-amber-500', href: '/users' },
-    ];
+    const quickActions = useMemo(() => [
+        { id: 'schedule-session', icon: FiCalendar, label: t('dashboard.scheduleSession'), color: 'bg-blue-500', href: '/calendar' },
+        { id: 'create-program', icon: FiTarget, label: t('dashboard.createProgram'), color: 'bg-emerald-500', href: '/assignments' },
+        { id: 'view-courses', icon: FiAward, label: t('dashboard.viewCourses'), color: 'bg-violet-500', href: '/courses' },
+        { id: 'client-list', icon: FiUsers, label: t('dashboard.clientList'), color: 'bg-amber-500', href: '/users' },
+    ], [t]);
 
-    const doughnutData = {
+    const doughnutData = useMemo(() => ({
         labels: ['Completed', 'In Progress', 'Missed'],
         datasets: [{
             data: [68, 22, 10],
@@ -159,23 +166,23 @@ const Dashboard = () => {
             borderWidth: 0,
             cutout: '75%',
         }],
-    };
+    }), []);
 
-    const doughnutOptions = {
+    const doughnutOptions = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-    };
+    }), []);
 
     // topClients is now fetched from Supabase (real data)
 
     // Memoize chart labels and datasets to avoid re-mapping on every render
-    const chartLabels = React.useMemo(() => {
+    const chartLabels = useMemo(() => {
         if (dailyStats.length === 0) { return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; }
         return dailyStats.map(stat => new Date(stat.date).toLocaleDateString('en-US', { weekday: 'short' }));
     }, [dailyStats]);
 
-    const lineChartData = React.useMemo(() => ({
+    const lineChartData = useMemo(() => ({
         labels: chartLabels,
         datasets: [
             {
@@ -207,7 +214,7 @@ const Dashboard = () => {
         ],
     }), [chartLabels, dailyStats]);
 
-    const barChartData = React.useMemo(() => ({
+    const barChartData = useMemo(() => ({
         labels: chartLabels,
         datasets: [
             {
@@ -227,7 +234,7 @@ const Dashboard = () => {
         ],
     }), [chartLabels, dailyStats]);
 
-    const chartBaseOptions = {
+    const chartBaseOptions = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index' as const, intersect: false },
@@ -255,21 +262,20 @@ const Dashboard = () => {
             y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, color: '#9ca3af' } },
             x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#9ca3af' } },
         },
-    };
-    const lineChartOptions: ChartOptions<'line'> = chartBaseOptions;
-    const barChartOptions: ChartOptions<'bar'> = chartBaseOptions;
+    }), []);
+    const lineChartOptions: any = chartBaseOptions;
+    const barChartOptions: any = chartBaseOptions;
+    const completionLegend = useMemo(() => [
+        { id: 'completed', color: 'bg-green-500', label: 'Completed', pct: '68%' },
+        { id: 'in-progress', color: 'bg-blue-500', label: 'In Progress', pct: '22%' },
+        { id: 'missed', color: 'bg-red-500', label: 'Missed', pct: '10%' },
+    ], []);
+    const currentDateLabel = useMemo(() => {
+        return new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }, []);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="text-center space-y-4">
-                    <div className="relative mx-auto w-16 h-16">
-                        <div className="w-16 h-16 rounded-full border-4 border-blue-100 border-t-blue-500 animate-spin"></div>
-                    </div>
-                    <p className="text-gray-500 font-medium">Loading dashboard...</p>
-                </div>
-            </div>
-        );
+        return <DashboardSkeleton />;
     }
 
     if (error) {
@@ -301,7 +307,7 @@ const Dashboard = () => {
                         <div className="flex items-center gap-4 mt-4 flex-wrap">
                             <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-lg px-4 py-2">
                                 <FiClock className="w-4 h-4" />
-                                <span className="text-sm font-medium">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                <span className="text-sm font-medium">{currentDateLabel}</span>
                             </div>
                             <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-lg px-4 py-2">
                                 <FiZap className="w-4 h-4 text-yellow-300" />
@@ -319,10 +325,10 @@ const Dashboard = () => {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {statCards.map((card, index) => {
+                {statCards.map((card) => {
                     const Icon = card.icon;
                     return (
-                        <div key={index} className="group relative overflow-hidden bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-500 cursor-pointer">
+                        <div key={card.id} className="group relative overflow-hidden bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-500 cursor-pointer">
                             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                             <div className="flex items-start justify-between mb-4">
                                 <div className={`p-3 rounded-xl ${card.bgLight} transition-transform duration-300 group-hover:scale-110`}>
@@ -346,10 +352,10 @@ const Dashboard = () => {
 
             {/* Quick Actions */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {quickActions.map((action, index) => {
+                {quickActions.map((action) => {
                     const Icon = action.icon;
                     return (
-                        <Link key={index} to={action.href} className="group flex items-center gap-4 bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
+                        <Link key={action.id} to={action.href} className="group flex items-center gap-4 bg-white rounded-xl border border-gray-100 p-4 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
                             <div className={`${action.color} p-3 rounded-xl text-white transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
                                 <Icon className="w-5 h-5" />
                             </div>
@@ -389,8 +395,8 @@ const Dashboard = () => {
                         </div>
                     </div>
                     <div className="mt-6 space-y-3">
-                        {[{ color: 'bg-green-500', label: 'Completed', pct: '68%' }, { color: 'bg-blue-500', label: 'In Progress', pct: '22%' }, { color: 'bg-red-500', label: 'Missed', pct: '10%' }].map((item, i) => (
-                            <div key={i} className="flex justify-between items-center">
+                        {completionLegend.map((item) => (
+                            <div key={item.id} className="flex justify-between items-center">
                                 <div className="flex items-center gap-2">
                                     <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
                                     <span className="text-sm text-gray-600">{item.label}</span>

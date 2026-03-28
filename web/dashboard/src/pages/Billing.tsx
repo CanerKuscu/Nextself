@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FiDollarSign, FiDownload, FiEye, FiCalendar, FiTrendingUp } from 'react-icons/fi';
-import { db } from '../lib/supabase';
+type InvoiceStatus = 'paid' | 'pending' | 'overdue';
 
 const Billing = () => {
     const [invoices, setInvoices] = useState<any[]>([]);
@@ -35,7 +35,7 @@ const Billing = () => {
         }
     };
 
-    const getStatusColor = (status) => {
+    const getStatusColor = (status: InvoiceStatus) => {
         switch (status) {
             case 'paid': return 'bg-green-100 text-green-800';
             case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -44,7 +44,7 @@ const Billing = () => {
         }
     };
 
-    const getStatusText = (status) => {
+    const getStatusText = (status: InvoiceStatus) => {
         switch (status) {
             case 'paid': return 'Ödendi';
             case 'pending': return 'Bekliyor';

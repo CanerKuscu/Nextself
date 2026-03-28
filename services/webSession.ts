@@ -8,15 +8,21 @@ import { importMetaFallback } from '../utils/importMetaFallback';
 // - proxiedRequest: proxy REST calls via Edge Function /proxy (credentials included)
 // - clearClientSession: best-effort to remove in-memory session from supabase client on web
 
+let webCsrfToken: string | null = null;
+
 export async function setSessionCookieFromRefreshToken(edgeFunctionUrl: string, refreshToken: string) {
     if (!edgeFunctionUrl) throw new Error('edgeFunctionUrl is required');
     if (!refreshToken) throw new Error('refreshToken is required');
 
     const url = edgeFunctionUrl.replace(/\/$/, '') + '/set-session';
+    const anonKey = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
     const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(anonKey ? { 'Authorization': `Bearer ${anonKey}` } : {}),
+        },
         body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
@@ -25,6 +31,10 @@ export async function setSessionCookieFromRefreshToken(edgeFunctionUrl: string, 
     try { json = text ? JSON.parse(text) : null; } catch { json = { ok: false, text }; }
     if (!res.ok) {
         return { error: json || { status: res.status, text } };
+    }
+    const csrfToken = json?.csrf_token;
+    if (typeof csrfToken === 'string' && csrfToken.length > 0) {
+        webCsrfToken = csrfToken;
     }
     return { data: json };
 }
@@ -53,6 +63,41 @@ export async function clearClientSession(supabaseClient: any) {
 
 export async function signInAndExchange(supabaseClient: any, email: string, password: string, opts?: { edgeFunctionUrl?: string }) {
     const edgeFunctionUrl = opts?.edgeFunctionUrl || (CONFIG as any).SESSION_EXCHANGE_URL || defaultEdgeFunctionUrl();
+
+    if (Platform.OS === 'web' && edgeFunctionUrl) {
+        try {
+            const loginUrl = edgeFunctionUrl.replace(/\/$/, '') + '/login';
+            const anonKey = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
+            const res = await fetch(loginUrl, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(anonKey ? { 'Authorization': `Bearer ${anonKey}` } : {}),
+                },
+                body: JSON.stringify({ email, password }),
+            });
+            const text = await res.text().catch(() => '');
+            let json: any;
+            try { json = text ? JSON.parse(text) : null; } catch { json = { text }; }
+            
+            if (res.ok && json && json.user) {
+                if (json.csrf_token) {
+                    webCsrfToken = json.csrf_token;
+                }
+                await clearClientSession(supabaseClient);
+                return { data: { user: json.user }, error: null };
+            } else {
+                // Return the error so AuthScreen can display it
+                // Wrap string errors in an object with a message property so sanitizeAuthError works
+                const errMsg = json?.error || 'Login failed';
+                return { error: { message: typeof errMsg === 'string' ? errMsg : 'Login failed' } };
+            }
+        } catch (err) {
+            console.error('[webSession] edge function login failed, falling back to direct sign in', err);
+        }
+    }
+
     const result = await supabaseClient.auth.signInWithPassword({ email, password });
 
     const session = (result as any)?.data?.session || (result as any)?.data || (result as any)?.session || null;
@@ -79,10 +124,18 @@ export async function signInAndExchange(supabaseClient: any, email: string, pass
 export async function proxiedRequest(edgeFunctionUrl: string, method: string, path: string, options?: { query?: string; body?: any }) {
     if (!edgeFunctionUrl) throw new Error('edgeFunctionUrl is required');
     const url = edgeFunctionUrl.replace(/\/$/, '') + '/proxy';
+    const anonKey = CONFIG.SUPABASE_PUBLISHABLE_KEY || '';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (anonKey) {
+        headers['Authorization'] = `Bearer ${anonKey}`;
+    }
+    if (webCsrfToken) {
+        headers['X-CSRF-Token'] = webCsrfToken;
+    }
     const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ method, path, query: options?.query, body: options?.body }),
     });
     const text = await res.text().catch(() => '');

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiActivity, FiSearch, FiFilter, FiClock, FiZap, FiTrendingUp, FiCalendar } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import { FiActivity, FiSearch, FiFilter, FiClock, FiZap, FiTrendingUp, FiCalendar, FiPlus } from 'react-icons/fi';
 import { db } from '../lib/supabase';
 
 const Workouts = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [workouts, setWorkouts] = useState<any[]>([]);
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -105,6 +107,15 @@ const Workouts = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Workouts</h1>
                     <p className="text-gray-600">Monitor and manage workout sessions</p>
+                </div>
+                <div className="mt-4 sm:mt-0">
+                    <button 
+                        onClick={() => navigate('/workouts/builder')}
+                        className="btn btn-primary shadow-lg shadow-blue-500/20"
+                    >
+                        <FiPlus className="w-5 h-5 mr-2" />
+                        Build Workout
+                    </button>
                 </div>
             </div>
 

@@ -1,13 +1,60 @@
 import { SupabaseService } from '@nextself/shared';
-import { CONFIG } from '@nextself/shared';
-import * as Sentry from '@sentry/react-native';
-import CryptoJS from 'crypto-js';
+// Lazy-load QuickCrypto for native-only usage to avoid web JSI errors
+let QuickCrypto: any = null;
+const getQuickCrypto = () => {
+    if (QuickCrypto) return QuickCrypto;
+    try {
+         
+        QuickCrypto = require('react-native-quick-crypto');
+    } catch (e) {
+        QuickCrypto = null;
+    }
+    return QuickCrypto;
+};
 import { KinematicReport } from './poseProcessor';
+const MAX_PROMPT_TEXT_LENGTH = 2000;
+const MAX_PROMPT_DEPTH = 6;
+const PROMPT_INJECTION_GUARD_KEYS = new Set(['query', 'context', 'details', 'customRules', 'userGoals', 'description', 'cameraHint', 'qualityHint']);
 
-const DEEPSEEK_API_KEY = CONFIG.DEEPSEEK_API_KEY;
-if (!DEEPSEEK_API_KEY && CONFIG.IS_PRODUCTION) {
-    Sentry.captureMessage('[SECURITY] DEEPSEEK_API_KEY is not configured. AI features will use Edge Functions only.', 'warning');
-}
+const sanitizePromptText = (value: string): string => {
+    return value
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001F\u007F]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, MAX_PROMPT_TEXT_LENGTH);
+};
+
+const sanitizePromptPayload = (value: any, depth = 0): any => {
+    if (depth > MAX_PROMPT_DEPTH) {
+        return '[depth_limited]';
+    }
+    if (value == null) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        return sanitizePromptText(value);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.slice(0, 100).map((item) => sanitizePromptPayload(item, depth + 1));
+    }
+    if (typeof value === 'object') {
+        const sanitized: Record<string, any> = {};
+        for (const [key, item] of Object.entries(value)) {
+            const nextValue = sanitizePromptPayload(item, depth + 1);
+            if (PROMPT_INJECTION_GUARD_KEYS.has(key) && typeof nextValue === 'string') {
+                sanitized[key] = `<UNTRUSTED_${key.toUpperCase()}>${nextValue}</UNTRUSTED_${key.toUpperCase()}>`;
+            } else {
+                sanitized[key] = nextValue;
+            }
+        }
+        return sanitized;
+    }
+    return String(value);
+};
 
 /**
  * KVKK / GDPR Privacy Utility
@@ -21,7 +68,8 @@ if (!DEEPSEEK_API_KEY && CONFIG.IS_PRODUCTION) {
 const PrivacyUtils = {
     /** Generate a random, disposable session ID — NOT linked to user UUID */
     generateSessionId: (): string => {
-        const random = CryptoJS.lib.WordArray.random(8).toString();
+        const qc = getQuickCrypto();
+        const random = qc ? qc.randomBytes(8).toString('hex') : Math.random().toString(16).slice(2, 18);
         const timestamp = Date.now().toString(36);
         return `ses_${random}${timestamp}`;
     },
@@ -104,16 +152,17 @@ export class DeepSeekService {
         return DeepSeekService.instance;
     }
 
-    // Generic content generation — tries Edge Function first, falls back to direct API call
+    // Generic content generation — uses Edge Function and secure local fallback response
     // PRIVACY: No user_id or PII is included in any request to DeepSeek.
     // A disposable session_id is used for request correlation only.
     public async generateContent(type: string, data: any, imageBase64?: string): Promise<string> {
         const sessionId = PrivacyUtils.generateSessionId();
+        const sanitizedData = sanitizePromptPayload(data);
 
         // Try Edge Function first
         try {
             const supabase = SupabaseService.getInstance().getClient();
-            const bodyPayload: any = { type, data, session_id: sessionId };
+            const bodyPayload: any = { type, data: sanitizedData, session_id: sessionId };
             if (imageBase64) {
                 bodyPayload.data.image_base64 = imageBase64;
             }
@@ -125,129 +174,13 @@ export class DeepSeekService {
             if (!error && responseData?.response) {
                 return responseData.response;
             }
-            console.warn('Edge function failed, trying direct API:', error?.message || 'No response');
+            console.warn('Edge function failed:', error?.message || 'No response');
         } catch (err) {
             console.warn('Edge function error', err);
         }
 
-        // FALLBACK: If Edge Function fails, try direct API call if key is available
-        if (DEEPSEEK_API_KEY) {
-            try {
-                return await this.generateContentDirect(type, data, imageBase64);
-            } catch (err) {
-                console.warn('Direct API fallback failed:', err);
-            }
-        }
-
-        // SECURITY: No direct API call from client — all AI calls go through Edge Functions only.
-        // If the Edge Function fails, return a safe fallback response.
         console.warn('[AI] Edge Function unavailable. Returning fallback response for type:', type);
-        return this.getFallbackResponse(type, data);
-    }
-
-    private async generateContentDirect(type: string, inputData: any, imageBase64?: string): Promise<string> {
-        const language = inputData.language || 'auto';
-        const langInstruction = language === 'auto'
-            ? 'You MUST detect the user language from the latest message and reply in that same language.'
-            : language === 'tr'
-                ? 'You MUST reply in Turkish.'
-                : language === 'en'
-                    ? 'You MUST reply in English.'
-                    : `You MUST reply in ${language}.`;
-        
-        let systemPrompt: string;
-        let userPrompt: string;
-
-        switch (type) {
-            case 'coach':
-                systemPrompt = `You are strictly a fitness AI Coach. ${langInstruction}`;
-                if (inputData.query) {
-                    userPrompt = `Context: ${JSON.stringify(inputData.context || {})}\n\nUser Question: ${inputData.query}`;
-                } else {
-                    userPrompt = `As an expert fitness coach, analyze this physique photo. Goals: ${inputData.userGoals}. Reply in ${language === 'auto' ? 'the user language' : language}.`;
-                }
-                break;
-            case 'dietitian':
-                systemPrompt = `You are strictly a Dietitian AI. ${langInstruction}`;
-                if (inputData.query) {
-                     userPrompt = `Context: ${JSON.stringify(inputData.context || {})}\n\nUser Question: ${inputData.query}`;
-                } else {
-                     userPrompt = `Create a meal plan. User: Height ${inputData.userProfile.height}cm, Weight ${inputData.userProfile.weight}kg, Goals: ${inputData.userProfile.goals}. Target: ${inputData.calorieTarget} calories. Reply in ${language === 'auto' ? 'the user language' : language}.`;
-                }
-                break;
-            case 'chef':
-                systemPrompt = `You are strictly a Chef AI focused on healthy eating. ${langInstruction}`;
-                if (inputData.query) {
-                    userPrompt = `Context: ${JSON.stringify(inputData.context || {})}\n\nUser Question: ${inputData.query}`;
-                } else {
-                    userPrompt = `Provide 5 healthy recipes: ~${inputData.calories} cal/serving, ~${inputData.protein}g protein. Cuisine: ${inputData.cuisineType}. Restrictions: ${inputData.restrictions}. Reply in ${language === 'auto' ? 'the user language' : language}.`;
-                }
-                break;
-            case 'posture':
-                systemPrompt = `You are a Senior Biomechanical Engineer and Professional Athletic Coach specialized in kinetic chain analysis. ${langInstruction}`;
-                userPrompt = `Analyze this coordinate-only report and return JSON only:
-${JSON.stringify(inputData.kinematicReport || {})}
-
-Required schema:
-{
-  "DetectedExercise": "string",
-  "FormScore": "number",
-  "BiomechanicalMetrics": {
-    "SymmetryScore": "number",
-    "StabilityIndex": "Stable|Wobbly|Critical",
-    "RangeOfMotion": "Full|Partial|Limited"
-  },
-  "CriticalFlaws": [
-    {"flaw": "string", "timestamp": "number", "severity": "High|Medium"}
-  ],
-  "PhaseFeedback": {"Eccentric": "string", "Apex": "string", "Concentric": "string"},
-  "CorrectionCues": ["string", "string"],
-  "SafetyWarning": {"isWarning": "boolean", "reason": "string"}
-}
-
-Use only the provided coordinates and angles. If asymmetry >10% or stability wobble appears, include in CriticalFlaws.`;
-                break;
-            case 'professional_program_generator':
-                systemPrompt = `You are an AI assistant helping a professional ${inputData.type === 'workout' ? 'Personal Trainer' : 'Dietitian'} create a customized program for their client. ${langInstruction} You MUST reply with ONLY a valid JSON object.`;
-                
-                const profileStr = JSON.stringify(inputData.clientProfile || {});
-                userPrompt = `Client Profile: ${profileStr}\n\n`;
-                if (inputData.hasImage) {
-                    userPrompt += `A photo of the client is attached for context (e.g., posture, physique analysis).\n\n`;
-                }
-                userPrompt += `Generate a comprehensive ${inputData.type} program for this client based on their profile (age, gender, experience/level, goals).\n`;
-                
-                if (inputData.type === 'workout') {
-                    userPrompt += `Return JSON strictly matching this schema: {"title": "Program title", "description": "General description and logic of the program", "notes": "Any special notes or warnings for the client (e.g. warm-ups, progressive overload)"}`;
-                } else {
-                    userPrompt += `Return JSON strictly matching this schema: {"title": "Diet plan title", "description": "General description and logic", "notes": "Any special notes or warnings", "dailyCalories": number, "proteinGrams": number, "carbsGrams": number, "fatGrams": number}`;
-                }
-                break;
-            default:
-                throw new Error(`Invalid request type: ${type}`);
-        }
-
-        const response = await fetch("https://api.deepseek.com/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                temperature: 0.7,
-            })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message);
-        if (!data.choices || !data.choices[0]?.message) throw new Error('Invalid response');
-        
-        return data.choices[0].message.content;
+        return this.getFallbackResponse(type, sanitizedData);
     }
 
     private getFallbackResponse(type: string, inputData?: any): string {
@@ -306,9 +239,9 @@ Use only the provided coordinates and angles. If asymmetry >10% or stability wob
                 });
             case 'professional_program_generator':
                 if (inputData?.type === 'workout') {
-                   return JSON.stringify({ title: isTurkish ? "Genel Antrenman" : "General Workout", description: "AI servisine şu an ulaşılamıyor.", notes: "Lütfen daha sonra tekrar deneyin." });
+                    return JSON.stringify({ title: isTurkish ? "Genel Antrenman" : "General Workout", description: "AI servisine şu an ulaşılamıyor.", notes: "Lütfen daha sonra tekrar deneyin." });
                 } else {
-                   return JSON.stringify({ title: isTurkish ? "Genel Beslenme" : "General Nutrition", description: "AI servisine şu an ulaşılamıyor.", notes: "Lütfen daha sonra tekrar deneyin.", dailyCalories: 2000, proteinGrams: 150, carbsGrams: 200, fatGrams: 65 });
+                    return JSON.stringify({ title: isTurkish ? "Genel Beslenme" : "General Nutrition", description: "AI servisine şu an ulaşılamıyor.", notes: "Lütfen daha sonra tekrar deneyin.", dailyCalories: 2000, proteinGrams: 150, carbsGrams: 200, fatGrams: 65 });
                 }
             default:
                 return isTurkish

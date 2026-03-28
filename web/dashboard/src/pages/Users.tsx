@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiSearch, FiFilter, FiUserPlus, FiEdit, FiTrash2, FiX, FiCheckSquare, FiMaximize } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiUserPlus, FiEdit, FiTrash2, FiX, FiMaximize } from 'react-icons/fi';
 import { db } from '../lib/supabase';
 import QRModal from '../components/QRModal';
 
@@ -21,6 +21,13 @@ const Users = () => {
     const [showQRModal, setShowQRModal] = useState(false);
     const [qrSessionId, setQrSessionId] = useState<any>(null);
     const [isQrVerified, setIsQrVerified] = useState(false);
+    type DashboardUser = {
+        id: string;
+        username?: string;
+        email?: string;
+        created_at?: string;
+        updated_at?: string;
+    };
 
     useEffect(() => {
         fetchUsers();
@@ -48,7 +55,7 @@ const Users = () => {
         user.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleEditUser = (user) => {
+    const handleEditUser = (user: DashboardUser) => {
         setEditingUser(user);
         setEditForm({ username: user.username || '', email: user.email || '' });
         setShowEditModal(true);
@@ -68,7 +75,7 @@ const Users = () => {
         }
     };
 
-    const handleGenerateQR = (userId) => {
+    const handleGenerateQR = (userId: string) => {
         // In a real app, this would create a session record in the DB and return the ID.
         // For demonstration to meet requirements, we use a fake session ID pattern.
         const mockSessionId = `session_${userId}_${Date.now()}`;
@@ -82,7 +89,7 @@ const Users = () => {
         }, 5000);
     };
 
-    const handleDeleteUser = async (userId) => {
+    const handleDeleteUser = async (userId: string) => {
         if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) { return; }
         try {
             const { error } = await db.deleteUser(userId);

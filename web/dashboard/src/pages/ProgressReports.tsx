@@ -11,6 +11,22 @@ import { db } from '../lib/supabase';
 
 ChartJS.register(RadialLinearScale, Filler);
 
+interface AdaptivePlanResponse {
+    coachMessage: string;
+    adjustedCalorieTarget: number | null;
+    workoutAdjustments: string;
+    flagsForHumanCoach: string[];
+}
+
+const escapeHtml = (value: string): string => {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+};
+
 const FALLBACK_PROGRESS_DATA = [
     {
         id: 1, name: 'Alex Johnson',
@@ -38,6 +54,35 @@ const FALLBACK_PROGRESS_DATA = [
     },
 ];
 
+const generateAdaptivePlan = async (client: any): Promise<AdaptivePlanResponse> => {
+    const lowWorkout = Number(client?.workoutAdherence ?? 0) < 60;
+    const lowNutrition = Number(client?.nutritionAdherence ?? 0) < 60;
+    const lowConsistency = Number(client?.streakDays ?? 0) < 4;
+    const bodyFat = Number(client?.metrics?.bodyFat?.current ?? 0);
+    const calorieTarget = lowWorkout && lowNutrition ? null : 2100;
+    const flagsForHumanCoach: string[] = [];
+
+    if (lowConsistency) {
+        flagsForHumanCoach.push('Low streak consistency - check engagement barriers.');
+    }
+    if (bodyFat >= 30 && lowNutrition) {
+        flagsForHumanCoach.push('Nutrition adherence is low while body-fat trend needs closer monitoring.');
+    }
+
+    const workoutAdjustments = lowWorkout
+        ? 'Reduce training volume by 10% and prioritize 3 short, consistent sessions this week.'
+        : 'Keep workout volume stable and add one progression set on main compound movements.';
+
+    return {
+        coachMessage: lowWorkout || lowNutrition
+            ? 'Adherence dipped this week. Focus on one repeatable nutrition habit and shorter, achievable training blocks.'
+            : 'Momentum is strong. Continue current structure and progress load gradually while protecting recovery.',
+        adjustedCalorieTarget: calorieTarget,
+        workoutAdjustments,
+        flagsForHumanCoach,
+    };
+};
+
 const ProgressReports = () => {
     const [selectedClient, setSelectedClient] = useState('all');
     const [timeRange, setTimeRange] = useState('month');
@@ -49,6 +94,9 @@ const ProgressReports = () => {
         { id: '3', name: 'Mike Davis' },
         { id: '4', name: 'Emma Wilson' },
     ]);
+    const [insightsLoading, setInsightsLoading] = useState(false);
+    const [insightsError, setInsightsError] = useState<string | null>(null);
+    const [insightsPlan, setInsightsPlan] = useState<AdaptivePlanResponse | null>(null);
 
     useEffect(() => {
         const loadClients = async () => {
@@ -72,13 +120,48 @@ const ProgressReports = () => {
         return progressData.filter((p: any) => String(p.id) === selectedClient || p.name === clients.find(c => c.id === selectedClient)?.name);
     }, [selectedClient, progressData, clients]);
 
+    const selectedClientName = useMemo(() => clients.find((c) => c.id === selectedClient)?.name || 'Selected Client', [clients, selectedClient]);
+
+    const handleGenerateInsights = useCallback(async () => {
+        if (selectedClient === 'all') {
+            setInsightsPlan(null);
+            setInsightsError('Please select a specific client to generate AI insights.');
+            return;
+        }
+        const client = progressData.find((p: any) => String(p.id) === selectedClient || p.name === selectedClientName);
+        if (!client) {
+            setInsightsPlan(null);
+            setInsightsError('Selected client data is not available yet.');
+            return;
+        }
+        setInsightsLoading(true);
+        setInsightsError(null);
+        try {
+            const result = await generateAdaptivePlan(client);
+            setInsightsPlan(result);
+        } catch (error) {
+            setInsightsPlan(null);
+            setInsightsError('Unable to generate AI insights right now. Please retry.');
+        } finally {
+            setInsightsLoading(false);
+        }
+    }, [selectedClient, progressData, selectedClientName]);
+
+    useEffect(() => {
+        if (selectedClient === 'all') {
+            setInsightsPlan(null);
+            setInsightsError(null);
+            return;
+        }
+        handleGenerateInsights();
+    }, [selectedClient, handleGenerateInsights]);
+
     const handleExportPDF = () => {
-        // Generate a simple printable report
         const printWindow = window.open('', '_blank');
         if (!printWindow) { return; }
         const rows = filteredProgress.map((c: any) => `
-            <tr><td>${c.name}</td><td>${c.metrics.weight.current}kg</td><td>${c.metrics.bodyFat.current}%</td>
-            <td>${c.workoutAdherence}%</td><td>${c.nutritionAdherence}%</td><td>${c.streakDays}</td></tr>
+            <tr><td>${escapeHtml(String(c.name ?? ''))}</td><td>${Number(c.metrics.weight.current || 0)}kg</td><td>${Number(c.metrics.bodyFat.current || 0)}%</td>
+            <td>${Number(c.workoutAdherence || 0)}%</td><td>${Number(c.nutritionAdherence || 0)}%</td><td>${Number(c.streakDays || 0)}</td></tr>
         `).join('');
         printWindow.document.write(`<html><head><title>NextSelf Progress Report</title></head><body>
             <h1>NextSelf Progress Report</h1><p>Generated: ${new Date().toLocaleDateString()}</p>
@@ -275,6 +358,76 @@ const ProgressReports = () => {
                         <Radar data={radarData} options={radarOptions} />
                     </div>
                 </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg transition-shadow duration-300">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900">AI Insights & Alerts</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                            {selectedClient === 'all'
+                                ? 'Select a client to generate coach-facing alerts.'
+                                : `Autopilot signals for ${selectedClientName}.`}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleGenerateInsights}
+                        disabled={selectedClient === 'all' || insightsLoading}
+                        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${selectedClient === 'all' || insightsLoading
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                    >
+                        {insightsLoading ? 'Generating...' : 'Refresh AI Insights'}
+                    </button>
+                </div>
+
+                {insightsError ? (
+                    <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                        {insightsError}
+                    </div>
+                ) : null}
+
+                {selectedClient !== 'all' && insightsPlan ? (
+                    <div className="mt-5 space-y-4">
+                        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Coach Message</p>
+                            <p className="mt-1 text-sm text-blue-900">{insightsPlan.coachMessage}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Workout Adjustment</p>
+                            <p className="mt-1 text-sm text-indigo-900">{insightsPlan.workoutAdjustments}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calorie Target</span>
+                            <span className="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                                {insightsPlan.adjustedCalorieTarget !== null ? `${insightsPlan.adjustedCalorieTarget} kcal` : 'No Change'}
+                            </span>
+                        </div>
+
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Flags For Human Coach</p>
+                            {insightsPlan.flagsForHumanCoach.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {insightsPlan.flagsForHumanCoach.map((flag) => (
+                                        <span
+                                            key={flag}
+                                            className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 border border-amber-200"
+                                        >
+                                            {flag}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                                    On Track
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {/* Client Progress Table */}

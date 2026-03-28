@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiHome, FiUsers, FiActivity, FiPieChart, FiSettings, FiLogOut, FiMenu, FiX, FiMessageSquare, FiClipboard, FiFileText, FiCalendar, FiAward, FiTrendingUp } from 'react-icons/fi';
 import { MdFastfood } from 'react-icons/md';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/supabase';
 import ErrorBoundary from './ErrorBoundary';
 
-const Layout = ({ session }) => {
+const Layout = ({ session }: { session: { user?: { email?: string | null } } | null }) => {
     const { t, i18n } = useTranslation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await auth.signOut();
         window.location.href = '/login';
     };
 

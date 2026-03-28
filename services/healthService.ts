@@ -1,5 +1,6 @@
 import { Platform, Linking } from 'react-native';
-import PlatformStorage from '@nextself/shared';
+import PlatformStorage, { SupabaseService } from '@nextself/shared';
+import { OfflineService } from '../utils/offlineService';
 
 const HEALTH_CACHE_KEY = 'NextSelf_health_cache';
 const HEALTH_CONNECTED_KEY = 'NextSelf_health_connected';
@@ -45,6 +46,7 @@ export class HealthService {
   private isGoogleConnected = false;
   private healthStreamTimers = new Set<ReturnType<typeof setInterval>>();
   private workoutStreamTimers = new Set<ReturnType<typeof setInterval>>();
+  private offlineHandlerRegistered = false;
 
   static getInstance(): HealthService {
     if (!HealthService.instance) {
@@ -60,6 +62,32 @@ export class HealthService {
       this.isAppleConnected = conn.apple ?? false;
       this.isGoogleConnected = conn.google ?? false;
     }
+    this.registerOfflineHandler();
+  }
+
+  private registerOfflineHandler(): void {
+    if (this.offlineHandlerRegistered) return;
+    const offline = OfflineService.getInstance();
+    offline.registerSyncHandler('health_records_upsert', async (operation) => {
+      const payload = operation.data as { healthData?: HealthData; timestamp?: string; userId?: string };
+      if (!payload?.healthData) return false;
+      const supabase = SupabaseService.getInstance().getClient();
+      let userId = payload.userId;
+      if (!userId) {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data?.user?.id) return false;
+        userId = data.user.id;
+      }
+      const { error } = await supabase
+        .from('health_records')
+        .upsert({
+          user_id: userId,
+          ...payload.healthData,
+          recorded_at: payload.timestamp ?? new Date().toISOString(),
+        }, { onConflict: 'user_id,date' });
+      return !error;
+    });
+    this.offlineHandlerRegistered = true;
   }
 
   // Apple HealthKit Integration
@@ -526,7 +554,7 @@ export class HealthService {
         const end = new Date();
         const start = new Date(today); // midnight
 
-        const [stepRecords, hydrationRecords, heartRateRecords, calorieRecords, sleepRecords, exerciseRecords] = await Promise.all([
+        const results = await Promise.allSettled([
           readRecords('Steps', {
             timeRangeFilter: {
               operator: 'between',
@@ -570,6 +598,13 @@ export class HealthService {
             }
           }),
         ]);
+
+        const stepRecords = results[0].status === 'fulfilled' ? results[0].value : null;
+        const hydrationRecords = results[1].status === 'fulfilled' ? results[1].value : null;
+        const heartRateRecords = results[2].status === 'fulfilled' ? results[2].value : null;
+        const calorieRecords = results[3].status === 'fulfilled' ? results[3].value : null;
+        const sleepRecords = results[4].status === 'fulfilled' ? results[4].value : null;
+        const exerciseRecords = results[5].status === 'fulfilled' ? results[5].value : null;
         const totalWaterLiters = (hydrationRecords?.records || []).reduce((acc: number, cur: any) => acc + (cur?.volume?.inLiters || 0), 0);
         const totalSteps = (stepRecords?.records || []).reduce((acc: number, cur: any) => acc + (cur?.count || 0), 0);
         const latestHeartRate = (heartRateRecords?.records || [])
@@ -653,7 +688,7 @@ export class HealthService {
       try {
         const { readRecords } = require('react-native-health-connect');
 
-        const [weightRecords, bodyFatRecords, leanMassRecords] = await Promise.all([
+        const results = await Promise.allSettled([
           readRecords('Weight', {
             timeRangeFilter: {
               operator: 'between',
@@ -676,6 +711,10 @@ export class HealthService {
             }
           }),
         ]);
+
+        const weightRecords = results[0].status === 'fulfilled' ? results[0].value : null;
+        const bodyFatRecords = results[1].status === 'fulfilled' ? results[1].value : null;
+        const leanMassRecords = results[2].status === 'fulfilled' ? results[2].value : null;
 
         if (weightRecords && weightRecords.records && weightRecords.records.length > 0) {
           // Find the most recent record
@@ -716,39 +755,29 @@ export class HealthService {
   }
 
   async addToOfflineQueue(data: any): Promise<void> {
-    const stored = await PlatformStorage.getItem(OFFLINE_QUEUE_KEY);
-    const queue = stored ? JSON.parse(stored) : [];
-    queue.push({ data, timestamp: new Date().toISOString(), synced: false });
-    // Keep only last 100 entries
-    if (queue.length > 100) queue.splice(0, queue.length - 100);
-    await PlatformStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    this.registerOfflineHandler();
+    await OfflineService.getInstance().queueOperation('health_records_upsert', {
+      healthData: data,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Last-write-wins conflict resolution
-  async syncOfflineQueue(supabaseClient: any, userId: string): Promise<void> {
+  async syncOfflineQueue(_supabaseClient: any, userId: string): Promise<void> {
     const stored = await PlatformStorage.getItem(OFFLINE_QUEUE_KEY);
-    if (!stored) return;
-
-    const queue = JSON.parse(stored);
-    const unsynced = queue.filter((item: any) => !item.synced);
-
-    for (const item of unsynced) {
-      try {
-        const { error } = await supabaseClient
-          .from('health_records')
-          .upsert({
-            user_id: userId,
-            ...item.data,
-            recorded_at: item.timestamp,
-          }, { onConflict: 'user_id,date' }); // Last write wins
-
-        if (!error) item.synced = true;
-      } catch (err) {
-        console.warn('Sync failed for item:', err);
+    if (stored) {
+      const queue = JSON.parse(stored);
+      const unsynced = queue.filter((item: any) => !item.synced);
+      for (const item of unsynced) {
+        await OfflineService.getInstance().queueOperation('health_records_upsert', {
+          healthData: item.data,
+          timestamp: item.timestamp,
+          userId,
+        });
       }
+      await PlatformStorage.removeItem(OFFLINE_QUEUE_KEY);
     }
-
-    await PlatformStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    await OfflineService.getInstance().syncNow();
   }
 
   getEmptyHealthData(date: string): HealthData {
@@ -886,7 +915,7 @@ export class HealthService {
         const startIso = startTime.toISOString();
         const endIso = new Date().toISOString();
 
-        const [heartRateRecords, calorieRecords] = await Promise.all([
+        const results = await Promise.allSettled([
           readRecords('HeartRate', {
             timeRangeFilter: {
               operator: 'between',
@@ -902,6 +931,9 @@ export class HealthService {
             },
           }),
         ]);
+
+        const heartRateRecords = results[0].status === 'fulfilled' ? results[0].value : null;
+        const calorieRecords = results[1].status === 'fulfilled' ? results[1].value : null;
 
         const heartRateSamples = heartRateRecords?.records || [];
         const latestHr = [...heartRateSamples]

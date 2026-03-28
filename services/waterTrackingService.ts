@@ -28,15 +28,15 @@ export interface WaterStats {
     drinkCount: number;
 }
 
-const DEFAULT_CONFIG: WaterConfig = {
+const getDefaultConfig = (): WaterConfig => ({
     dailyGoalLiters: 2.5,
     mlPerSip: 250,
     startHour: 8,
     endHour: 22,
     currentIntakeMl: 0,
-    date: new Date().toDateString(),
+    date: getLocalDateString(),
     drinkCount: 0,
-};
+});
 
 export class WaterTrackingService {
     private static instance: WaterTrackingService;
@@ -89,26 +89,34 @@ export class WaterTrackingService {
                 const parsed = JSON.parse(stored);
                 // Merge with default config to ensure all fields exist
                 const config: WaterConfig = {
-                    ...DEFAULT_CONFIG,
+                    ...getDefaultConfig(),
                     ...parsed,
                 };
 
-                const today = new Date().toDateString();
+                const today = getLocalDateString();
                 
-                // Also check if stored date format is old (Date().toDateString()) vs new (YYYY-MM-DD) if we change it.
-                // But let's stick to toDateString() for now to avoid breaking existing logic unless we migrate fully.
+                // Also check if stored date format is old (Date().toDateString()) vs new (YYYY-MM-DD)
+                // If it doesn't match `today` in either format, we reset it.
                 
-                if (config.date !== today) {
+                if (config.date !== today && config.date !== new Date().toDateString()) {
                     // New day — reset intake
                     const newConfig = { ...config, currentIntakeMl: 0, drinkCount: 0, date: today };
                     await this.saveConfig(newConfig);
                     return newConfig;
                 }
+                
+                // If it matches the old format but is today, just upgrade the format
+                if (config.date === new Date().toDateString() && config.date !== today) {
+                    const newConfig = { ...config, date: today };
+                    await this.saveConfig(newConfig);
+                    return newConfig;
+                }
+
                 return config;
             }
-            return DEFAULT_CONFIG;
+            return getDefaultConfig();
         } catch {
-            return DEFAULT_CONFIG;
+            return getDefaultConfig();
         }
     }
 

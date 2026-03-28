@@ -24,7 +24,7 @@
     },
     "android": {
       "versionCode": 2,
-      "predictiveBackGestureEnabled": false,
+      "predictiveBackGestureEnabled": true,
       "package": "com.nextself.app",
       "permissions": [
         "android.permission.health.READ_STEPS",
@@ -86,6 +86,13 @@
         "expo-calendar",
         {
           "calendarPermission": "Allow NextSelf to access your calendar to sync workouts and events."
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermissionText": "Allow NextSelf to access your camera for on-device posture landmark extraction."
         }
       ]
     ],

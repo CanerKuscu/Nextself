@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, GRADIENTS } from '../config/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -53,6 +54,8 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const config = ALERT_CONFIG[type];
+    const { colors, isDark } = useTheme();
+    const runtimeIconColor = isDark ? colors.text : colors.textInverse;
 
     useEffect(() => {
         if (visible) {
@@ -98,7 +101,7 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
                     end={{ x: 1, y: 0 }}
                     style={styles.buttonGradient}
                 >
-                    <Text style={[styles.buttonText, isDestructive && { color: '#fff' }]}>{btn.text}</Text>
+                    <Text style={[styles.buttonText, isDestructive && { color: isDark ? colors.text : colors.textInverse }]}>{btn.text}</Text>
                 </LinearGradient>
             </TouchableOpacity>
         );
@@ -115,7 +118,7 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
                         end={{ x: 1, y: 1 }}
                         style={styles.iconHeader}
                     >
-                        <Ionicons name={(icon || config.icon) as any} size={36} color={config.iconColor} />
+                        <Ionicons name={(icon || config.icon) as any} size={36} color={runtimeIconColor} />
                     </LinearGradient>
 
                     {/* Content */}

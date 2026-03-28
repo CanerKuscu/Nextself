@@ -1,20 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiSettings, FiBell, FiShield, FiDatabase, FiGlobe, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import { FiSettings, FiBell, FiShield, FiDatabase, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import { db, auth } from '../lib/supabase';
 
+type SettingsState = {
+    notifications: boolean;
+    emailAlerts: boolean;
+    darkMode: boolean;
+    autoSave: boolean;
+    language: string;
+};
+
+type SaveStatus = 'saving' | 'saved' | 'error' | null;
+type SettingOption = { value: string; label: string };
+type SettingItem = {
+    key: keyof SettingsState | 'twoFactor' | 'dataExport';
+    label: string;
+    description: string;
+    type: 'toggle' | 'select' | 'button';
+    options?: SettingOption[];
+    disabled?: boolean;
+    action?: () => void;
+};
+type SettingGroup = { title: string; icon: any; settings: SettingItem[] };
+
 const Settings = () => {
-    const { t, i18n } = useTranslation();
-    const [settings, setSettings] = useState({
+    const { i18n } = useTranslation();
+    const [settings, setSettings] = useState<SettingsState>({
         notifications: true,
         emailAlerts: true,
         darkMode: false,
         autoSave: true,
         language: 'en',
     });
-    const [saveStatus, setSaveStatus] = useState<any>(null); // 'saving' | 'saved' | 'error'
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const settingsKeys: Array<keyof SettingsState> = ['notifications', 'emailAlerts', 'darkMode', 'autoSave', 'language'];
+    const isSettingsKey = (key: string): key is keyof SettingsState => settingsKeys.includes(key as keyof SettingsState);
 
     const loadSettings = useCallback(async () => {
         try {
@@ -34,7 +57,7 @@ const Settings = () => {
         loadSettings();
     }, [loadSettings]);
 
-    const persistSettings = useCallback(async (newSettings) => {
+    const persistSettings = useCallback(async (newSettings: SettingsState) => {
         setSaveStatus('saving');
         try {
             const { error } = await db.saveSettings(newSettings);
@@ -48,14 +71,18 @@ const Settings = () => {
         }
     }, []);
 
-    const handleToggle = (key) => {
-        const newSettings = { ...settings, [key]: !settings[key] };
+    const handleToggle = (key: keyof SettingsState) => {
+        const current = settings[key];
+        if (typeof current !== 'boolean') {
+            return;
+        }
+        const newSettings: SettingsState = { ...settings, [key]: !current };
         setSettings(newSettings);
         if (newSettings.autoSave) { persistSettings(newSettings); }
     };
 
-    const handleSelect = (key, value) => {
-        const newSettings = { ...settings, [key]: value };
+    const handleSelect = (key: keyof SettingsState, value: string) => {
+        const newSettings: SettingsState = { ...settings, [key]: value };
         setSettings(newSettings);
         if (key === 'language') {
             i18n.changeLanguage(value);
@@ -84,7 +111,7 @@ const Settings = () => {
         setShowResetConfirm(false);
     };
 
-    const settingGroups = [
+    const settingGroups: SettingGroup[] = [
         {
             title: 'General Settings',
             icon: FiSettings,
@@ -186,8 +213,9 @@ const Settings = () => {
                             </div>
 
                             <div className="space-y-6">
-                                {group.settings.map((setting, settingIndex) => (
-                                    <div key={settingIndex} className="flex items-center justify-between">
+                                {group.settings.map((setting, settingIndex) => {
+                                    const settingsKey = isSettingsKey(setting.key) ? setting.key : null;
+                                    return <div key={settingIndex} className="flex items-center justify-between">
                                         <div className="flex-1">
                                             <div className="flex items-center">
                                                 <h4 className="text-sm font-medium text-gray-900">
@@ -205,27 +233,27 @@ const Settings = () => {
                                         </div>
 
                                         <div className="ml-4">
-                                            {setting.type === 'toggle' && (
+                                            {setting.type === 'toggle' && settingsKey && typeof settings[settingsKey] === 'boolean' && (
                                                 <button
-                                                    onClick={() => !setting.disabled && handleToggle(setting.key)}
+                                                    onClick={() => !setting.disabled && handleToggle(settingsKey)}
                                                     disabled={setting.disabled}
-                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full ${settings[setting.key] ? 'bg-primary-600' : 'bg-gray-200'
+                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full ${settings[settingsKey] ? 'bg-primary-600' : 'bg-gray-200'
                                                         } ${setting.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                 >
                                                     <span
-                                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${settings[setting.key] ? 'translate-x-6' : 'translate-x-1'
+                                                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${settings[settingsKey] ? 'translate-x-6' : 'translate-x-1'
                                                             }`}
                                                     />
                                                 </button>
                                             )}
 
-                                            {setting.type === 'select' && (
+                                            {setting.type === 'select' && settingsKey && setting.options && (
                                                 <select
-                                                    value={settings[setting.key]}
-                                                    onChange={(e) => handleSelect(setting.key, e.target.value)}
+                                                    value={String(settings[settingsKey])}
+                                                    onChange={(e) => handleSelect(settingsKey, e.target.value)}
                                                     className="input py-1 text-sm"
                                                 >
-                                                    {setting.options.map((option) => (
+                                                    {setting.options.map((option: SettingOption) => (
                                                         <option key={option.value} value={option.value}>
                                                             {option.label}
                                                         </option>
@@ -233,7 +261,7 @@ const Settings = () => {
                                                 </select>
                                             )}
 
-                                            {setting.type === 'button' && (
+                                            {setting.type === 'button' && setting.action && (
                                                 <button
                                                     onClick={setting.action}
                                                     className="btn btn-outline text-sm"
@@ -243,7 +271,7 @@ const Settings = () => {
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                ;})}
                             </div>
                         </div>
                     );

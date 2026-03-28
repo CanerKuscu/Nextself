@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { FiPlus, FiFilter, FiMapPin, FiDollarSign, FiStar, FiEdit2, FiTrash2, FiEye } from 'react-icons/fi';
-import { useTranslation } from 'react-i18next';
 
 const ServiceListing = () => {
-    const { t } = useTranslation();
     const [services, setServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [cities, setCities] = useState<any[]>([]);
@@ -119,22 +117,6 @@ const ServiceListing = () => {
         setLoading(false);
     }, []);
 
-    const fetchServices = async () => {
-        setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('services')
-                .select('*')
-                .order('created_at', { ascending: false });
-            if (error) { throw error; }
-            setServices(data || []);
-        } catch (err: any) {
-            console.error('Failed to fetch services:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleFilter = () => {
         let filtered = [...mockServices];
         if (selectedCity) {
@@ -168,7 +150,7 @@ const ServiceListing = () => {
         handleFilter();
     }, [selectedCity, minPrice, maxPrice, sortBy]);
 
-    const handleEdit = (service) => {
+    const handleEdit = (service: any) => {
         setEditingService(service);
         setFormData({
             title: service.title,
@@ -184,7 +166,7 @@ const ServiceListing = () => {
         setShowModal(true);
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = async (id: string) => {
         if (!window.confirm('Are you sure you want to delete this service?')) { return; }
         // await supabase.from('services').delete().eq('id', id);
         setServices(prev => prev.filter(s => s.id !== id));
@@ -223,7 +205,7 @@ const ServiceListing = () => {
         });
     };
 
-    const renderStars = (rating) => {
+    const renderStars = (rating: number) => {
         return (
             <div className="flex items-center">
                 {[1, 2, 3, 4, 5].map(star => (
@@ -360,7 +342,7 @@ const ServiceListing = () => {
                                 <div className="mb-4">
                                     <h4 className="text-sm font-semibold text-gray-700 mb-1">Included:</h4>
                                     <div className="flex flex-wrap gap-1">
-                                        {service.inclusions.map((inc, idx) => (
+                                        {service.inclusions.map((inc: string, idx: number) => (
                                             <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                                                 {inc}
                                             </span>

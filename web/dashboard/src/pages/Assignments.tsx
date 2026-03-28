@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { FiPlus, FiClipboard, FiCheckCircle, FiClock, FiX, FiRefreshCw, FiUser, FiActivity, FiHeart } from 'react-icons/fi';
 
@@ -15,6 +15,16 @@ const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800',
     active: 'bg-blue-100 text-blue-800',
     expired: 'bg-red-100 text-red-800',
+};
+type AssignmentStatus = keyof typeof statusColors;
+type AssignmentRow = {
+    id: string | number;
+    type: 'Workout' | 'Nutrition';
+    client: string;
+    title: string;
+    date: string;
+    status: AssignmentStatus;
+    raw?: any;
 };
 
 const demoData = [
@@ -57,7 +67,7 @@ const Assignments = () => {
                     .order('start_date', { ascending: false }),
             ]);
 
-            const rows = [];
+            const rows: AssignmentRow[] = [];
             if (workoutsRes.status === 'fulfilled' && workoutsRes.value.data) {
                 workoutsRes.value.data.forEach((w) => {
                     rows.push({
@@ -117,7 +127,7 @@ const Assignments = () => {
     useEffect(() => { loadAssignments(); loadClients(); }, [loadAssignments, loadClients]);
 
     // ── Create Assignment ─────────────────────────────────
-    const handleCreate = async (e) => {
+    const handleCreate = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!form.clientId || !form.title) { return; }
         setSaving(true);
@@ -233,7 +243,7 @@ const Assignments = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{a.date || '—'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[a.status] || 'bg-gray-100 text-gray-800'}`}>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[a.status as AssignmentStatus] || 'bg-gray-100 text-gray-800'}`}>
                                                 {a.status === 'completed' && <FiCheckCircle className="mr-1 w-3 h-3" />}
                                                 {a.status === 'pending' && <FiClock className="mr-1 w-3 h-3" />}
                                                 {a.status.charAt(0).toUpperCase() + a.status.slice(1)}

@@ -16,6 +16,7 @@ import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, COMMON_STYLES } fr
 import { useAlert } from '../components/CustomAlert';
 import FoodCategoryIcon from '../components/FoodCategoryIcon';
 import { useTheme } from '../contexts/ThemeContext';
+import SkeletonCard from '../components/SkeletonCard';
 
 const SCAN_STORAGE_KEY = 'nextself_daily_scans';
 
@@ -39,6 +40,54 @@ const getCategoryLabel = (category: string, isTurkish: boolean) => {
   return CATEGORY_ICONS[key]?.tr || category;
 };
 
+// Module-level constants (R7: extracted from component body)
+const DAY_OPTIONS = [
+  { key: 'monday', tr: 'Pazartesi', en: 'Monday' },
+  { key: 'tuesday', tr: 'Salı', en: 'Tuesday' },
+  { key: 'wednesday', tr: 'Çarşamba', en: 'Wednesday' },
+  { key: 'thursday', tr: 'Perşembe', en: 'Thursday' },
+  { key: 'friday', tr: 'Cuma', en: 'Friday' },
+  { key: 'saturday', tr: 'Cumartesi', en: 'Saturday' },
+  { key: 'sunday', tr: 'Pazar', en: 'Sunday' },
+] as const;
+
+const MEAL_OPTIONS = [
+  { key: 'breakfast', tr: 'Kahvaltı', en: 'Breakfast' },
+  { key: 'lunch', tr: 'Öğle Yemeği', en: 'Lunch' },
+  { key: 'dinner', tr: 'Akşam Yemeği', en: 'Dinner' },
+  { key: 'snack', tr: 'Ara Öğün', en: 'Snack' },
+] as const;
+
+const WEEKDAY_MAP: Record<string, number> = {
+  sunday: 1,
+  monday: 2,
+  tuesday: 3,
+  wednesday: 4,
+  thursday: 5,
+  friday: 6,
+  saturday: 7,
+};
+
+type ProgramFormState = {
+  selectedFoodForProgram: any | null;
+  selectedMealDay: string;
+  selectedMealType: string;
+  mealTime: Date;
+  notificationTime: Date;
+  showTimePicker: 'meal' | 'notification' | null;
+  creatingProgram: boolean;
+};
+
+const createProgramFormState = (): ProgramFormState => ({
+  selectedFoodForProgram: null,
+  selectedMealDay: 'monday',
+  selectedMealType: 'breakfast',
+  mealTime: new Date(),
+  notificationTime: new Date(),
+  showTimePicker: null,
+  creatingProgram: false,
+});
+
 // Macro Progress Bar Component
 const MacroBar = ({ label, value, goal, color, unit, styles, colors }: any) => {
   const safeGoal = goal > 0 ? goal : 1;
@@ -58,36 +107,118 @@ const MacroBar = ({ label, value, goal, color, unit, styles, colors }: any) => {
   );
 };
 
+type NutritionState = {
+  foods: any[];
+  page: number;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loadError: string | null;
+  selectedCategory: string;
+  searchQuery: string;
+  loading: boolean;
+  dailyScans: number;
+  dailyMacros: {
+    calories: number; protein: number; carbs: number; fat: number;
+    calorieGoal: number; proteinGoal: number; carbsGoal: number; fatGoal: number;
+  };
+  dbCategories: string[];
+  imageErrors: Record<string, boolean>;
+  showCreateProgramModal: boolean;
+  programForm: ProgramFormState;
+};
+
+type NutritionAction =
+  | { type: 'SET_FOODS'; payload: any[] }
+  | { type: 'APPEND_FOODS'; payload: any[] }
+  | { type: 'SET_PAGE'; payload: number }
+  | { type: 'SET_LOADING_MORE'; payload: boolean }
+  | { type: 'SET_HAS_MORE'; payload: boolean }
+  | { type: 'SET_LOAD_ERROR'; payload: string | null }
+  | { type: 'SET_CATEGORY'; payload: string }
+  | { type: 'SET_SEARCH_QUERY'; payload: string }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_DAILY_SCANS'; payload: number }
+  | { type: 'SET_DAILY_MACROS'; payload: NutritionState['dailyMacros'] }
+  | { type: 'SET_DB_CATEGORIES'; payload: string[] }
+  | { type: 'SET_IMAGE_ERROR'; payload: { id: string; error: boolean } }
+  | { type: 'SET_SHOW_MODAL'; payload: boolean }
+  | { type: 'SET_PROGRAM_FORM'; payload: Partial<ProgramFormState> }
+  | { type: 'RESET_PROGRAM_FORM' };
+
+const nutritionReducer = (state: NutritionState, action: NutritionAction): NutritionState => {
+  switch (action.type) {
+    case 'SET_FOODS': return { ...state, foods: action.payload };
+    case 'APPEND_FOODS': return { ...state, foods: [...state.foods, ...action.payload] };
+    case 'SET_PAGE': return { ...state, page: action.payload };
+    case 'SET_LOADING_MORE': return { ...state, loadingMore: action.payload };
+    case 'SET_HAS_MORE': return { ...state, hasMore: action.payload };
+    case 'SET_LOAD_ERROR': return { ...state, loadError: action.payload };
+    case 'SET_CATEGORY': return { ...state, selectedCategory: action.payload, page: 0, foods: [], hasMore: true };
+    case 'SET_SEARCH_QUERY': return { ...state, searchQuery: action.payload, page: 0, foods: [], hasMore: true };
+    case 'SET_LOADING': return { ...state, loading: action.payload };
+    case 'SET_DAILY_SCANS': return { ...state, dailyScans: action.payload };
+    case 'SET_DAILY_MACROS': return { ...state, dailyMacros: action.payload };
+    case 'SET_DB_CATEGORIES': return { ...state, dbCategories: action.payload };
+    case 'SET_IMAGE_ERROR': return { ...state, imageErrors: { ...state.imageErrors, [action.payload.id]: action.payload.error } };
+    case 'SET_SHOW_MODAL': return { ...state, showCreateProgramModal: action.payload };
+    case 'SET_PROGRAM_FORM': return { ...state, programForm: { ...state.programForm, ...action.payload } };
+    case 'RESET_PROGRAM_FORM': return { ...state, programForm: createProgramFormState() };
+    default: return state;
+  }
+};
+
 const NutritionScreen = ({ navigation }: any) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
-  const [foods, setFoods] = useState<any[]>([]);
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 60;
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [dailyScans, setDailyScans] = useState(0);
-  const [dailyMacros, setDailyMacros] = useState({
-    calories: 0, protein: 0, carbs: 0, fat: 0,
-    calorieGoal: 2500, proteinGoal: 150, carbsGoal: 300, fatGoal: 70,
+  const [state, dispatch] = React.useReducer(nutritionReducer, {
+    foods: [],
+    page: 0,
+    loadingMore: false,
+    hasMore: true,
+    loadError: null,
+    selectedCategory: 'all',
+    searchQuery: '',
+    loading: true,
+    dailyScans: 0,
+    dailyMacros: {
+      calories: 0, protein: 0, carbs: 0, fat: 0,
+      calorieGoal: 2500, proteinGoal: 150, carbsGoal: 300, fatGoal: 70,
+    },
+    dbCategories: [],
+    imageErrors: {},
+    showCreateProgramModal: false,
+    programForm: createProgramFormState(),
   });
-  const [dbCategories, setDbCategories] = useState<string[]>([]);
+
+  const PAGE_SIZE = 60;
   const { t, isTurkish } = useTranslation();
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
-  const [showCreateProgramModal, setShowCreateProgramModal] = useState(false);
-  const [selectedFoodForProgram, setSelectedFoodForProgram] = useState<any | null>(null);
-  const [selectedMealDay, setSelectedMealDay] = useState('monday');
-  const [selectedMealType, setSelectedMealType] = useState('breakfast');
-  const [mealTime, setMealTime] = useState(new Date());
-  const [notificationTime, setNotificationTime] = useState(new Date());
-  const [showTimePicker, setShowTimePicker] = useState<'meal' | 'notification' | null>(null);
-  const [creatingProgram, setCreatingProgram] = useState(false);
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
+  const {
+    foods,
+    page,
+    loadingMore,
+    hasMore,
+    loadError,
+    selectedCategory,
+    searchQuery,
+    loading,
+    dailyScans,
+    dailyMacros,
+    dbCategories,
+    imageErrors,
+    showCreateProgramModal,
+  } = state;
+
+  const {
+    selectedFoodForProgram,
+    selectedMealDay,
+    selectedMealType,
+    mealTime,
+    notificationTime,
+    showTimePicker,
+    creatingProgram,
+  } = state.programForm;
 
   useEffect(() => { loadDailyMacros(); }, []);
   useEffect(() => { loadCategories(); }, [isTurkish]);
@@ -97,86 +228,118 @@ const NutritionScreen = ({ navigation }: any) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       // reset pagination when query/category changes
-      setPage(0);
-      setHasMore(true);
+      dispatch({ type: 'SET_PAGE', payload: 0 });
+      dispatch({ type: 'SET_HAS_MORE', payload: true });
       loadFoods(0);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedCategory, isTurkish]);
+  }, [state.searchQuery, state.selectedCategory, isTurkish]);
 
   const loadCategories = async () => {
     try {
       const supabase = SupabaseService.getInstance();
       const { data } = await supabase.getFoodCategories(isTurkish ? 'tr' : 'en');
-      if (data && data.length > 0) setDbCategories(data);
+      if (data && data.length > 0) dispatch({ type: 'SET_DB_CATEGORIES', payload: data });
     } catch (err) { console.error('Load categories error:', err); }
   };
 
   const loadDailyMacros = async () => {
     try {
-      const supabase = SupabaseService.getInstance();
-      const { user } = await supabase.getCurrentUser();
+      const { user } = await SupabaseService.getInstance().getCurrentUser();
       if (!user) return;
-      const { data } = await supabase.getTodayNutritionSummary(user.id);
-      if (data) {
-        setDailyMacros(prev => ({
-          ...prev,
-          calories: Math.round(data.calories),
-          protein: Math.round(data.protein),
-          carbs: Math.round(data.carbs),
-          fat: Math.round(data.fat),
-        }));
+      // Get actual goals from health_goals
+      const { data: goalsData } = await SupabaseService.getInstance().getClient()
+        .from('health_goals')
+        .select('goal_type, target_value')
+        .eq('user_id', user.id);
+
+      let calorieGoal = 2500, proteinGoal = 150, carbsGoal = 300, fatGoal = 70;
+      if (goalsData) {
+        goalsData.forEach((g: any) => {
+          const val = Number(g.target_value);
+          if (isNaN(val) || val <= 0) return;
+          if (g.goal_type === 'calories' || g.goal_type === 'daily_calories') calorieGoal = val;
+          if (g.goal_type === 'protein') proteinGoal = val;
+          if (g.goal_type === 'carbs') carbsGoal = val;
+          if (g.goal_type === 'fat') fatGoal = val;
+        });
       }
-    } catch (err) { console.error('Load daily macros error:', err); }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const { data } = await SupabaseService.getInstance().getClient()
+        .from('nutrition_logs')
+        .select('calories, protein, carbs, fat')
+        .eq('user_id', user.id)
+        .eq('log_date', dateStr);
+
+      if (data) {
+        const total = data.reduce((acc, log) => ({
+          calories: acc.calories + (Number(log.calories) || 0),
+          protein: acc.protein + (Number(log.protein) || 0),
+          carbs: acc.carbs + (Number(log.carbs) || 0),
+          fat: acc.fat + (Number(log.fat) || 0)
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+        dispatch({ type: 'SET_DAILY_MACROS', payload: {
+          ...total,
+          calorieGoal, proteinGoal, carbsGoal, fatGoal
+        } });
+      } else {
+        dispatch({ type: 'SET_DAILY_MACROS', payload: {
+          calories: 0, protein: 0, carbs: 0, fat: 0,
+          calorieGoal, proteinGoal, carbsGoal, fatGoal
+        } });
+      }
+    } catch (error) {
+      console.error('Error loading daily macros:', error);
+    }
   };
 
   const loadFoods = async (pageParam: number = 0) => {
-    if (!hasMore && pageParam > 0) return;
-    if (pageParam === 0) setLoading(true);
-    else setLoadingMore(true);
+    if (!state.hasMore && pageParam > 0) return;
+    if (pageParam === 0) dispatch({ type: 'SET_LOADING', payload: true });
+    else dispatch({ type: 'SET_LOADING_MORE', payload: true });
     try {
-      setLoadError(null);
+      dispatch({ type: 'SET_LOAD_ERROR', payload: null });
       const supabase = SupabaseService.getInstance();
       const macroKeys = ['protein', 'carbs', 'fat'];
-      const categoryParam = (selectedCategory === 'all' || macroKeys.includes(selectedCategory)) ? undefined : selectedCategory;
-      const { data, error } = await supabase.getFoodItems(isTurkish ? 'tr' : 'en', categoryParam, searchQuery || undefined, pageParam, PAGE_SIZE);
+      const categoryParam = (state.selectedCategory === 'all' || macroKeys.includes(state.selectedCategory)) ? undefined : state.selectedCategory;
+      const { data, error } = await supabase.getFoodItems(isTurkish ? 'tr' : 'en', categoryParam, state.searchQuery || undefined, pageParam, PAGE_SIZE);
       if (error) {
         console.error('Load foods error:', error);
-        setLoadError(isTurkish ? 'Besinler yüklenemedi' : 'Failed to load foods');
-        if (pageParam === 0) setFoods([]);
+        dispatch({ type: 'SET_LOAD_ERROR', payload: isTurkish ? 'Besinler yüklenemedi' : 'Failed to load foods' });
+        if (pageParam === 0) dispatch({ type: 'SET_FOODS', payload: [] });
       } else {
         const raw = data || [];
 
         // Apply client-side macro filtering/sorting if requested
         let final = raw;
-        if (macroKeys.includes(selectedCategory)) {
+        if (macroKeys.includes(state.selectedCategory)) {
           const map: Record<string, string> = { protein: 'protein_g', carbs: 'carbs_g', fat: 'fat_g' };
-          const key = map[selectedCategory];
+          const key = map[state.selectedCategory];
           final = raw.filter((f: any) => Number(f[key] || 0) > 0).sort((a: any, b: any) => (Number(b[key] || 0) - Number(a[key] || 0)));
         }
 
         if (pageParam === 0) {
-          setFoods(final);
+          dispatch({ type: 'SET_FOODS', payload: final });
         } else {
           // append new page but avoid duplicates
-          setFoods(prev => {
-            const ids = new Set(prev.map(p => p.id));
-            const appended = final.filter((f: any) => !ids.has(f.id));
-            return prev.concat(appended);
-          });
+          const ids = new Set(state.foods.map(p => p.id));
+          const appended = final.filter((f: any) => !ids.has(f.id));
+          dispatch({ type: 'APPEND_FOODS', payload: appended });
         }
 
         // Determine if more pages exist based on raw server result, not post-filtered length
-        if (!raw || raw.length < PAGE_SIZE) setHasMore(false);
+        if (!raw || raw.length < PAGE_SIZE) dispatch({ type: 'SET_HAS_MORE', payload: false });
       }
     } catch (err) {
       console.error('Load foods error:', err);
-      setLoadError(isTurkish ? 'Besinler yüklenemedi' : 'Failed to load foods');
-      if (pageParam === 0) setFoods([]);
+      dispatch({ type: 'SET_LOAD_ERROR', payload: isTurkish ? 'Besinler yüklenemedi' : 'Failed to load foods' });
+      if (pageParam === 0) dispatch({ type: 'SET_FOODS', payload: [] });
     }
     finally {
-      if (pageParam === 0) setLoading(false);
-      else setLoadingMore(false);
+      if (pageParam === 0) dispatch({ type: 'SET_LOADING', payload: false });
+      else dispatch({ type: 'SET_LOADING_MORE', payload: false });
     }
   };
 
@@ -188,7 +351,7 @@ const NutritionScreen = ({ navigation }: any) => {
       // Initialize for first-time users
       if (!stored) {
         await PlatformStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify({ date: today, count: 0 }));
-        setDailyScans(0);
+        dispatch({ type: 'SET_DAILY_SCANS', payload: 0 });
         return;
       }
 
@@ -198,39 +361,39 @@ const NutritionScreen = ({ navigation }: any) => {
       } catch (parseErr) {
         console.error('Corrupted scan data, resetting:', parseErr);
         await PlatformStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify({ date: today, count: 0 }));
-        setDailyScans(0);
+        dispatch({ type: 'SET_DAILY_SCANS', payload: 0 });
         return;
       }
 
       // Validate parsed data structure
       if (!parsed || typeof parsed.date !== 'string' || typeof parsed.count !== 'number') {
         await PlatformStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify({ date: today, count: 0 }));
-        setDailyScans(0);
+        dispatch({ type: 'SET_DAILY_SCANS', payload: 0 });
         return;
       }
 
       if (parsed.date === today) {
-        setDailyScans(parsed.count);
+        dispatch({ type: 'SET_DAILY_SCANS', payload: parsed.count });
       } else {
         // New day - reset count
         await PlatformStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify({ date: today, count: 0 }));
-        setDailyScans(0);
+        dispatch({ type: 'SET_DAILY_SCANS', payload: 0 });
       }
     } catch (err) {
       console.error('Load scan count error:', err);
-      setDailyScans(0); // Graceful fallback
+      dispatch({ type: 'SET_DAILY_SCANS', payload: 0 }); // Graceful fallback
     }
   };
 
   const incrementScanCount = async () => {
     const today = new Date().toDateString();
     const newCount = dailyScans + 1;
-    setDailyScans(newCount);
+    dispatch({ type: 'SET_DAILY_SCANS', payload: newCount });
     await PlatformStorage.setItem(SCAN_STORAGE_KEY, JSON.stringify({ date: today, count: newCount }));
   };
 
   const handleScan = () => {
-    if (dailyScans >= CONFIG.FREE_FOOD_SCANS_PER_DAY) {
+    if (state.dailyScans >= CONFIG.FREE_FOOD_SCANS_PER_DAY) {
       showAlert({
         type: 'warning',
         title: isTurkish ? 'Tarama Limiti' : 'Scan Limit',
@@ -252,7 +415,7 @@ const NutritionScreen = ({ navigation }: any) => {
   };
 
   const handleImageError = useCallback((itemId: string) => {
-    setImageErrors(prev => ({ ...prev, [itemId]: true }));
+    dispatch({ type: 'SET_IMAGE_ERROR', payload: { id: itemId, error: true } });
   }, []);
 
   const getFoodField = useCallback((food: any, field: string): string => {
@@ -286,17 +449,14 @@ const NutritionScreen = ({ navigation }: any) => {
   }, [getFoodField, handleImageError, imageErrors, styles]);
 
   const handleSearch = () => {
-    setPage(0);
-    setHasMore(true);
+    dispatch({ type: 'SET_PAGE', payload: 0 });
+    dispatch({ type: 'SET_HAS_MORE', payload: true });
     loadFoods(0);
   };
 
   const handleCategoryChange = (cat: string) => {
-    setSearchQuery('');
-    setSelectedCategory(cat);
-    setFoods([]);
-    setPage(0);
-    setHasMore(true);
+    dispatch({ type: 'SET_SEARCH_QUERY', payload: '' });
+    dispatch({ type: 'SET_CATEGORY', payload: cat });
   };
 
   // Calorie ring
@@ -306,30 +466,6 @@ const NutritionScreen = ({ navigation }: any) => {
   const ringCircumference = 2 * Math.PI * ringRadius;
   const calProgress = Math.min(dailyMacros.calories / Math.max(1, dailyMacros.calorieGoal), 1);
   const ringOffset = ringCircumference * (1 - calProgress);
-  const dayOptions = [
-    { key: 'monday', tr: 'Pazartesi', en: 'Monday' },
-    { key: 'tuesday', tr: 'Salı', en: 'Tuesday' },
-    { key: 'wednesday', tr: 'Çarşamba', en: 'Wednesday' },
-    { key: 'thursday', tr: 'Perşembe', en: 'Thursday' },
-    { key: 'friday', tr: 'Cuma', en: 'Friday' },
-    { key: 'saturday', tr: 'Cumartesi', en: 'Saturday' },
-    { key: 'sunday', tr: 'Pazar', en: 'Sunday' },
-  ];
-  const mealOptions = [
-    { key: 'breakfast', tr: 'Kahvaltı', en: 'Breakfast' },
-    { key: 'lunch', tr: 'Öğle Yemeği', en: 'Lunch' },
-    { key: 'dinner', tr: 'Akşam Yemeği', en: 'Dinner' },
-    { key: 'snack', tr: 'Ara Öğün', en: 'Snack' },
-  ];
-  const weekdayMap: Record<string, number> = {
-    sunday: 1,
-    monday: 2,
-    tuesday: 3,
-    wednesday: 4,
-    thursday: 5,
-    friday: 6,
-    saturday: 7,
-  };
 
   const formatTime = useCallback((date: Date) => {
     const hours = String(date.getHours()).padStart(2, '0');
@@ -337,29 +473,34 @@ const NutritionScreen = ({ navigation }: any) => {
     return `${hours}:${minutes}`;
   }, []);
 
+  const updateProgramForm = useCallback((patch: Partial<ProgramFormState>) => {
+    dispatch({ type: 'SET_PROGRAM_FORM', payload: patch });
+  }, []);
+
   const openCreateProgramModal = useCallback((item: any) => {
-    const today = new Date();
-    const jsDay = today.getDay();
-    const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
-    setSelectedMealDay(dayOptions[dayIndex].key);
-    setSelectedMealType('breakfast');
-    setMealTime(today);
-    setNotificationTime(today);
-    setSelectedFoodForProgram(item);
-    setShowCreateProgramModal(true);
-  }, [dayOptions]);
+      const today = new Date();
+      const jsDay = today.getDay();
+      const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
+      updateProgramForm({
+        selectedMealDay: DAY_OPTIONS[dayIndex].key,
+        selectedMealType: 'breakfast',
+        mealTime: today,
+        notificationTime: today,
+        selectedFoodForProgram: item,
+      });
+      dispatch({ type: 'SET_SHOW_MODAL', payload: true });
+    }, [updateProgramForm]);
 
   const closeCreateProgramModal = useCallback(() => {
-    setShowCreateProgramModal(false);
-    setSelectedFoodForProgram(null);
-    setShowTimePicker(null);
-    setCreatingProgram(false);
+    dispatch({ type: 'SET_SHOW_MODAL', payload: false });
+    dispatch({ type: 'RESET_PROGRAM_FORM' });
   }, []);
 
   const handleAddFoodToProgram = useCallback(async () => {
+    // Add food to program
     if (!selectedFoodForProgram) return;
     try {
-      setCreatingProgram(true);
+      updateProgramForm({ creatingProgram: true });
       const supabase = SupabaseService.getInstance();
       const { user } = await supabase.getCurrentUser();
       if (!user) {
@@ -374,8 +515,8 @@ const NutritionScreen = ({ navigation }: any) => {
 
       const foodName = getFoodField(selectedFoodForProgram, 'name');
       const foodCategory = getFoodField(selectedFoodForProgram, 'category');
-      const selectedDay = dayOptions.find(d => d.key === selectedMealDay);
-      const selectedMeal = mealOptions.find(m => m.key === selectedMealType);
+      const selectedDay = DAY_OPTIONS.find((d: any) => d.key === selectedMealDay);
+      const selectedMeal = MEAL_OPTIONS.find((m: any) => m.key === selectedMealType);
       const dayLabel = isTurkish ? selectedDay?.tr : selectedDay?.en;
       const mealLabel = isTurkish ? selectedMeal?.tr : selectedMeal?.en;
       const content = [
@@ -412,7 +553,7 @@ const NutritionScreen = ({ navigation }: any) => {
         { foodName },
         isTurkish ? 'tr' : 'en',
         undefined,
-        weekdayMap[selectedMealDay]
+        WEEKDAY_MAP[selectedMealDay]
       );
 
       showAlert({
@@ -430,9 +571,9 @@ const NutritionScreen = ({ navigation }: any) => {
         buttons: [{ text: 'OK' }],
       });
     } finally {
-      setCreatingProgram(false);
+      updateProgramForm({ creatingProgram: false });
     }
-  }, [closeCreateProgramModal, dayOptions, formatTime, getFoodField, isTurkish, mealOptions, mealTime, notificationTime, selectedFoodForProgram, selectedMealDay, selectedMealType, showAlert, weekdayMap]);
+  }, [closeCreateProgramModal, formatTime, getFoodField, isTurkish, mealTime, notificationTime, selectedFoodForProgram, selectedMealDay, selectedMealType, showAlert, updateProgramForm]);
 
   const renderFoodItem = useCallback(({ item }: { item: any }) => (
     <View style={styles.foodCard}>
@@ -486,8 +627,8 @@ const NutritionScreen = ({ navigation }: any) => {
         showsVerticalScrollIndicator={false}
         refreshing={loading && page === 0}
         onRefresh={() => {
-          setPage(0);
-          setHasMore(true);
+          dispatch({ type: 'SET_PAGE', payload: 0 });
+          dispatch({ type: 'SET_HAS_MORE', payload: true });
           loadFoods(0);
           loadDailyMacros();
         }}
@@ -497,16 +638,11 @@ const NutritionScreen = ({ navigation }: any) => {
         // Optimize FlatList performance with windowing and batching
         removeClippedSubviews={true}
         updateCellsBatchingPeriod={50}
-        getItemLayout={(data, index) => ({
-          length: 120, // Estimated food card height
-          offset: 120 * index,
-          index,
-        })}
         onEndReachedThreshold={0.5}
         onEndReached={() => {
           if (!loadingMore && hasMore && !loading) {
             const next = page + 1;
-            setPage(next);
+            dispatch({ type: 'SET_PAGE', payload: next });
             loadFoods(next);
           }
         }}
@@ -576,19 +712,19 @@ const NutritionScreen = ({ navigation }: any) => {
             <View style={styles.searchBar}>
               <Ionicons name="search" size={18} color={colors.textTertiary} />
               <TextInput
-                style={styles.searchInput}
-                placeholder={isTurkish ? 'Yiyecek ara...' : 'Search food...'}
-                placeholderTextColor={colors.textTertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                </TouchableOpacity>
-              )}
+                  style={styles.searchInput}
+                  placeholder={isTurkish ? 'Yiyecek ara...' : 'Search food...'}
+                  placeholderTextColor={colors.textTertiary}
+                  value={searchQuery}
+                  onChangeText={(text) => dispatch({ type: 'SET_SEARCH_QUERY', payload: text })}
+                  returnKeyType="search"
+                  onSubmitEditing={handleSearch}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => dispatch({ type: 'SET_SEARCH_QUERY', payload: '' })} style={styles.clearSearchBtn}>
+                    <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
             </View>
 
             {/* ─── CATEGORY CHIPS ─── */}
@@ -657,8 +793,11 @@ const NutritionScreen = ({ navigation }: any) => {
         renderItem={renderFoodItem}
         ListEmptyComponent={
           loading ? (
-            <View style={{ alignItems: 'center', paddingTop: 60 }}>
-              <ActivityIndicator size="large" color="#FF9600" />
+            <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+              <SkeletonCard style={{ height: 120, borderRadius: 20, marginBottom: 12 }} />
+              <SkeletonCard style={{ height: 120, borderRadius: 20, marginBottom: 12 }} />
+              <SkeletonCard style={{ height: 120, borderRadius: 20, marginBottom: 12 }} />
+              <SkeletonCard style={{ height: 120, borderRadius: 20, marginBottom: 12 }} />
             </View>
           ) : (
             <View style={styles.emptyState}>
@@ -702,14 +841,14 @@ const NutritionScreen = ({ navigation }: any) => {
 
             <Text style={styles.modalSectionTitle}>{isTurkish ? 'Öğün' : 'Meal'}</Text>
             <View style={styles.optionWrap}>
-              {mealOptions.map(option => {
+              {MEAL_OPTIONS.map((option: any) => {
                 const active = selectedMealType === option.key;
                 return (
                   <TouchableOpacity
                     key={option.key}
                     activeOpacity={0.75}
                     style={[styles.optionChip, active && styles.optionChipActive]}
-                    onPress={() => setSelectedMealType(option.key)}
+                    onPress={() => updateProgramForm({ selectedMealType: option.key })}
                   >
                     <Text style={[styles.optionChipText, active && styles.optionChipTextActive]}>
                       {isTurkish ? option.tr : option.en}
@@ -721,14 +860,14 @@ const NutritionScreen = ({ navigation }: any) => {
 
             <Text style={styles.modalSectionTitle}>{isTurkish ? 'Haftanın günü' : 'Day of week'}</Text>
             <View style={styles.optionWrap}>
-              {dayOptions.map(option => {
+              {DAY_OPTIONS.map((option: any) => {
                 const active = selectedMealDay === option.key;
                 return (
                   <TouchableOpacity
                     key={option.key}
                     activeOpacity={0.75}
                     style={[styles.optionChip, active && styles.optionChipActive]}
-                    onPress={() => setSelectedMealDay(option.key)}
+                    onPress={() => updateProgramForm({ selectedMealDay: option.key })}
                   >
                     <Text style={[styles.optionChipText, active && styles.optionChipTextActive]}>
                       {isTurkish ? option.tr : option.en}
@@ -741,14 +880,14 @@ const NutritionScreen = ({ navigation }: any) => {
             <View style={styles.timeRow}>
               <View style={styles.timeColumn}>
                 <Text style={styles.timeLabel}>{isTurkish ? 'Öğün saati' : 'Meal time'}</Text>
-                <TouchableOpacity style={styles.timeBtn} onPress={() => setShowTimePicker('meal')}>
+                <TouchableOpacity style={styles.timeBtn} onPress={() => updateProgramForm({ showTimePicker: 'meal' })}>
                   <Ionicons name="time-outline" size={16} color="#FF9600" />
                   <Text style={styles.timeBtnText}>{formatTime(mealTime)}</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.timeColumn}>
                 <Text style={styles.timeLabel}>{isTurkish ? 'Bildirim saati' : 'Notification time'}</Text>
-                <TouchableOpacity style={styles.timeBtn} onPress={() => setShowTimePicker('notification')}>
+                <TouchableOpacity style={styles.timeBtn} onPress={() => updateProgramForm({ showTimePicker: 'notification' })}>
                   <Ionicons name="notifications-outline" size={16} color="#58CC02" />
                   <Text style={styles.timeBtnText}>{formatTime(notificationTime)}</Text>
                 </TouchableOpacity>
@@ -761,10 +900,10 @@ const NutritionScreen = ({ navigation }: any) => {
                 mode="time"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, date) => {
-                  if (Platform.OS === 'android') setShowTimePicker(null);
+                  if (Platform.OS === 'android') updateProgramForm({ showTimePicker: null });
                   if (!date) return;
-                  if (showTimePicker === 'meal') setMealTime(date);
-                  if (showTimePicker === 'notification') setNotificationTime(date);
+                  if (showTimePicker === 'meal') updateProgramForm({ mealTime: date });
+                  if (showTimePicker === 'notification') updateProgramForm({ notificationTime: date });
                 }}
               />
             )}
@@ -803,7 +942,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   // Dashboard
   dashboardCard: {
     backgroundColor: colors.background, borderRadius: 24, padding: 20,
-    marginBottom: 20, borderWidth: 1, borderColor: '#F0F0F0',
+    marginBottom: 20, borderWidth: 1, borderColor: colors.borderLight,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   dashRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
@@ -818,7 +957,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   macroBarDot: { width: 8, height: 8, borderRadius: 4 },
   macroBarLabel: { fontSize: 12, fontWeight: '600', color: colors.text, flex: 1 },
   macroBarValue: { fontSize: 11, fontWeight: '600', color: colors.text },
-  macroBarTrack: { height: 6, backgroundColor: '#F0F0F0', borderRadius: 3, overflow: 'hidden' },
+  macroBarTrack: { height: 6, backgroundColor: colors.borderLight, borderRadius: 3, overflow: 'hidden' },
   macroBarFill: { height: '100%', borderRadius: 3 },
 
   // Scan Card
@@ -841,6 +980,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 14, height: 44, marginBottom: 14, gap: 10,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, textAlignVertical: 'center' },
+  clearSearchBtn: { padding: 4 },
 
   // Category Chips
   catScroll: { gap: 8, paddingBottom: 8, marginBottom: 18 },
@@ -858,7 +998,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   foodCard: {
     flexDirection: 'row', overflow: 'hidden',
     backgroundColor: colors.background, borderRadius: 18,
-    marginBottom: 10, borderWidth: 1, borderColor: '#F0F0F0',
+    marginBottom: 10, borderWidth: 1, borderColor: colors.borderLight,
   },
   foodAccent: { width: 4 },
   foodContent: { flex: 1, padding: 14 },
@@ -917,7 +1057,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: colors.borderLight,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -960,7 +1100,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     backgroundColor: '#F8FAFC',
   },
   optionChipActive: {
@@ -993,7 +1133,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     height: 42,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1016,7 +1156,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     backgroundColor: '#F8FAFC',
   },
   cancelBtnText: {
