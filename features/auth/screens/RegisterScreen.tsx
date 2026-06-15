@@ -184,8 +184,12 @@ const RegisterScreen = ({ navigation }: any) => {
     const newErrors: Record<string, string> = {};
     if (!gender) newErrors.gender = t('required_field');
     if (!dateOfBirth) newErrors.dateOfBirth = t('required_field');
-    if (!userHeight) newErrors.height = t('required_field');
-    if (!weight) newErrors.weight = t('required_field');
+    
+    if (role === 'user') {
+      if (!userHeight) newErrors.height = t('required_field');
+      if (!weight) newErrors.weight = t('required_field');
+    }
+
     if (!agreedTerms) newErrors.agreedTerms = isTurkish ? 'Zorunlu' : 'Required';
     if (!agreedPrivacy) newErrors.agreedPrivacy = isTurkish ? 'Zorunlu' : 'Required';
     if (!agreedKVKK) newErrors.agreedKVKK = isTurkish ? 'Zorunlu' : 'Required';
@@ -401,14 +405,16 @@ const RegisterScreen = ({ navigation }: any) => {
                 </>
               )}
 
-              <View style={styles.row}>
-                <View style={{ flex: 1, marginRight: SPACING.md }}>
-                  <FloatingInput label={isTurkish ? "BOY (CM)" : "HEIGHT (CM)"} value={userHeight} onChangeText={setUserHeight} keyboardType="numeric" error={errors.height} />
+              {role === 'user' && (
+                <View style={styles.row}>
+                  <View style={{ flex: 1, marginRight: SPACING.md }}>
+                    <FloatingInput label={isTurkish ? "BOY (CM)" : "HEIGHT (CM)"} value={userHeight} onChangeText={setUserHeight} keyboardType="numeric" error={errors.height} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <FloatingInput label={isTurkish ? "KİLO (KG)" : "WEIGHT (KG)"} value={weight} onChangeText={setWeight} keyboardType="numeric" error={errors.weight} />
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <FloatingInput label={isTurkish ? "KİLO (KG)" : "WEIGHT (KG)"} value={weight} onChangeText={setWeight} keyboardType="numeric" error={errors.weight} />
-                </View>
-              </View>
+              )}
 
               <View style={styles.agreementBox}>
                 <TouchableOpacity style={styles.checkRow} onPress={() => setAgreedKVKK(!agreedKVKK)}>

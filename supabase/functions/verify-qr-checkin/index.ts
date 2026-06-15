@@ -1,6 +1,11 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+    isCallerAuthorized,
+    normalizeNestedRelationship,
+    pickProfessionalProfileId,
+} from "./checkin-logic.ts";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -38,8 +43,8 @@ serve(async (req) => {
         const { data: checkinData, error: findError } = await supabaseClient
             .from('session_checkins')
             .select(`
-                id, 
-                is_verified, 
+                id,
+                is_verified,
                 client_relationship_id,
                 client_relationships (
                     client_id,
@@ -57,13 +62,34 @@ serve(async (req) => {
             throw new Error("Invalid or Expired Session Code");
         }
 
-        const relationship = checkinData.client_relationships;
-        // Determine the professional ID from the relationship (could be professional_id, trainer_id, or dietitian_id)
-        const professionalId = relationship.professional_id || relationship.trainer_id || relationship.dietitian_id;
+        // Supabase nested-select may return the related row as an object or a 1-element array
+        // depending on relationship inference; normalize to a single object.
+        const relationship = normalizeNestedRelationship(checkinData.client_relationships);
+        if (!relationship) {
+            throw new Error("Invalid or Expired Session Code");
+        }
+
+        // The relationship stores PROFESSIONAL_PROFILES.id (a row PK), not auth.users.id.
+        // We must translate the professional_profile row into its owning auth user
+        // before comparing to the caller's auth.users.id (scannedById).
+        const professionalProfileId = pickProfessionalProfileId(relationship);
+        if (!professionalProfileId) {
+            throw new Error("Session is not linked to a professional.");
+        }
+
+        const { data: professionalProfile, error: profLookupError } = await supabaseClient
+            .from('professional_profiles')
+            .select('user_id')
+            .eq('id', professionalProfileId)
+            .single();
+
+        if (profLookupError || !professionalProfile?.user_id) {
+            throw new Error("Professional profile lookup failed.");
+        }
 
         // 2. Kontrol 1: Bu kodu okutan/giren kişi bu ilişkinin EĞİTMENİ mi?
-        // Note: scannedById is the user calling this function (The Trainer)
-        if (professionalId !== scannedById) {
+        // Note: scannedById is the auth.users.id of the caller (The Trainer)
+        if (!isCallerAuthorized(scannedById, professionalProfile.user_id)) {
             throw new Error("You are not authorized to verify this session. This code belongs to a client of another professional.");
         }
 

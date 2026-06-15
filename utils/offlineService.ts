@@ -83,6 +83,19 @@ export class OfflineService {
                 this.syncQueue = decrypted ? JSON.parse(decrypted) : [];
             }
         } catch (error) {
+            // Decryption / parse failed: previously we silently reset to [] which dropped
+            // every pending offline mutation on the floor. Preserve the raw blob to a
+            // sidecar key so it can be inspected or recovered later, then continue with
+            // an empty queue rather than blocking startup.
+            console.error('[OfflineService] Failed to load offline queue:', error);
+            try {
+                const raw = await AsyncStorage.getItem(this.STORAGE_KEY);
+                if (raw) {
+                    await AsyncStorage.setItem(`${this.STORAGE_KEY}.corrupted`, raw);
+                }
+            } catch (backupError) {
+                console.warn('[OfflineService] Failed to back up corrupted queue blob:', backupError);
+            }
             this.syncQueue = [];
         }
 
@@ -94,14 +107,18 @@ export class OfflineService {
                     'Device secure storage is unavailable. Your offline data is not encrypted.'
                 );
             }
-        } catch {}
+        } catch (encryptInitError) {
+            console.warn('[OfflineService] Failed to verify encryption init:', encryptInitError);
+        }
     }
 
     private async saveQueueImmediate() {
         try {
             const encrypted = await SecurityUtils.encryptAsync(JSON.stringify(this.syncQueue));
             await AsyncStorage.setItem(this.STORAGE_KEY, encrypted);
-        } catch (error) { }
+        } catch (error) {
+            console.warn('[OfflineService] Failed to persist offline queue:', error);
+        }
     }
 
     /**
@@ -115,7 +132,9 @@ export class OfflineService {
         this.syncQueue = [];
         try {
             await AsyncStorage.removeItem(this.STORAGE_KEY);
-        } catch { }
+        } catch (error) {
+            console.warn('[OfflineService] Failed to clear offline queue storage:', error);
+        }
     }
 
     private netInfoUnsubscribe: (() => void) | null = null;

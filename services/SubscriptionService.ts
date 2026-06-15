@@ -1,8 +1,16 @@
-import Purchases, { PurchasesPackage, CustomerInfo, LOG_LEVEL } from 'react-native-purchases';
+import Purchases, { PurchasesPackage, CustomerInfo } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const REVENUECAT_API_KEY_IOS = 'appl_YOUR_IOS_API_KEY'; // Placeholder
-const REVENUECAT_API_KEY_ANDROID = 'goog_YOUR_ANDROID_API_KEY'; // Placeholder
+const resolveRevenueCatKey = (platform: 'ios' | 'android'): string => {
+    const extra = Constants.expoConfig?.extra?.revenueCat as
+        | { iosApiKey?: string; androidApiKey?: string }
+        | undefined;
+    if (platform === 'ios') {
+        return (extra?.iosApiKey || process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || '').trim();
+    }
+    return (extra?.androidApiKey || process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || '').trim();
+};
 
 export class SubscriptionService {
     private static instance: SubscriptionService;
@@ -21,12 +29,20 @@ export class SubscriptionService {
         if (this.isInitialized) return;
 
         try {
-            if (Platform.OS === 'ios') {
-                Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS, appUserID: userId });
-            } else if (Platform.OS === 'android') {
-                Purchases.configure({ apiKey: REVENUECAT_API_KEY_ANDROID, appUserID: userId });
+            const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : null;
+            if (!platform) {
+                // Web / unsupported platforms: skip silently.
+                this.isInitialized = true;
+                return;
             }
-            // Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+            const apiKey = resolveRevenueCatKey(platform);
+            if (!apiKey) {
+                console.warn(
+                    `RevenueCat ${platform} API key is not configured. Set EXPO_PUBLIC_REVENUECAT_${platform.toUpperCase()}_API_KEY or expo extra.revenueCat.`,
+                );
+                return;
+            }
+            Purchases.configure({ apiKey, appUserID: userId });
             this.isInitialized = true;
         } catch (error) {
             console.warn('Failed to initialize RevenueCat:', error);

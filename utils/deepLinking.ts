@@ -264,7 +264,9 @@ export class DeepLinkingService {
             this.pendingURLs.push(url);
                 return;
             }
-        } catch (_) { }
+        } catch (queueError) {
+            console.warn('[deepLinking] Failed to queue deferred deep link:', queueError);
+        }
 
         switch (path) {
             case 'home':

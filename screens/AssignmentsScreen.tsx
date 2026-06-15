@@ -10,6 +10,7 @@ import GlassCard from '../components/GlassCard';
 import { COLORS, GRADIENTS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '../config/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import { safeGoBack } from '../utils/navigation';
+import { parseHHMM, formatHHMMKey } from '../utils/timeValidation';
 
 export default function AssignmentsScreen({ navigation, route }: any) {
     const { colors, isDark } = useTheme();
@@ -23,6 +24,7 @@ export default function AssignmentsScreen({ navigation, route }: any) {
     const [supplements, setSupplements] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'workout' | 'nutrition' | 'supplement'>('workout');
     const [feedbackVisible, setFeedbackVisible] = useState(false);
+    const [isProfessionalView, setIsProfessionalView] = useState(false);
     const [selectedWorkout, setSelectedWorkout] = useState<any | null>(null);
     const [weeklyAction, setWeeklyAction] = useState<'increase' | 'decrease' | 'stable'>('stable');
     const [feedbackNotes, setFeedbackNotes] = useState('');
@@ -57,10 +59,13 @@ export default function AssignmentsScreen({ navigation, route }: any) {
             const { user } = await supabase.getCurrentUser();
             if (!user) return;
 
+            const targetUserId = route.params?.clientId || user.id;
+            setIsProfessionalView(!!route.params?.clientId && route.params?.clientId !== user.id);
+
             const [workoutRes, nutritionRes, suppRes] = await Promise.all([
-                supabase.getAssignedWorkouts(user.id),
-                supabase.getAssignedNutritionPlans(user.id),
-                supabase.getAssignedSupplements(user.id).catch(() => ({ data: [] }))
+                supabase.getAssignedWorkouts(targetUserId),
+                supabase.getAssignedNutritionPlans(targetUserId),
+                supabase.getAssignedSupplements(targetUserId).catch(() => ({ data: [] }))
             ]);
 
             if (workoutRes.data) {
@@ -99,36 +104,38 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                 const times = Array.isArray(item.reminder_time) ? item.reminder_time : [item.reminder_time];
 
                 for (const timeStr of times) {
-                    if (typeof timeStr === 'string' && timeStr.includes(':')) {
-                        const [h, m] = timeStr.split(':');
-                        if (h && m) {
-                            if (hasPermission) {
-                                await notifService.scheduleSmartReminder(
-                                    type === 'supplement' ? 'supplement' : (type === 'workout' ? 'workout' : 'nutrition'),
-                                    parseInt(h),
-                                    parseInt(m),
-                                    `${type}_reminder_${item.id}_${h}${m}`,
-                                    'Assignments',
-                                    { screen: 'Assignments', params: { tab: type } },
-                                    language,
-                                    { name: item.title || item.name || item.description }
-                                );
-                            }
+                    const parsed = parseHHMM(timeStr);
+                    if (!parsed) {
+                        // Skip malformed/out-of-range reminders rather than scheduling a 99:99 alarm
+                        // (the old code accepted any parseInt() output and silently shifted the day).
+                        continue;
+                    }
+                    const keySuffix = formatHHMMKey(parsed);
+                    if (hasPermission) {
+                        await notifService.scheduleSmartReminder(
+                            type === 'supplement' ? 'supplement' : (type === 'workout' ? 'workout' : 'nutrition'),
+                            parsed.hour,
+                            parsed.minute,
+                            `${type}_reminder_${item.id}_${keySuffix}`,
+                            'Assignments',
+                            { screen: 'Assignments', params: { tab: type } },
+                            language,
+                            { name: item.title || item.name || item.description }
+                        );
+                    }
 
-                            if (hasCalendarPermission) {
-                                // Create a calendar event for today at that time
-                                const startDate = new Date();
-                                startDate.setHours(parseInt(h), parseInt(m), 0, 0);
-                                const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 mins later
+                    if (hasCalendarPermission) {
+                        // Create a calendar event for today at that time
+                        const startDate = new Date();
+                        startDate.setHours(parsed.hour, parsed.minute, 0, 0);
+                        const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 mins later
 
-                                await calendarService.syncEventToCalendar(
-                                    `NextSelf: ${item.title || item.name || 'Reminder'}`,
-                                    startDate,
-                                    endDate,
-                                    item.notes || item.description || ''
-                                );
-                            }
-                        }
+                        await calendarService.syncEventToCalendar(
+                            `NextSelf: ${item.title || item.name || 'Reminder'}`,
+                            startDate,
+                            endDate,
+                            item.notes || item.description || ''
+                        );
                     }
                 }
             } else if (item.scheduled_date && type === 'workout' && hasCalendarPermission) {
@@ -295,10 +302,20 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                                             {item.pt?.first_name} {item.pt?.last_name}
                                         </Text>
                                     </View>
-                                    {!item.is_completed && (
+                                    {!item.is_completed && !isProfessionalView && (
                                         <TouchableOpacity style={styles.completeBtn} onPress={() => openWorkoutFeedback(item)}>
                                             <Text style={styles.completeBtnText}>{t('mark_complete')}</Text>
                                         </TouchableOpacity>
+                                    )}
+                                    {isProfessionalView && item.exercises && item.exercises.length > 0 && (
+                                        <View style={{ marginTop: SPACING.md, backgroundColor: colors.background, padding: SPACING.sm, borderRadius: BORDER_RADIUS.md }}>
+                                            <Text style={{ ...TYPOGRAPHY.captionBold, color: colors.text, marginBottom: SPACING.xs }}>{isTurkish ? 'Egzersizler' : 'Exercises'}</Text>
+                                            {item.exercises.map((ex: any, idx: number) => (
+                                                <Text key={idx} style={{ ...TYPOGRAPHY.caption, color: colors.textSecondary }}>
+                                                    • {ex.name} ({ex.sets} {isTurkish ? 'set' : 'sets'} x {ex.reps} {isTurkish ? 'tekrar' : 'reps'} {ex.weight ? `- ${ex.weight}kg` : ''})
+                                                </Text>
+                                            ))}
+                                        </View>
                                     )}
                                 </GlassCard>
                             )
@@ -334,6 +351,16 @@ export default function AssignmentsScreen({ navigation, route }: any) {
                                             {item.dietitian?.first_name} {item.dietitian?.last_name}
                                         </Text>
                                     </View>
+                                    {isProfessionalView && item.meals && item.meals.length > 0 && (
+                                        <View style={{ marginTop: SPACING.md, backgroundColor: colors.background, padding: SPACING.sm, borderRadius: BORDER_RADIUS.md }}>
+                                            <Text style={{ ...TYPOGRAPHY.captionBold, color: colors.text, marginBottom: SPACING.xs }}>{isTurkish ? 'Öğünler' : 'Meals'}</Text>
+                                            {item.meals.map((meal: any, idx: number) => (
+                                                <Text key={idx} style={{ ...TYPOGRAPHY.caption, color: colors.textSecondary }}>
+                                                    • {meal.type || (isTurkish ? 'Öğün' : 'Meal')}: {meal.foods?.map((f: any) => f.name).join(', ') || meal.description || ''}
+                                                </Text>
+                                            ))}
+                                        </View>
+                                    )}
                                 </GlassCard>
                             )
                         } else {

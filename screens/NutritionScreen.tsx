@@ -17,7 +17,8 @@ import { useAlert } from '../components/CustomAlert';
 import FoodCategoryIcon from '../components/FoodCategoryIcon';
 import { useTheme } from '../contexts/ThemeContext';
 import SkeletonCard from '../components/SkeletonCard';
-import { RewardedAd, RewardedAdEventType, AdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { RewardedAd, RewardedAdEventType, AdEventType, TestIds } from '../utils/ads';
+import { computeMacroProgress } from '../utils/nutritionProgress';
 
 const SCAN_STORAGE_KEY = 'nextself_daily_scans';
 
@@ -91,18 +92,21 @@ const createProgramFormState = (): ProgramFormState => ({
 
 // Macro Progress Bar Component
 const MacroBar = ({ label, value, goal, color, unit, styles, colors }: any) => {
-  const safeGoal = goal > 0 ? goal : 1;
-  const safeValue = Number.isFinite(value) ? value : 0;
-  const progress = Math.min(safeValue / safeGoal, 1);
+  const { hasGoal, progressFraction } = computeMacroProgress(value, goal);
   return (
     <View style={styles.macroBarWrap}>
       <View style={styles.macroBarHeader}>
         <View style={[styles.macroBarDot, { backgroundColor: color }]} />
         <Text style={styles.macroBarLabel}>{label}</Text>
-        <Text style={styles.macroBarValue}>{value}{unit} <Text style={{ color: colors.textTertiary }}>/ {goal}{unit}</Text></Text>
+        <Text style={styles.macroBarValue}>
+          {value}{unit}
+          {hasGoal
+            ? <Text style={{ color: colors.textTertiary }}> / {goal}{unit}</Text>
+            : <Text style={{ color: colors.textTertiary }}> / —</Text>}
+        </Text>
       </View>
       <View style={styles.macroBarTrack}>
-        <View style={[styles.macroBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
+        <View style={[styles.macroBarFill, { width: `${progressFraction * 100}%`, backgroundColor: color }]} />
       </View>
     </View>
   );
@@ -210,6 +214,9 @@ const NutritionScreen = ({ navigation }: any) => {
     imageErrors,
     showCreateProgramModal,
   } = state;
+
+  // Multi-select cart for foods
+  const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
 
   const {
     selectedFoodForProgram,
@@ -505,7 +512,20 @@ const NutritionScreen = ({ navigation }: any) => {
     dispatch({ type: 'SET_PROGRAM_FORM', payload: patch });
   }, []);
 
-  const openCreateProgramModal = useCallback((item: any) => {
+  const toggleFoodSelection = useCallback((item: any) => {
+    setSelectedFoods(prev => {
+      const exists = prev.find((f: any) => f.id === item.id);
+      if (exists) return prev.filter((f: any) => f.id !== item.id);
+      return [...prev, item];
+    });
+  }, []);
+
+  const isFoodSelected = useCallback((id: string) => selectedFoods.some((f: any) => f.id === id), [selectedFoods]);
+
+
+
+  const openProgramModalFromCart = useCallback(() => {
+    if (selectedFoods.length === 0) return;
     const today = new Date();
     const jsDay = today.getDay();
     const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
@@ -514,10 +534,10 @@ const NutritionScreen = ({ navigation }: any) => {
       selectedMealType: 'breakfast',
       mealTime: today,
       notificationTime: today,
-      selectedFoodForProgram: item,
+      selectedFoodForProgram: selectedFoods[0],
     });
     dispatch({ type: 'SET_SHOW_MODAL', payload: true });
-  }, [updateProgramForm]);
+  }, [selectedFoods, updateProgramForm]);
 
   const closeCreateProgramModal = useCallback(() => {
     dispatch({ type: 'SET_SHOW_MODAL', payload: false });
@@ -525,8 +545,8 @@ const NutritionScreen = ({ navigation }: any) => {
   }, []);
 
   const handleAddFoodToProgram = useCallback(async () => {
-    // Add food to program
-    if (!selectedFoodForProgram) return;
+    // Add ALL selected foods to program
+    if (selectedFoods.length === 0) return;
     try {
       updateProgramForm({ creatingProgram: true });
       const supabase = SupabaseService.getInstance();
@@ -541,30 +561,42 @@ const NutritionScreen = ({ navigation }: any) => {
         return;
       }
 
-      const foodName = getFoodField(selectedFoodForProgram, 'name');
-      const foodCategory = getFoodField(selectedFoodForProgram, 'category');
       const selectedDay = DAY_OPTIONS.find((d: any) => d.key === selectedMealDay);
       const selectedMeal = MEAL_OPTIONS.find((m: any) => m.key === selectedMealType);
       const dayLabel = isTurkish ? selectedDay?.tr : selectedDay?.en;
       const mealLabel = isTurkish ? selectedMeal?.tr : selectedMeal?.en;
+
+      // Build content with all selected foods
+      const foodLines = selectedFoods.map((food: any, idx: number) => {
+        const foodName = getFoodField(food, 'name');
+        const foodCategory = getFoodField(food, 'category');
+        return [
+          `\n--- ${isTurkish ? 'Besin' : 'Food'} ${idx + 1}: ${foodName} ---`,
+          `${isTurkish ? 'Kategori' : 'Category'}: ${foodCategory}`,
+          `${isTurkish ? 'Porsiyon' : 'Serving'}: ${food.serving_size || '-'}`,
+          `${isTurkish ? 'Kalori' : 'Calories'}: ${food.calories || 0} kcal`,
+          `${isTurkish ? 'Protein' : 'Protein'}: ${food.protein_g || 0} g`,
+          `${isTurkish ? 'Karbonhidrat' : 'Carbs'}: ${food.carbs_g || 0} g`,
+          `${isTurkish ? 'Yağ' : 'Fat'}: ${food.fat_g || 0} g`,
+        ].join('\n');
+      }).join('\n');
+
       const content = [
-        `${isTurkish ? 'Besin' : 'Food'}: ${foodName}`,
-        `${isTurkish ? 'Kategori' : 'Category'}: ${foodCategory}`,
         `${isTurkish ? 'Öğün' : 'Meal'}: ${mealLabel}`,
         `${isTurkish ? 'Gün' : 'Day'}: ${dayLabel}`,
         `${isTurkish ? 'Öğün saati' : 'Meal time'}: ${formatTime(mealTime)}`,
         `${isTurkish ? 'Bildirim saati' : 'Notification time'}: ${formatTime(notificationTime)}`,
-        `${isTurkish ? 'Porsiyon' : 'Serving'}: ${selectedFoodForProgram.serving_size || '-'}`,
-        `${isTurkish ? 'Kalori' : 'Calories'}: ${selectedFoodForProgram.calories || 0} kcal`,
-        `${isTurkish ? 'Protein' : 'Protein'}: ${selectedFoodForProgram.protein_g || 0} g`,
-        `${isTurkish ? 'Karbonhidrat' : 'Carbs'}: ${selectedFoodForProgram.carbs_g || 0} g`,
-        `${isTurkish ? 'Yağ' : 'Fat'}: ${selectedFoodForProgram.fat_g || 0} g`,
+        foodLines,
       ].join('\n');
+
+      const title = selectedFoods.length === 1
+        ? `${getFoodField(selectedFoods[0], 'name')} ${isTurkish ? 'Planı' : 'Plan'}`
+        : `${selectedFoods.length} ${isTurkish ? 'Besin Planı' : 'Food Plan'}`;
 
       const { error } = await supabase.createAiProgram({
         userId: user.id,
         type: 'nutrition',
-        title: `${foodName} ${isTurkish ? 'Planı' : 'Plan'}`,
+        title,
         content,
       });
 
@@ -576,9 +608,9 @@ const NutritionScreen = ({ navigation }: any) => {
         'nutrition',
         notificationTime.getHours(),
         notificationTime.getMinutes(),
-        `nutrition_${user.id}_${selectedFoodForProgram.id}_${selectedMealDay}`,
+        `nutrition_${user.id}_program_${Date.now()}`,
         'Nutrition',
-        { foodName },
+        { foodName: title },
         isTurkish ? 'tr' : 'en',
         undefined,
         WEEKDAY_MAP[selectedMealDay]
@@ -587,10 +619,13 @@ const NutritionScreen = ({ navigation }: any) => {
       showAlert({
         type: 'success',
         title: isTurkish ? 'Programa Eklendi' : 'Added to Program',
-        message: isTurkish ? `${foodName} programına eklendi ve bildirim ayarlandı.` : `${foodName} has been added to your program and notification is scheduled.`,
+        message: isTurkish
+          ? `${selectedFoods.length} besin programınıza eklendi ve bildirim ayarlandı.`
+          : `${selectedFoods.length} foods added to your program and notification scheduled.`,
         buttons: [{ text: 'OK' }],
       });
       closeCreateProgramModal();
+      setSelectedFoods([]);
     } catch {
       showAlert({
         type: 'error',
@@ -601,10 +636,12 @@ const NutritionScreen = ({ navigation }: any) => {
     } finally {
       updateProgramForm({ creatingProgram: false });
     }
-  }, [closeCreateProgramModal, formatTime, getFoodField, isTurkish, mealTime, notificationTime, selectedFoodForProgram, selectedMealDay, selectedMealType, showAlert, updateProgramForm]);
+  }, [closeCreateProgramModal, formatTime, getFoodField, isTurkish, mealTime, notificationTime, selectedFoods, selectedMealDay, selectedMealType, showAlert, updateProgramForm]);
 
-  const renderFoodItem = useCallback(({ item }: { item: any }) => (
-    <View style={styles.foodCard}>
+  const renderFoodItem = useCallback(({ item }: { item: any }) => {
+    const selected = selectedFoods.some((f: any) => f.id === item.id);
+    return (
+    <View style={[styles.foodCard, selected && { borderColor: '#58CC02', borderWidth: 2 }]}>
       <View style={[styles.foodAccent, { backgroundColor: '#FF9600' }]} />
       <View style={styles.foodContent}>
         <View style={styles.foodTop}>
@@ -619,11 +656,11 @@ const NutritionScreen = ({ navigation }: any) => {
               <Text style={styles.foodCalUnit}>kcal</Text>
             </View>
             <TouchableOpacity
-              style={styles.addItemBtn}
+              style={[styles.addItemBtn, selected && { backgroundColor: '#58CC02' }]}
               activeOpacity={0.8}
-              onPress={() => openCreateProgramModal(item)}
+              onPress={() => toggleFoodSelection(item)}
             >
-              <Ionicons name="add" size={18} color="#FFF" />
+              <Ionicons name={selected ? 'checkmark' : 'add'} size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -643,7 +680,8 @@ const NutritionScreen = ({ navigation }: any) => {
         </View>
       </View>
     </View>
-  ), [styles, renderFoodImage, getFoodField, isTurkish, openCreateProgramModal]);
+    );
+  }, [styles, renderFoodImage, getFoodField, isTurkish, selectedFoods, toggleFoodSelection]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
@@ -651,7 +689,7 @@ const NutritionScreen = ({ navigation }: any) => {
       <FlatList
         data={foods}
         keyExtractor={item => String(item.id)}
-        contentContainerStyle={[styles.listContent, { paddingTop: 12 }]}
+        contentContainerStyle={[styles.listContent, { paddingTop: 12, paddingBottom: selectedFoods.length > 0 ? 180 : 120 }]}
         showsVerticalScrollIndicator={false}
         refreshing={loading && page === 0}
         onRefresh={() => {
@@ -847,27 +885,55 @@ const NutritionScreen = ({ navigation }: any) => {
           </View>
         ) : null}
       />
+
+      {/* Bottom Cart Bar */}
+      {selectedFoods.length > 0 && (
+        <View style={[styles.cartBar, { bottom: (insets.bottom > 0 ? insets.bottom : 12) + 85 }]}>
+          <View style={styles.cartInfo}>
+            <Ionicons name="restaurant" size={20} color="#FF9600" />
+            <Text style={styles.cartText}>
+              {selectedFoods.length} {isTurkish ? 'besin seçildi' : 'foods selected'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.cartButton} onPress={openProgramModalFromCart} activeOpacity={0.85}>
+            <Ionicons name="arrow-forward" size={16} color="#FFF" />
+            <Text style={styles.cartButtonText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <Modal
         visible={showCreateProgramModal}
-        transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={closeCreateProgramModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
-              <TouchableOpacity onPress={closeCreateProgramModal} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              {selectedFoodForProgram
-                ? `${isTurkish ? 'Besin' : 'Food'}: ${getFoodField(selectedFoodForProgram, 'name')}`
-                : ''}
-            </Text>
+        <View style={[styles.modalFull, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={closeCreateProgramModal} style={[styles.modalCloseBtn, { backgroundColor: colors.surface }]}>
+              <Ionicons name="close" size={20} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
+            <View style={{ width: 36 }} />
+          </View>
+          <Text style={[styles.modalSubtitle, { color: colors.textTertiary }]}>
+            {selectedFoods.length} {isTurkish ? 'besin seçildi' : 'foods selected'}
+          </Text>
 
-            <Text style={styles.modalSectionTitle}>{isTurkish ? 'Öğün' : 'Meal'}</Text>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+            {/* Selected foods list */}
+            {selectedFoods.map((food: any) => (
+              <View key={food.id} style={[styles.selectedFoodItem, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.selectedFoodName, { color: colors.text }]} numberOfLines={1}>{getFoodField(food, 'name')}</Text>
+                  <Text style={[styles.selectedFoodMeta, { color: colors.textTertiary }]}>{food.calories} kcal • {food.serving_size}</Text>
+                </View>
+                <TouchableOpacity onPress={() => toggleFoodSelection(food)}>
+                  <Ionicons name="close-circle" size={22} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+
+            <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{isTurkish ? 'Öğün' : 'Meal'}</Text>
             <View style={styles.optionWrap}>
               {MEAL_OPTIONS.map((option: any) => {
                 const active = selectedMealType === option.key;
@@ -886,7 +952,7 @@ const NutritionScreen = ({ navigation }: any) => {
               })}
             </View>
 
-            <Text style={styles.modalSectionTitle}>{isTurkish ? 'Haftanın günü' : 'Day of week'}</Text>
+            <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{isTurkish ? 'Haftanın günü' : 'Day of week'}</Text>
             <View style={styles.optionWrap}>
               {DAY_OPTIONS.map((option: any) => {
                 const active = selectedMealDay === option.key;
@@ -907,17 +973,17 @@ const NutritionScreen = ({ navigation }: any) => {
 
             <View style={styles.timeRow}>
               <View style={styles.timeColumn}>
-                <Text style={styles.timeLabel}>{isTurkish ? 'Öğün saati' : 'Meal time'}</Text>
-                <TouchableOpacity style={styles.timeBtn} onPress={() => updateProgramForm({ showTimePicker: 'meal' })}>
+                <Text style={[styles.timeLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Öğün saati' : 'Meal time'}</Text>
+                <TouchableOpacity style={[styles.timeBtn, { borderColor: colors.borderLight, backgroundColor: colors.surface }]} onPress={() => updateProgramForm({ showTimePicker: 'meal' })}>
                   <Ionicons name="time-outline" size={16} color="#FF9600" />
-                  <Text style={styles.timeBtnText}>{formatTime(mealTime)}</Text>
+                  <Text style={[styles.timeBtnText, { color: colors.text }]}>{formatTime(mealTime)}</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.timeColumn}>
-                <Text style={styles.timeLabel}>{isTurkish ? 'Bildirim saati' : 'Notification time'}</Text>
-                <TouchableOpacity style={styles.timeBtn} onPress={() => updateProgramForm({ showTimePicker: 'notification' })}>
+                <Text style={[styles.timeLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Bildirim saati' : 'Notification time'}</Text>
+                <TouchableOpacity style={[styles.timeBtn, { borderColor: colors.borderLight, backgroundColor: colors.surface }]} onPress={() => updateProgramForm({ showTimePicker: 'notification' })}>
                   <Ionicons name="notifications-outline" size={16} color="#58CC02" />
-                  <Text style={styles.timeBtnText}>{formatTime(notificationTime)}</Text>
+                  <Text style={[styles.timeBtnText, { color: colors.text }]}>{formatTime(notificationTime)}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -935,24 +1001,25 @@ const NutritionScreen = ({ navigation }: any) => {
                 }}
               />
             )}
+          </ScrollView>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                onPress={closeCreateProgramModal}
-                style={styles.cancelBtn}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelBtnText}>{isTurkish ? 'İptal' : 'Cancel'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAddFoodToProgram}
-                style={[styles.createBtn, creatingProgram && { opacity: 0.6 }]}
-                disabled={creatingProgram}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.createBtnText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Bottom actions - fixed position */}
+          <View style={[styles.modalBottomActions, { paddingBottom: insets.bottom + 12 }]}>
+            <TouchableOpacity
+              onPress={closeCreateProgramModal}
+              style={[styles.cancelBtn, { borderColor: colors.borderLight, backgroundColor: colors.surface }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.cancelBtnText, { color: colors.text }]}>{isTurkish ? 'İptal' : 'Cancel'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleAddFoodToProgram}
+              style={[styles.createBtn, creatingProgram && { opacity: 0.6 }]}
+              disabled={creatingProgram}
+              activeOpacity={0.85}
+            >
+              {creatingProgram ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.createBtnText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -998,13 +1065,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     width: 44, height: 44, borderRadius: 14,
     backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center',
   },
-  scanTitle: { fontSize: 15, fontWeight: '700', color: colors.background },
+  scanTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   scanSub: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
 
   // Search
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F5F5F5', borderRadius: 16,
+    backgroundColor: colors.surface, borderRadius: 16,
     paddingHorizontal: 14, height: 44, marginBottom: 14, gap: 10,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, textAlignVertical: 'center' },
@@ -1015,9 +1082,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   catChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: 'transparent',
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent',
   },
-  catChipText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  catChipText: { fontSize: 12, fontWeight: '600', color: colors.textTertiary },
 
   // Section
   sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 14 },
@@ -1049,11 +1116,11 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   foodMacros: {
     flexDirection: 'row', marginTop: 10, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: '#F5F5F5', gap: 16,
+    borderTopWidth: 1, borderTopColor: colors.borderLight, gap: 16,
   },
   foodMacroItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   fmDot: { width: 6, height: 6, borderRadius: 3 },
-  fmText: { fontSize: 11, color: '#6B7280' },
+  fmText: { fontSize: 11, color: colors.textTertiary },
 
   // Empty
   emptyState: { alignItems: 'center', paddingTop: 60 },
@@ -1074,137 +1141,70 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  // Cart bar
+  cartBar: {
+    position: 'absolute', bottom: 0, left: 16, right: 16, borderRadius: 20,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight,
+    paddingHorizontal: 18, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
-  modalCard: {
-    backgroundColor: colors.background,
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  cartInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cartText: { fontSize: 14, fontWeight: '700', color: colors.text },
+  cartButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FF9600',
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14,
   },
+  cartButtonText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  // Full-screen Modal
+  modalFull: { flex: 1 },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
   modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
   },
   modalSubtitle: {
-    marginTop: 8,
-    color: colors.textTertiary,
-    fontSize: 12,
-    marginBottom: 14,
+    marginTop: 4, paddingHorizontal: 18, fontSize: 13, marginBottom: 14,
   },
-  modalSectionTitle: {
-    fontSize: 13,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
+  // Selected food items in modal
+  selectedFoodItem: {
+    flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 14,
+    borderWidth: 1, marginBottom: 8, gap: 10,
   },
-  optionWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
+  selectedFoodName: { fontSize: 14, fontWeight: '700' },
+  selectedFoodMeta: { fontSize: 11, marginTop: 2 },
+  modalSectionTitle: { fontSize: 13, fontWeight: '700', marginBottom: 8, marginTop: 14 },
+  optionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   optionChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
-  optionChipActive: {
-    borderColor: '#58CC02',
-    backgroundColor: '#58CC0218',
-  },
-  optionChipText: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    fontWeight: '600',
-  },
-  optionChipTextActive: {
-    color: '#58CC02',
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  timeColumn: {
-    flex: 1,
-  },
-  timeLabel: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
+  optionChipActive: { borderColor: '#58CC02', backgroundColor: '#58CC0218' },
+  optionChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+  optionChipTextActive: { color: '#58CC02' },
+  timeRow: { flexDirection: 'row', gap: 10, marginTop: 16, marginBottom: 16 },
+  timeColumn: { flex: 1 },
+  timeLabel: { fontSize: 12, marginBottom: 8, fontWeight: '600' },
   timeBtn: {
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
+    height: 42, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', gap: 8,
   },
-  timeBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
+  timeBtnText: { fontSize: 14, fontWeight: '700' },
+  modalBottomActions: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 10,
+    paddingHorizontal: 18, paddingTop: 14, backgroundColor: colors.background,
+    borderTopWidth: 1, borderTopColor: colors.borderLight,
   },
   cancelBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#F8FAFC',
+    flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
-  cancelBtnText: {
-    fontSize: 13,
-    color: colors.text,
-    fontWeight: '700',
-  },
+  cancelBtnText: { fontSize: 14, fontWeight: '700' },
   createBtn: {
-    flex: 1.3,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#58CC02',
+    flex: 1.3, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#58CC02',
   },
-  createBtnText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
+  createBtnText: { fontSize: 14, color: '#FFFFFF', fontWeight: '800' },
 });
 
 export default NutritionScreen;

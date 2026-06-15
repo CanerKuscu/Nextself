@@ -38,8 +38,16 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showCreateProgramModal, setShowCreateProgramModal] = useState(false);
-    const [selectedExerciseForProgram, setSelectedExerciseForProgram] = useState<any | null>(null);
-    const [selectedWorkoutDay, setSelectedWorkoutDay] = useState('monday');
+    // Multi-select cart: each item has exercise data + per-exercise options
+    const [selectedExercises, setSelectedExercises] = useState<{
+        exercise: any;
+        sets: string;
+        reps: string;
+        weight: string;
+        duration: string;
+        restTime: string;
+        day: string;
+    }[]>([]);
     const [notificationTime, setNotificationTime] = useState(new Date());
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [creatingProgram, setCreatingProgram] = useState(false);
@@ -71,7 +79,11 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
         if (workoutType === 'strength') {
             return rows.filter((item) => {
                 const equipment = String(item?.equipment || '').toLowerCase();
-                return equipment && !equipment.includes('body') && equipment !== 'none';
+                // Treat rows with missing equipment as strength by default (cardio/calisthenics
+                // both require explicit signals via cardioWords or 'body'/'none' equipment).
+                // Previously these rows were dropped, hiding legitimate strength exercises.
+                if (!equipment) return true;
+                return !equipment.includes('body') && equipment !== 'none';
             });
         }
         return rows;
@@ -153,25 +165,53 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
         return `${hours}:${minutes}`;
     };
 
-    const openCreateProgramModal = (exercise: any) => {
-        const today = new Date();
-        const jsDay = today.getDay();
-        const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
-        setSelectedWorkoutDay(dayOptions[dayIndex].key);
-        setNotificationTime(today);
-        setSelectedExerciseForProgram(exercise);
+    const toggleExerciseSelection = (exercise: any) => {
+        setSelectedExercises(prev => {
+            const exists = prev.find(e => e.exercise.id === exercise.id);
+            if (exists) {
+                return prev.filter(e => e.exercise.id !== exercise.id);
+            }
+            const diff = exercise.difficulty;
+            const defaultSets = diff === 'beginner' ? '3' : diff === 'intermediate' ? '4' : '4';
+            const defaultReps = diff === 'beginner' ? '12' : diff === 'intermediate' ? '10' : '8';
+            return [...prev, {
+                exercise,
+                sets: defaultSets,
+                reps: defaultReps,
+                weight: '',
+                duration: '',
+                restTime: '60',
+                day: dayOptions[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key,
+            }];
+        });
+    };
+
+    const isExerciseSelected = (id: string) => selectedExercises.some(e => e.exercise.id === id);
+
+    const updateSelectedExercise = (exerciseId: string, field: string, value: string) => {
+        setSelectedExercises(prev => prev.map(e =>
+            e.exercise.id === exerciseId ? { ...e, [field]: value } : e
+        ));
+    };
+
+    const removeSelectedExercise = (exerciseId: string) => {
+        setSelectedExercises(prev => prev.filter(e => e.exercise.id !== exerciseId));
+    };
+
+    const openProgramModal = () => {
+        if (selectedExercises.length === 0) return;
+        setNotificationTime(new Date());
         setShowCreateProgramModal(true);
     };
 
     const closeCreateProgramModal = () => {
         setShowCreateProgramModal(false);
-        setSelectedExerciseForProgram(null);
         setShowTimePicker(false);
         setCreatingProgram(false);
     };
 
-    const handleAddExerciseToProgram = async () => {
-        if (!selectedExerciseForProgram) return;
+    const handleCreateProgram = async () => {
+        if (selectedExercises.length === 0) return;
         try {
             setCreatingProgram(true);
             const supabase = SupabaseService.getInstance();
@@ -180,75 +220,82 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
                 showAlert({
                     type: 'warning',
                     title: isTurkish ? 'Giriş Gerekli' : 'Login Required',
-                    message: isTurkish ? 'Programa eklemek için giriş yapmalısınız.' : 'Please sign in to add this exercise to your program.',
+                    message: isTurkish ? 'Programa eklemek için giriş yapmalısınız.' : 'Please sign in to create a program.',
                     buttons: [{ text: 'OK' }],
                 });
                 return;
             }
 
-            const name = getExerciseName(selectedExerciseForProgram);
-            const muscle = getExerciseMuscle(selectedExerciseForProgram) || (isTurkish ? 'Genel' : 'General');
-            const difficulty = getDifficultyLabel(selectedExerciseForProgram.difficulty, isTurkish);
-            const selectedDay = dayOptions.find(d => d.key === selectedWorkoutDay);
-            const dayLabel = isTurkish ? selectedDay?.tr : selectedDay?.en;
+            const exerciseLines = selectedExercises.map((sel, idx) => {
+                const name = getExerciseName(sel.exercise);
+                const muscle = getExerciseMuscle(sel.exercise) || (isTurkish ? 'Genel' : 'General');
+                const selectedDay = dayOptions.find(d => d.key === sel.day);
+                const dayLabel = isTurkish ? selectedDay?.tr : selectedDay?.en;
+                return [
+                    `\n--- ${isTurkish ? 'Hareket' : 'Exercise'} ${idx + 1}: ${name} ---`,
+                    `${isTurkish ? 'Kas grubu' : 'Muscle group'}: ${muscle}`,
+                    `Set: ${sel.sets || '-'}`,
+                    `${isTurkish ? 'Tekrar' : 'Reps'}: ${sel.reps || '-'}`,
+                    sel.weight ? `${isTurkish ? 'Ağırlık' : 'Weight'}: ${sel.weight} kg` : null,
+                    sel.duration ? `${isTurkish ? 'Süre' : 'Duration'}: ${sel.duration}` : null,
+                    sel.restTime ? `${isTurkish ? 'Dinlenme' : 'Rest'}: ${sel.restTime}s` : null,
+                    `${isTurkish ? 'Gün' : 'Day'}: ${dayLabel}`,
+                ].filter(Boolean).join('\n');
+            }).join('\n');
 
-            const equipmentLower = String(selectedExerciseForProgram.equipment || '').toLowerCase();
-            const nameLower = String(name || '').toLowerCase();
-            const isCalisthenics = equipmentLower.includes('body') || equipmentLower.includes('none');
-            const isCardio = ['cardio', 'run', 'koş', 'jump', 'zıpla', 'bike', 'bisiklet', 'rope', 'ip'].some((k) =>
-                nameLower.includes(k) || equipmentLower.includes(k)
-            );
-
-            const recommendationLine = isCardio
-                ? `${isTurkish ? 'Öneri' : 'Recommendation'}: ${isTurkish ? '25-40 dk orta-yoğun kardiyo' : '25-40 min moderate-vigorous cardio'}`
-                : isCalisthenics
-                    ? `${isTurkish ? 'Öneri' : 'Recommendation'}: ${selectedExerciseForProgram.difficulty === 'beginner' ? '3 x 8-12' : selectedExerciseForProgram.difficulty === 'intermediate' ? '4 x 10-15' : '4-5 x 12-20'}`
-                    : `${isTurkish ? 'Öneri' : 'Recommendation'}: ${selectedExerciseForProgram.difficulty === 'beginner' ? '3 x 12-15' : selectedExerciseForProgram.difficulty === 'intermediate' ? '4 x 8-12' : '4-5 x 6-8'} (${isTurkish ? 'ağırlık eklenebilir' : 'load can be increased progressively'})`;
+            const title = selectedExercises.length === 1
+                ? `${getExerciseName(selectedExercises[0].exercise)} ${isTurkish ? 'Programı' : 'Program'}`
+                : `${selectedExercises.length} ${isTurkish ? 'Hareket Programı' : 'Exercise Program'}`;
 
             const content = [
-                `${isTurkish ? 'Egzersiz' : 'Exercise'}: ${name}`,
-                `${isTurkish ? 'Kas grubu' : 'Muscle group'}: ${muscle}`,
-                `${isTurkish ? 'Zorluk' : 'Difficulty'}: ${difficulty}`,
-                `${isTurkish ? 'Gün' : 'Day'}: ${dayLabel}`,
                 `${isTurkish ? 'Bildirim saati' : 'Notification time'}: ${formatTime(notificationTime)}`,
-                recommendationLine,
+                exerciseLines,
             ].join('\n');
 
             const { error } = await supabase.createAiProgram({
                 userId: user.id,
                 type: 'workout',
-                title: `${name} ${isTurkish ? 'Programı' : 'Program'}`,
+                title,
                 content,
             });
 
-            if (error) throw error;
+            if (error) {
+                console.error('[Program] createAiProgram error:', error);
+                throw error;
+            }
 
+            // Schedule notification for the first exercise's day
             const notificationService = NotificationService.getInstance();
             await notificationService.requestPermissions();
+            const firstDay = selectedExercises[0].day;
             await notificationService.scheduleSmartReminder(
                 'workout',
                 notificationTime.getHours(),
                 notificationTime.getMinutes(),
-                `workout_${user.id}_${selectedExerciseForProgram.id}_${selectedWorkoutDay}`,
+                `workout_${user.id}_program_${Date.now()}`,
                 'Sports',
-                { exerciseName: name },
+                { exerciseName: title },
                 isTurkish ? 'tr' : 'en',
                 undefined,
-                weekdayMap[selectedWorkoutDay]
+                weekdayMap[firstDay]
             );
 
             showAlert({
                 type: 'success',
-                title: isTurkish ? 'Programa Eklendi' : 'Added to Program',
-                message: isTurkish ? `${name} programına eklendi ve bildirim ayarlandı.` : `${name} has been added to your program and notification is scheduled.`,
+                title: isTurkish ? 'Program Oluşturuldu' : 'Program Created',
+                message: isTurkish
+                    ? `${selectedExercises.length} hareket programınıza eklendi.`
+                    : `${selectedExercises.length} exercises added to your program.`,
                 buttons: [{ text: 'OK' }],
             });
             closeCreateProgramModal();
-        } catch {
+            setSelectedExercises([]);
+        } catch (err) {
+            console.error('[Program] Error:', err);
             showAlert({
                 type: 'error',
                 title: isTurkish ? 'Hata' : 'Error',
-                message: isTurkish ? 'Egzersiz programa eklenemedi. Tekrar deneyin.' : 'Failed to add exercise to program. Please try again.',
+                message: isTurkish ? 'Program oluşturulamadı. Tekrar deneyin.' : 'Failed to create program. Please try again.',
                 buttons: [{ text: 'OK' }],
             });
         } finally {
@@ -301,8 +348,10 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
                     <Animated.View style={{ opacity: fadeAnim, gap: 10 }}>
                         {filteredExercises.map(item => {
                             const dc = getDifficultyColor(item.difficulty);
+                            const selected = isExerciseSelected(item.id);
                             return (
-                                <TouchableOpacity key={item.id} activeOpacity={0.7} style={st.exerciseCard}
+                                <TouchableOpacity key={item.id} activeOpacity={0.7}
+                                    style={[st.exerciseCard, selected && { borderColor: '#58CC02', borderWidth: 2 }]}
                                     onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}>
                                     <View style={[st.exerciseAccent, { backgroundColor: dc }]} />
                                     {item.image_url ? (
@@ -325,62 +374,118 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
                                     </View>
                                     <TouchableOpacity
                                         activeOpacity={0.8}
-                                        style={st.addItemBtn}
-                                        onPress={() => openCreateProgramModal(item)}
+                                        style={[st.addItemBtn, selected && { backgroundColor: '#58CC02' }]}
+                                        onPress={() => toggleExerciseSelection(item)}
                                     >
-                                        <Ionicons name="add" size={18} color="#FFF" />
+                                        <Ionicons name={selected ? 'checkmark' : 'add'} size={18} color="#FFF" />
                                     </TouchableOpacity>
                                 </TouchableOpacity>
                             );
                         })}
                     </Animated.View>
                 )}
-                <View style={{ height: 100 }} />
+                <View style={{ height: selectedExercises.length > 0 ? 140 : 100 }} />
             </ScrollView>
+
+            {/* Bottom Cart Bar */}
+            {selectedExercises.length > 0 && (
+                <View style={[st.cartBar, { paddingBottom: insets.bottom + 12 }]}>
+                    <View style={st.cartInfo}>
+                        <Ionicons name="fitness" size={20} color="#58CC02" />
+                        <Text style={st.cartText}>
+                            {selectedExercises.length} {isTurkish ? 'hareket seçildi' : 'exercises selected'}
+                        </Text>
+                    </View>
+                    <TouchableOpacity style={st.cartButton} onPress={openProgramModal} activeOpacity={0.85}>
+                        <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                        <Text style={st.cartButtonText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Program Creation Modal */}
             <Modal
                 visible={showCreateProgramModal}
-                transparent
-                animationType="fade"
+                animationType="slide"
                 onRequestClose={closeCreateProgramModal}
             >
-                <View style={st.modalOverlay}>
-                    <View style={st.modalCard}>
-                        <View style={st.modalHeader}>
-                            <Text style={st.modalTitle}>{isTurkish ? 'Create Program' : 'Create Program'}</Text>
-                            <TouchableOpacity onPress={closeCreateProgramModal} style={st.modalCloseBtn}>
-                                <Ionicons name="close" size={18} color={colors.text} />
+                <View style={[st.modalFull, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+                    <View style={st.modalHeader}>
+                        <TouchableOpacity onPress={closeCreateProgramModal} style={[st.modalCloseBtn, { backgroundColor: colors.surface }]}>
+                            <Ionicons name="close" size={20} color={colors.text} />
+                        </TouchableOpacity>
+                        <Text style={[st.modalTitle, { color: colors.text }]}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
+                        <View style={{ width: 36 }} />
+                    </View>
+                    <Text style={[st.modalSubtitle, { color: colors.textTertiary }]}>
+                        {selectedExercises.length} {isTurkish ? 'hareket seçildi' : 'exercises selected'}
+                    </Text>
+
+                    <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                        {selectedExercises.map((sel, idx) => {
+                            const name = getExerciseName(sel.exercise);
+                            const muscle = getExerciseMuscle(sel.exercise);
+                            return (
+                                <View key={sel.exercise.id} style={[st.exDetailCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+                                    <View style={st.exDetailHeader}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[st.exDetailName, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+                                            {muscle ? <Text style={[st.exDetailMuscle, { color: colors.textTertiary }]}>{muscle}</Text> : null}
+                                        </View>
+                                        <TouchableOpacity onPress={() => removeSelectedExercise(sel.exercise.id)}>
+                                            <Ionicons name="close-circle" size={22} color="#EF4444" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    {/* Per-exercise options */}
+                                    <View style={st.exDetailRow}>
+                                        <View style={st.exDetailInputWrap}>
+                                            <Text style={[st.exDetailInputLabel, { color: colors.textTertiary }]}>Set</Text>
+                                            <TextInput value={sel.sets} onChangeText={v => updateSelectedExercise(sel.exercise.id, 'sets', v)} keyboardType="numeric" style={[st.exDetailInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]} />
+                                        </View>
+                                        <View style={st.exDetailInputWrap}>
+                                            <Text style={[st.exDetailInputLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Tekrar' : 'Reps'}</Text>
+                                            <TextInput value={sel.reps} onChangeText={v => updateSelectedExercise(sel.exercise.id, 'reps', v)} keyboardType="numeric" style={[st.exDetailInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]} />
+                                        </View>
+                                        <View style={st.exDetailInputWrap}>
+                                            <Text style={[st.exDetailInputLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Ağırlık' : 'Weight'}</Text>
+                                            <TextInput value={sel.weight} onChangeText={v => updateSelectedExercise(sel.exercise.id, 'weight', v)} keyboardType="numeric" placeholder="kg" placeholderTextColor={colors.textTertiary} style={[st.exDetailInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]} />
+                                        </View>
+                                    </View>
+                                    <View style={[st.exDetailRow, { marginTop: 8 }]}>
+                                        <View style={st.exDetailInputWrap}>
+                                            <Text style={[st.exDetailInputLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Süre' : 'Duration'}</Text>
+                                            <TextInput value={sel.duration} onChangeText={v => updateSelectedExercise(sel.exercise.id, 'duration', v)} placeholder={isTurkish ? 'dk' : 'min'} placeholderTextColor={colors.textTertiary} style={[st.exDetailInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]} />
+                                        </View>
+                                        <View style={st.exDetailInputWrap}>
+                                            <Text style={[st.exDetailInputLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Dinlenme' : 'Rest'}</Text>
+                                            <TextInput value={sel.restTime} onChangeText={v => updateSelectedExercise(sel.exercise.id, 'restTime', v)} keyboardType="numeric" placeholder="60s" placeholderTextColor={colors.textTertiary} style={[st.exDetailInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.borderLight }]} />
+                                        </View>
+                                        <View style={st.exDetailInputWrap} />
+                                    </View>
+                                    {/* Day selection per exercise */}
+                                    <Text style={[st.exDetailInputLabel, { color: colors.text, marginTop: 10, marginBottom: 4, fontWeight: '700' }]}>{isTurkish ? 'Gün' : 'Day'}</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                                        {dayOptions.map(opt => {
+                                            const active = sel.day === opt.key;
+                                            return (
+                                                <TouchableOpacity key={opt.key} style={[st.optionChip, active && st.optionChipActive]} onPress={() => updateSelectedExercise(sel.exercise.id, 'day', opt.key)}>
+                                                    <Text style={[st.optionChipText, active && st.optionChipTextActive]}>{isTurkish ? opt.tr : opt.en}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            );
+                        })}
+
+                        {/* Notification time */}
+                        <View style={{ marginTop: 16 }}>
+                            <Text style={[st.timeLabel, { color: colors.textTertiary }]}>{isTurkish ? 'Bildirim saati' : 'Notification time'}</Text>
+                            <TouchableOpacity style={[st.timeBtn, { borderColor: colors.borderLight, backgroundColor: colors.surface }]} onPress={() => setShowTimePicker(true)}>
+                                <Ionicons name="notifications-outline" size={16} color="#58CC02" />
+                                <Text style={[st.timeBtnText, { color: colors.text }]}>{formatTime(notificationTime)}</Text>
                             </TouchableOpacity>
                         </View>
-                        <Text style={st.modalSubtitle}>
-                            {selectedExerciseForProgram
-                                ? `${isTurkish ? 'Egzersiz' : 'Exercise'}: ${getExerciseName(selectedExerciseForProgram)}`
-                                : ''}
-                        </Text>
-
-                        <Text style={st.modalSectionTitle}>{isTurkish ? 'Haftanın günü' : 'Day of week'}</Text>
-                        <View style={st.optionWrap}>
-                            {dayOptions.map(option => {
-                                const active = selectedWorkoutDay === option.key;
-                                return (
-                                    <TouchableOpacity
-                                        key={option.key}
-                                        activeOpacity={0.75}
-                                        style={[st.optionChip, active && st.optionChipActive]}
-                                        onPress={() => setSelectedWorkoutDay(option.key)}
-                                    >
-                                        <Text style={[st.optionChipText, active && st.optionChipTextActive]}>
-                                            {isTurkish ? option.tr : option.en}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-
-                        <Text style={st.timeLabel}>{isTurkish ? 'Bildirim saati' : 'Notification time'}</Text>
-                        <TouchableOpacity style={st.timeBtn} onPress={() => setShowTimePicker(true)}>
-                            <Ionicons name="notifications-outline" size={16} color="#58CC02" />
-                            <Text style={st.timeBtnText}>{formatTime(notificationTime)}</Text>
-                        </TouchableOpacity>
 
                         {showTimePicker && (
                             <DateTimePicker
@@ -393,24 +498,16 @@ const MuscleExercisesScreen = ({ navigation, route }: any) => {
                                 }}
                             />
                         )}
+                    </ScrollView>
 
-                        <View style={st.modalActions}>
-                            <TouchableOpacity
-                                onPress={closeCreateProgramModal}
-                                style={st.cancelBtn}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={st.cancelBtnText}>{isTurkish ? 'İptal' : 'Cancel'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleAddExerciseToProgram}
-                                style={[st.createBtn, creatingProgram && { opacity: 0.6 }]}
-                                disabled={creatingProgram}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={st.createBtnText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>
-                            </TouchableOpacity>
-                        </View>
+                    {/* Bottom action */}
+                    <View style={[st.modalBottomActions, { paddingBottom: insets.bottom + 12 }]}>
+                        <TouchableOpacity onPress={closeCreateProgramModal} style={[st.cancelBtn, { borderColor: colors.borderLight, backgroundColor: colors.surface }]} activeOpacity={0.8}>
+                            <Text style={[st.cancelBtnText, { color: colors.text }]}>{isTurkish ? 'İptal' : 'Cancel'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleCreateProgram} style={[st.createBtn, creatingProgram && { opacity: 0.6 }]} disabled={creatingProgram} activeOpacity={0.85}>
+                            {creatingProgram ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={st.createBtnText}>{isTurkish ? 'Program Oluştur' : 'Create Program'}</Text>}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -424,13 +521,13 @@ const getStyles = (colors: any) => StyleSheet.create({
         paddingBottom: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
     },
     backBtn: {
-        width: 40, height: 40, borderRadius: 14, backgroundColor: '#F5F5F5',
+        width: 40, height: 40, borderRadius: 14, backgroundColor: colors.surface,
         justifyContent: 'center', alignItems: 'center',
     },
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
     headerSub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
     searchBar: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5',
+        flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
         borderRadius: 16, paddingHorizontal: 14, height: 44, marginHorizontal: 20,
         marginTop: 14, marginBottom: 8, gap: 10,
     },
@@ -439,7 +536,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     loader: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
     emptyState: { alignItems: 'center', paddingTop: 80 },
     emptyText: { fontSize: 16, fontWeight: '700', color: colors.textTertiary, marginTop: 16 },
-    emptyHint: { fontSize: 13, color: '#D1D5DB', marginTop: 4 },
+    emptyHint: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
     exerciseCard: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background,
         borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight, paddingRight: 14,
@@ -461,130 +558,73 @@ const getStyles = (colors: any) => StyleSheet.create({
         width: 30, height: 30, borderRadius: 15, backgroundColor: '#58CC02',
         alignItems: 'center', justifyContent: 'center',
     },
-    modalOverlay: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 18,
-        backgroundColor: 'rgba(0,0,0,0.45)',
+    // Cart bar
+    cartBar: {
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.borderLight,
+        paddingHorizontal: 18, paddingTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 8,
     },
-    modalCard: {
-        backgroundColor: colors.background,
-        borderRadius: 20,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: colors.borderLight,
+    cartInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    cartText: { fontSize: 14, fontWeight: '700', color: colors.text },
+    cartButton: {
+        flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#58CC02',
+        paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14,
     },
+    cartButtonText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+    // Full-screen modal
+    modalFull: { flex: 1 },
     modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
     },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: colors.text,
-    },
+    modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
     modalCloseBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F5F5F5',
+        width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
     },
     modalSubtitle: {
-        marginTop: 8,
-        color: colors.textTertiary,
-        fontSize: 12,
-        marginBottom: 14,
+        marginTop: 4, paddingHorizontal: 18, color: colors.textTertiary, fontSize: 13, marginBottom: 14,
     },
-    modalSectionTitle: {
-        fontSize: 13,
-        color: colors.text,
-        fontWeight: '700',
-        marginBottom: 8,
+    // Exercise detail cards in modal
+    exDetailCard: {
+        borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12, gap: 8,
     },
-    optionWrap: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 14,
+    exDetailHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    exDetailName: { fontSize: 15, fontWeight: '700' },
+    exDetailMuscle: { fontSize: 12, marginTop: 2 },
+    exDetailRow: { flexDirection: 'row', gap: 8 },
+    exDetailInputWrap: { flex: 1, gap: 3 },
+    exDetailInputLabel: { fontSize: 11, fontWeight: '600' },
+    exDetailInput: {
+        borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
+        fontSize: 14, fontWeight: '600', textAlign: 'center',
     },
     optionChip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18,
+        borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
     },
-    optionChipActive: {
-        borderColor: '#58CC02',
-        backgroundColor: '#58CC0218',
-    },
-    optionChipText: {
-        fontSize: 12,
-        color: colors.textTertiary,
-        fontWeight: '600',
-    },
-    optionChipTextActive: {
-        color: '#58CC02',
-    },
-    timeLabel: {
-        fontSize: 12,
-        color: colors.textTertiary,
-        marginBottom: 8,
-        fontWeight: '600',
-    },
+    optionChipActive: { borderColor: '#58CC02', backgroundColor: '#58CC0218' },
+    optionChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+    optionChipTextActive: { color: '#58CC02' },
+    timeLabel: { fontSize: 12, marginBottom: 8, fontWeight: '600' },
     timeBtn: {
-        height: 42,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: '#F8FAFC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 8,
-        marginBottom: 16,
+        height: 42, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'row', gap: 8,
     },
-    timeBtnText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.text,
-    },
-    modalActions: {
-        flexDirection: 'row',
-        gap: 10,
+    timeBtnText: { fontSize: 14, fontWeight: '700' },
+    modalBottomActions: {
+        position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 10,
+        paddingHorizontal: 18, paddingTop: 14, backgroundColor: colors.background,
+        borderTopWidth: 1, borderTopColor: colors.borderLight,
     },
     cancelBtn: {
-        flex: 1,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: '#F8FAFC',
+        flex: 1, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1,
     },
-    cancelBtnText: {
-        fontSize: 13,
-        color: colors.text,
-        fontWeight: '700',
-    },
+    cancelBtnText: { fontSize: 14, fontWeight: '700' },
     createBtn: {
-        flex: 1.3,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#58CC02',
+        flex: 1.3, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#58CC02',
     },
-    createBtnText: {
-        fontSize: 13,
-        color: '#FFFFFF',
-        fontWeight: '800',
-    },
+    createBtnText: { fontSize: 14, color: '#FFFFFF', fontWeight: '800' },
 });
 
 export default MuscleExercisesScreen;

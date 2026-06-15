@@ -401,10 +401,12 @@ export class PushNotificationService {
     }
 
     private async getTranslation(key: TranslationKey, params?: Record<string, string | number>): Promise<string> {
+        // The translations module is typed { en: Record<...>, tr: Record<...>, ... } but
+        // we index it dynamically by a string locale code, so widen for the lookup.
+        const dict = translations as Record<string, Record<string, string>>;
         try {
-            const lang = await PlatformStorage.getItem('NextSelf_language') || 'en';
-            // @ts-ignore
-            const translation = translations[lang]?.[key] || translations.en[key] || key;
+            const lang = (await PlatformStorage.getItem('NextSelf_language')) || 'en';
+            const translation = dict[lang]?.[key] || dict.en[key] || key;
 
             if (params) {
                 return Object.entries(params).reduce(
@@ -416,8 +418,7 @@ export class PushNotificationService {
         } catch (error) {
             console.error('Error translating:', error);
             // Fallback to English
-            // @ts-ignore
-            const translation = translations.en[key] || key;
+            const translation = dict.en[key] || key;
             if (params) {
                 return Object.entries(params).reduce(
                     (str, [param, value]) => str.replaceAll(`{${param}}`, String(value)),

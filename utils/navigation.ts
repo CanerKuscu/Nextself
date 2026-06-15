@@ -30,6 +30,8 @@ export function safeGoBack(
         return;
       }
     } catch (e) {
+      // Some navigators throw if getState/canGoBack are not available — try the parent.
+      console.warn('[navigation] safeGoBack: navigator getState/canGoBack failed, trying parent:', e);
     }
 
     current = current.getParent?.();
@@ -40,6 +42,7 @@ export function safeGoBack(
       nav.navigate?.(fallbackRoute, fallbackParams);
       return;
     } catch (e) {
+      console.warn(`[navigation] safeGoBack: fallback navigate('${fallbackRoute}') failed:`, e);
     }
   }
 

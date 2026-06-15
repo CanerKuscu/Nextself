@@ -83,6 +83,10 @@ serve(async (req: Request) => {
         if (typeof agreedPrice !== 'number' || Number.isNaN(agreedPrice) || agreedPrice <= 0) {
             throw new Error('Invalid agreedPrice');
         }
+        const MAX_AGREED_PRICE_TRY = 1_000_000;
+        if (agreedPrice > MAX_AGREED_PRICE_TRY) {
+            throw new Error(`agreedPrice exceeds maximum of ${MAX_AGREED_PRICE_TRY} TL`);
+        }
         if (!Number.isInteger(durationMonths) || durationMonths <= 0 || durationMonths > 24) {
             throw new Error('Invalid durationMonths');
         }
@@ -92,7 +96,11 @@ serve(async (req: Request) => {
             throw new Error('identityNumber is required and must be 11 digits');
         }
 
-        const commissionRate = 0.10;
+        // Platform commission percent is configured centrally via env so that
+        // process-client-activation, calculate-monthly-billing, and verify_proposal_payment
+        // all derive from one source of truth instead of three hard-coded copies.
+        const platformFeePercent = Number(Deno.env.get('PLATFORM_COMMISSION_PERCENT')) || 10;
+        const commissionRate = platformFeePercent / 100;
         const depositAmount = calculateDepositAmount(durationMonths);
 
         const { data: professional, error: profError } = await serviceClient
@@ -251,7 +259,7 @@ serve(async (req: Request) => {
             .update({
                 agreed_price: agreedPrice,
                 duration_months: durationMonths,
-                platform_fee_percent: commissionRate * 100,
+                platform_fee_percent: platformFeePercent,
                 deposit_paid_amount: depositAmount,
                 billing_status: 'active'
             })

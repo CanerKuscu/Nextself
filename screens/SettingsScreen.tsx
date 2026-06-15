@@ -12,6 +12,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     Pressable,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -174,6 +175,29 @@ const SettingsScreen = ({ navigation }: any) => {
             setReAuthError('');
         }
     }, [showReAuthModal]);
+
+    const handleSignOut = () => {
+        Alert.alert(
+            isTurkish ? 'Çıkış Yap' : 'Sign Out',
+            isTurkish ? 'Hesabınızdan çıkış yapmak istediğinize emin misiniz?' : 'Are you sure you want to sign out?',
+            [
+                { text: t('cancel'), style: 'cancel' },
+                {
+                    text: isTurkish ? 'Çıkış Yap' : 'Sign Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const supabase = SupabaseService.getInstance();
+                            await supabase.signOut();
+                            navigation.replace('Auth');
+                        } catch (err) {
+                            console.error('Sign out error:', err);
+                        }
+                    },
+                },
+            ]
+        );
+    };
 
     const handleDeleteAccount = () => {
         showAlert({
@@ -389,6 +413,18 @@ const SettingsScreen = ({ navigation }: any) => {
                     ))}
                 </AnimatedCard>
 
+                {/* Sign Out */}
+                <TouchableOpacity
+                    style={styles.signOutBtn}
+                    onPress={handleSignOut}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="log-out-outline" size={22} color={colors.error} />
+                    <Text style={styles.signOutText}>
+                        {isTurkish ? 'Çıkış Yap' : 'Sign Out'}
+                    </Text>
+                </TouchableOpacity>
+
                 {/* Danger Zone */}
                 <Text style={[styles.sectionTitle, { color: colors.error }]}>{t('danger_zone')}</Text>
                 <AnimatedCard style={styles.dangerCard}>
@@ -484,6 +520,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     deleteIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.errorSoft, justifyContent: 'center', alignItems: 'center' },
     deleteLabel: { ...TYPOGRAPHY.body, color: colors.error, flex: 1 },
     deleteHint: { ...TYPOGRAPHY.small, color: colors.textTertiary, marginTop: 4, paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, lineHeight: 16 },
+    signOutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, marginTop: SPACING.xxl, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: colors.error + '40', backgroundColor: colors.error + '08' },
+    signOutText: { ...TYPOGRAPHY.bodyBold, color: colors.error },
     // Re-auth modal styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: SPACING.xl },
     modalCard: { backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg, padding: SPACING.xl, width: '100%', maxWidth: 400 },

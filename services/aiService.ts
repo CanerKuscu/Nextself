@@ -89,7 +89,14 @@ export class AIService {
 
     private parseJsonObject(raw: string): any {
         const extracted = this.extractFirstJsonObject(raw);
-        return JSON.parse(extracted ?? raw);
+        if (!extracted) {
+            // Previously we'd pass the raw (non-JSON) string straight to JSON.parse and
+            // surface a cryptic "Unexpected token ... in JSON" error from a callsite far
+            // away. Fail fast with a typed message that includes a snippet for debugging.
+            const snippet = typeof raw === 'string' ? raw.slice(0, 200) : String(raw);
+            throw new Error(`AIService: model response did not contain a JSON object. First 200 chars: ${snippet}`);
+        }
+        return JSON.parse(extracted);
     }
 
     /**

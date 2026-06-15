@@ -57,7 +57,9 @@ export function initLogFilter() {
             if (matchesIgnored(args)) return;
             if (seenWarns.has(key)) return;
             seenWarns.add(key);
-        } catch (e) { }
+        } catch (e) {
+            // Best-effort dedupe — fall through to original logging if key construction fails.
+        }
         origWarn(...args);
     };
 
@@ -67,7 +69,9 @@ export function initLogFilter() {
             if (matchesIgnored(args)) return;
             if (seenErrors.has(key)) return;
             seenErrors.add(key);
-        } catch (e) { }
+        } catch (e) {
+            // Best-effort dedupe — fall through to original logging if key construction fails.
+        }
         origError(...args);
     };
 }

@@ -48,3 +48,16 @@ build_temp/
 lint-report.json
 lint_errors.txt
 ts_errors.txt
+
+# Local Agent & Testing Configs
+.claude/
+.vscode/mcp.json
+testsprite_tests/
+
+# Temp scripts & output logs
+check_csv*.js
+test_proxy.js
+push_error*.txt
+test_out.txt
+icon-preview.html
+depcheck.json

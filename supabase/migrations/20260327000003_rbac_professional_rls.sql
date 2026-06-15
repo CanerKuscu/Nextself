@@ -83,6 +83,19 @@ CREATE POLICY "Clients can view assigned nutrition plans"
     USING (client_id = auth.uid());
 
 -- Enforce RLS on sessions (Appointments)
+CREATE TABLE IF NOT EXISTS public.sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    professional_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    client_id UUID,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ,
+    status TEXT DEFAULT 'scheduled',
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT sessions_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.users(id) ON DELETE CASCADE
+);
+
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Professionals can manage their sessions"

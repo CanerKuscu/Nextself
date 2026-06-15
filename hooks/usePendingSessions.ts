@@ -67,10 +67,16 @@ export function usePendingSessions(showAlert: any, isTurkish: boolean) {
 
                 if (sessions && sessions.length > 0) {
                     const session = sessions[0];
-                    const rel = relationships.find((r: any) => r.id === session.client_relationship_id);
-                    // @ts-ignore
+                    type ProfBrief = { first_name?: string; last_name?: string };
+                    type RelationshipRow = {
+                        id: string;
+                        professional_profiles?: ProfBrief | ProfBrief[] | null;
+                        trainer_profiles?: ProfBrief | ProfBrief[] | null;
+                        dietitian_profiles?: ProfBrief | ProfBrief[] | null;
+                    };
+                    const rel = (relationships as RelationshipRow[]).find((r) => r.id === session.client_relationship_id);
                     const profArray = rel?.professional_profiles || rel?.trainer_profiles || rel?.dietitian_profiles;
-                    const prof = Array.isArray(profArray) ? profArray[0] : profArray;
+                    const prof: ProfBrief | undefined = Array.isArray(profArray) ? profArray[0] : profArray ?? undefined;
                     const profName = prof ? `${prof.first_name} ${prof.last_name || ''}` : (isTurkish ? 'Eğitmeniniz' : 'Your Trainer');
 
                     showAlert({

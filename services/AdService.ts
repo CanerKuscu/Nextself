@@ -1,4 +1,4 @@
-import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { InterstitialAd, AdEventType, TestIds } from '../utils/ads';
 import { SubscriptionService } from './SubscriptionService';
 
 // Fallback to Test ID if real ID is not provided.

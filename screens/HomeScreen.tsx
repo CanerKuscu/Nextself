@@ -29,9 +29,9 @@ import QuickActions from '../components/HomeScreen/QuickActions';
 import GamificationBar from '../components/HomeScreen/GamificationBar';
 import { usePendingSessions } from '../hooks/usePendingSessions';
 import { aiAutopilotService, AdaptivePlanResponse } from '../services/aiAutopilotService';
-import { useAuthStore } from '../store/authStoreSecure';
+import { useAuthStore, registerSignOutCallback } from '../store/authStoreSecure';
 import { SubscriptionService } from '../services/SubscriptionService';
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { AdBanner, BannerAdSize, TestIds } from '../components/AdBanner';
 
 let hasShownPremiumPopupSession = false;
 
@@ -42,6 +42,11 @@ let hasShownPremiumPopupSession = false;
 export const resetPremiumPopupFlag = () => {
   hasShownPremiumPopupSession = false;
 };
+
+// Register the reset to fire on every sign-out, even when HomeScreen is unmounted.
+// The auth store fires registered callbacks before clearing user state, so we are
+// guaranteed to clean up regardless of which screen the user signed out from.
+registerSignOutCallback(resetPremiumPopupFlag);
 
 const HEALTH_CONNECT_STARTUP_PROMPT_KEY = 'NextSelf_health_connect_startup_prompt_v1';
 
@@ -514,11 +519,9 @@ const HomeScreen = ({ navigation }: any) => {
 
           {!isAdFree && (
             <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 10 }}>
-                <BannerAd
-                    unitId={TestIds.BANNER}
-                    size={BannerAdSize.BANNER}
-                    requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-                />
+              <AdBanner
+                requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+              />
             </View>
           )}
 
