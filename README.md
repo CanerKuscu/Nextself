@@ -1,58 +1,64 @@
 # 🏋️ NextSelf
 
-**Wellness & Performance** — A comprehensive health, fitness, and nutrition mobile app with AI-powered coaching.
+**Wellness & Performance** — A comprehensive health, fitness, and nutrition mobile app powered by DeepSeek AI.
 
-Built with **React Native (Expo SDK 54)** · **Supabase** · **DeepSeek AI** · **TypeScript**
+NextSelf, kullanıcıların sağlık, fitness ve beslenme hedeflerine ulaşmalarını sağlayan, gelişmiş yapay zeka özellikleriyle donatılmış, "hepsi bir arada" bir mobil uygulamadır. Hem iOS hem de Android cihazlarda çalışabilen bu proje, modern yazılım mimarisi prensipleri ve güncel teknolojiler kullanılarak inşa edilmiştir.
 
 ---
 
-## ✨ Features
+## ✨ Features / Özellikler
 
-- 🤖 **AI Coach, Dietitian & Chef** — Personalized fitness and nutrition advice powered by DeepSeek
-- 🍽️ **Nutrition Tracking** — Food scanning (barcode + camera), calorie/macro logging
-- 🏋️ **Workout System** — Exercise library, active workout tracking, posture analysis
-- 🏆 **Gamification** — XP-based league system, daily missions, streak tracking
-- 💊 **Supplements** — Supplement tracking and recommendations
-- 🏥 **Health Integration** — HealthKit (iOS) + Health Connect (Android) sync
-- ⚖️ **Smart Scale** — Body composition tracking
-- 💧 **Water Tracking** — Daily hydration goals with reminders
-- 👨‍⚕️ **Professional Portal** — PT/Dietitian dashboard, client management, billing
-- 💬 **Chat System** — Real-time messaging between professionals and clients
-- 🌍 **Community Forum** — Social features with content moderation
-- 🎵 **Spotify Integration** — Workout playlists
-- 🛍️ **Store** — In-app purchases with XP coins
-- 🌐 **Multi-language** — Turkish & English
-- 🌙 **Dark Mode** — Full light/dark theme support
+- 🤖 **AI Uzmanlar (Coach, Dietitian & Chef)** — DeepSeek tarafından desteklenen kişiselleştirilmiş fitness, beslenme tavsiyeleri ve yemek tarifleri.
+- 📸 **Gelişmiş Biyomekanik Postür Analizi** — Cihazın kamerası ile form analizi, asimetri ölçümü ve düzeltme uyarıları.
+- 🍽️ **Akıllı Besin Tarayıcı (Food Scanner)** — Yiyecekleri tarayarak kalori ve makro (protein, karbonhidrat, yağ) değerlerini otomatik çıkarma.
+- 🏥 **Sağlık Entegrasyonları** — Apple HealthKit (iOS) ve Google Health Connect (Android) üzerinden uyku, adım, kalori ve nabız takibi.
+- 🏆 **Dinamik Görev ve Oyunlaştırma** — Kullanıcıya özel yapay zeka destekli günlük/haftalık görevler ve XP bazlı lig sistemi.
+- 👨‍⚕️ **Profesyoneller Portalı** — Gerçek diyetisyen ve antrenörler için müşteri yönetimi, program hazırlama ve iyzico entegrasyonlu ödeme sistemi.
+- 💬 **Sohbet Sistemi** — Profesyoneller ve müşteriler arası gerçek zamanlı mesajlaşma (Supabase Edge Functions destekli).
+- 🌙 **Tema ve Çoklu Dil** — Türkçe & İngilizce desteği, tam uyumlu Karanlık Mod (Dark Mode).
 
-## 🚀 Quick Start
+---
+
+## 🏗️ Mimari ve Teknolojiler
+
+- **Mobil Çatı:** React Native (v0.81), Expo (v54), TypeScript
+- **Backend & Veritabanı:** Supabase, PostgreSQL, Edge Functions (Güvenli AI çağrıları için)
+- **Durum Yönetimi (State):** Zustand (Global durum) ve React Query (Sunucu önbelleği)
+- **Kullanıcı Arayüzü (UI):** TailwindCSS, Lottie Animasyonları, React Native Reanimated (60fps)
+- **Gelir ve Performans:** RevenueCat (Abonelikler), Sentry (Hata takibi), Jest & Detox (Testler)
+
+---
+
+## 🚀 Quick Start (Hızlı Başlangıç)
 
 ```bash
+# Bağımlılıkları yükleyin
 npm install
-cp .env.example .env    # Fill in your keys
+
+# Çevre değişkenlerini ayarlayın
+cp .env.example .env    # Gerekli API anahtarlarını .env dosyasına girin
+
+# Uygulamayı başlatın
 npx expo start
 ```
 
 ## 📖 Documentation
-
-See [docs/README.md](docs/README.md) for full documentation including architecture, API reference, and deployment guides.
+Daha detaylı mimari, API referansları ve dağıtım yönergeleri için [docs/README.md](docs/README.md) dosyasına göz atın.
 
 ## 🧪 Testing
-
 ```bash
-npm test                 # Unit tests
-npm run type-check       # TypeScript check
-npm run lint             # ESLint
-npm run e2e:android      # E2E tests (Detox)
+npm test                 # Birim testleri (Jest)
+npm run type-check       # TypeScript denetimi
+npm run lint             # ESLint kod kontrolü
+npm run e2e:android      # Detox ile E2E Testleri
 ```
 
 ## 🏗️ Build
-
 ```bash
-npm run build:dev        # Development build
-npm run build:preview    # Preview APK
-npm run build:production # Store release
+npm run build:dev        # Geliştirme derlemesi
+npm run build:preview    # Önizleme (Preview APK)
+npm run build:production # Mağaza (Store) sürümü
 ```
 
 ## 📄 License
-
 Private — All rights reserved.
