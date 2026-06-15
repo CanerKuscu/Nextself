@@ -2,62 +2,62 @@
 
 **Wellness & Performance** — A comprehensive health, fitness, and nutrition mobile app powered by DeepSeek AI.
 
-NextSelf, kullanıcıların sağlık, fitness ve beslenme hedeflerine ulaşmalarını sağlayan, gelişmiş yapay zeka özellikleriyle donatılmış, "hepsi bir arada" bir mobil uygulamadır. Hem iOS hem de Android cihazlarda çalışabilen bu proje, modern yazılım mimarisi prensipleri ve güncel teknolojiler kullanılarak inşa edilmiştir.
+NextSelf is an "all-in-one" mobile application equipped with advanced artificial intelligence features, enabling users to achieve their health, fitness, and nutrition goals. Designed to run seamlessly on both iOS and Android devices, this project is built using modern software architecture principles and cutting-edge technologies.
 
 ---
 
-## ✨ Features / Özellikler
+## ✨ Features
 
-- 🤖 **AI Uzmanlar (Coach, Dietitian & Chef)** — DeepSeek tarafından desteklenen kişiselleştirilmiş fitness, beslenme tavsiyeleri ve yemek tarifleri.
-- 📸 **Gelişmiş Biyomekanik Postür Analizi** — Cihazın kamerası ile form analizi, asimetri ölçümü ve düzeltme uyarıları.
-- 🍽️ **Akıllı Besin Tarayıcı (Food Scanner)** — Yiyecekleri tarayarak kalori ve makro (protein, karbonhidrat, yağ) değerlerini otomatik çıkarma.
-- 🏥 **Sağlık Entegrasyonları** — Apple HealthKit (iOS) ve Google Health Connect (Android) üzerinden uyku, adım, kalori ve nabız takibi.
-- 🏆 **Dinamik Görev ve Oyunlaştırma** — Kullanıcıya özel yapay zeka destekli günlük/haftalık görevler ve XP bazlı lig sistemi.
-- 👨‍⚕️ **Profesyoneller Portalı** — Gerçek diyetisyen ve antrenörler için müşteri yönetimi, program hazırlama ve iyzico entegrasyonlu ödeme sistemi.
-- 💬 **Sohbet Sistemi** — Profesyoneller ve müşteriler arası gerçek zamanlı mesajlaşma (Supabase Edge Functions destekli).
-- 🌙 **Tema ve Çoklu Dil** — Türkçe & İngilizce desteği, tam uyumlu Karanlık Mod (Dark Mode).
-
----
-
-## 🏗️ Mimari ve Teknolojiler
-
-- **Mobil Çatı:** React Native (v0.81), Expo (v54), TypeScript
-- **Backend & Veritabanı:** Supabase, PostgreSQL, Edge Functions (Güvenli AI çağrıları için)
-- **Durum Yönetimi (State):** Zustand (Global durum) ve React Query (Sunucu önbelleği)
-- **Kullanıcı Arayüzü (UI):** TailwindCSS, Lottie Animasyonları, React Native Reanimated (60fps)
-- **Gelir ve Performans:** RevenueCat (Abonelikler), Sentry (Hata takibi), Jest & Detox (Testler)
+- 🤖 **AI Experts (Coach, Dietitian & Chef)** — Personalized fitness advice, nutrition plans, and healthy recipes powered by DeepSeek AI.
+- 📸 **Advanced Biomechanical Posture Analysis** — Uses the device's camera for real-time form analysis, asymmetry measurement, and correction cues.
+- 🍽️ **Smart Food Scanner** — Automatically extracts calorie and macro (protein, carbs, fat) values by scanning food images or descriptions.
+- 🏥 **Health Integrations** — Sleep, step, calorie, and heart rate tracking via Apple HealthKit (iOS) and Google Health Connect (Android).
+- 🏆 **Dynamic Missions & Gamification** — AI-generated daily/weekly personalized missions and an XP-based league system.
+- 👨‍⚕️ **Professionals Portal** — Client management, program creation, and integrated payment system (iyzico) for real dietitians and personal trainers.
+- 💬 **Chat System** — Real-time messaging between professionals and clients (powered by Supabase Edge Functions).
+- 🌙 **Theming & Localization** — Full English & Turkish support, along with a perfectly adapted Dark Mode.
 
 ---
 
-## 🚀 Quick Start (Hızlı Başlangıç)
+## 🏗️ Architecture & Technologies
+
+- **Mobile Framework:** React Native (v0.81), Expo (v54), TypeScript
+- **Backend & Database:** Supabase, PostgreSQL, Edge Functions (For secure AI API calls)
+- **State Management:** Zustand (Global state) and React Query (Server state caching)
+- **User Interface (UI):** TailwindCSS, Lottie Animations, React Native Reanimated (60fps)
+- **Monetization & Performance:** RevenueCat (Subscriptions), Sentry (Error tracking), Jest & Detox (Testing)
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Bağımlılıkları yükleyin
+# Install dependencies
 npm install
 
-# Çevre değişkenlerini ayarlayın
-cp .env.example .env    # Gerekli API anahtarlarını .env dosyasına girin
+# Setup environment variables
+cp .env.example .env    # Fill in the required API keys in the .env file
 
-# Uygulamayı başlatın
+# Start the application
 npx expo start
 ```
 
 ## 📖 Documentation
-Daha detaylı mimari, API referansları ve dağıtım yönergeleri için [docs/README.md](docs/README.md) dosyasına göz atın.
+For more detailed architecture overviews, API references, and deployment guidelines, please check out the [docs/README.md](docs/README.md) file.
 
 ## 🧪 Testing
 ```bash
-npm test                 # Birim testleri (Jest)
-npm run type-check       # TypeScript denetimi
-npm run lint             # ESLint kod kontrolü
-npm run e2e:android      # Detox ile E2E Testleri
+npm test                 # Unit tests (Jest)
+npm run type-check       # TypeScript compilation check
+npm run lint             # ESLint code check
+npm run e2e:android      # Detox E2E Tests
 ```
 
 ## 🏗️ Build
 ```bash
-npm run build:dev        # Geliştirme derlemesi
-npm run build:preview    # Önizleme (Preview APK)
-npm run build:production # Mağaza (Store) sürümü
+npm run build:dev        # Development build
+npm run build:preview    # Preview APK
+npm run build:production # Store release build (Production)
 ```
 
 ## 📄 License
