@@ -65,7 +65,8 @@
         {
           "url": "https://sentry.io/",
           "project": "nextself",
-          "organization": "kuscu"
+          "organization": "kuscu",
+          "enableAutoUploadSourceMaps": false
         }
       ],
       "react-native-health",
@@ -76,7 +77,7 @@
           "cameraPermissionText": "Allow NextSelf to access your camera for on-device posture landmark extraction."
         }
       ],
-      "@sentry/react-native",
+
       [
         "expo-notifications",
         {
