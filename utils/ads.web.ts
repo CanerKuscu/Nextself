@@ -16,9 +16,9 @@ export const TestIds = {
 };
 
 function createMockAd() {
-  let listeners: Record<string, Function[]> = {};
+  const listeners: Record<string, ((...args: any[]) => void)[]> = {};
   return {
-    addAdEventListener: (eventType: string, callback: Function) => {
+    addAdEventListener: (eventType: string, callback: (...args: any[]) => void) => {
       if (!listeners[eventType]) listeners[eventType] = [];
       listeners[eventType].push(callback);
       return () => {

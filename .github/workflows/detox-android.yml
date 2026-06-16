@@ -40,36 +40,24 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }}
 
-      - name: Setup Android emulator
+      - name: Setup Android emulator and run tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ADB_INSTALL_TIMEOUT: 30M
         with:
           api-level: 30
           target: google_apis
           arch: x86_64
           force-avd-creation: true
           emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect
-
-      - name: Check for prebuilt APKs
-        id: check_apks
-        run: |
-          if [ -f "e2e/apks/app-debug.apk" ] && [ -f "e2e/apks/app-debug-androidTest.apk" ]; then
-            echo "prebuilts=true" >> $GITHUB_OUTPUT
-          else
-            echo "prebuilts=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install prebuilt APKs (if present)
-        if: steps.check_apks.outputs.prebuilts == 'true'
-        run: |
-          adb devices
-          adb install -r e2e/apks/app-debug.apk
-          adb install -r e2e/apks/app-debug-androidTest.apk
-
-      - name: Build APKs (when no prebuilt available)
-        if: steps.check_apks.outputs.prebuilts == 'false'
-        run: npx detox build -c android.emu.debug
-
-      - name: Run Detox tests
-        run: npx detox test -c android.emu.debug --headless
-        env:
-          ADB_INSTALL_TIMEOUT: 30M
+          script: |
+            if [ -f "e2e/apks/app-debug.apk" ] && [ -f "e2e/apks/app-debug-androidTest.apk" ]; then
+              echo "prebuilts found"
+              adb devices
+              adb install -r e2e/apks/app-debug.apk
+              adb install -r e2e/apks/app-debug-androidTest.apk
+            else
+              echo "building apks"
+              npx detox build -c android.emu.debug
+            fi
+            npx detox test -c android.emu.debug --headless
